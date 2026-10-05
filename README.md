@@ -6,7 +6,7 @@ A console-style Linux test build with an Xbox-like home screen, side menu, docke
 
 ## Download
 
-Get **LaunchOS.zip** from the [Releases](../../releases) page. It contains:
+Get **LaunchOS.zip** from the [latest release](../../releases/latest). Check which version you are running in **Settings → About LaunchOS**. It contains:
 
 - `LaunchOS.iso`: the live system (boots in BIOS and UEFI)
 - `LaunchOS.vbox`: a ready-made VirtualBox machine

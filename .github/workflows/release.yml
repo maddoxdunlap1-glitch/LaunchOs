@@ -33,6 +33,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete v0.1 --yes --cleanup-tag 2>/dev/null || true
-          gh release create v0.1 LaunchOS.zip \
-            --title "LaunchOS v0.1 (test build)" \
-            --notes "Live test build for VirtualBox. Download **LaunchOS.zip**, unzip it, then in VirtualBox choose **Machine > Add** and pick **LaunchOS.vbox**. Boots in BIOS and UEFI. See the README for controls."
+          gh release delete v0.2 --yes --cleanup-tag 2>/dev/null || true
+          gh release create v0.2 LaunchOS.zip \
+            --title "LaunchOS v0.2" \
+            --notes "Live test build for VirtualBox. Download **LaunchOS.zip**, unzip it, then in VirtualBox choose **Machine > Add** and pick **LaunchOS.vbox**. Boots in BIOS and UEFI. Check the version in Settings > About LaunchOS. See the README for controls."
