@@ -6,7 +6,8 @@ A console-style Linux test build with an Xbox-like home screen. It boots to a sp
 
 **What's in it**
 
-- **Browser**: a lightweight web browser with a start page and shortcuts (YouTube, Discord, Twitch and more). `Ctrl+L` address bar, `Alt+Left` back, `F5` reload, `Ctrl+W` back to the home screen.
+- **Browser**: a lightweight web browser with a start page and shortcuts (YouTube, Discord, Twitch and more). `Ctrl+L` address bar, `Alt+Left` back, `F5` reload, `Ctrl+W` close.
+- **Apps keep running** when you go Home. **Ctrl+click** (or right-click) an app for its options: Resume, Restart, **End task**, Move.
 - **Setup**: walks through your name and color, time zone, network, sound, screen size, controllers and devices, look, and the apps you want.
 - **System monitor**: live CPU, memory, network and storage with one-minute charts, the busiest processes and per-core load.
 - **Side menu** (`M` or the Menu button): devices, notifications, and settings for screen size, sound, network, time zone and power.
@@ -37,7 +38,9 @@ Making your own VM instead? Set **Type: Linux, Version: Ubuntu (64-bit)** and at
 | Move | Arrow keys | D-pad or left stick |
 | Select | Enter | A |
 | Back | Esc | B |
-| Side menu | M | Menu or Xbox button |
+| Side menu | M or Super (Windows key) | Menu or Xbox button |
+| Back to Home from an app | Super (Windows key) | Xbox button |
+| App options | Ctrl+click, right-click, Menu key | X |
 
 The mouse works too: point at a tile to highlight it, click to open it.
 
