@@ -1,0 +1,38 @@
+name: Publish LaunchOS release
+
+on:
+  push:
+    branches: [main]
+    paths: ["dist/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check all parts are here
+        id: check
+        run: |
+          expected=$(cat dist/PARTS)
+          found=$(ls dist/LaunchOS.zip.part* | wc -l)
+          echo "expected=$expected found=$found"
+          if [ "$found" = "$expected" ]; then echo "ready=yes" >> "$GITHUB_OUTPUT"; else echo "ready=no" >> "$GITHUB_OUTPUT"; fi
+      - name: Join and verify LaunchOS.zip
+        if: steps.check.outputs.ready == 'yes'
+        run: |
+          cat $(ls dist/LaunchOS.zip.part* | sort) > LaunchOS.zip
+          echo "$(cat dist/SHA256)  LaunchOS.zip" | sha256sum -c -
+          ls -lh LaunchOS.zip
+      - name: Publish release
+        if: steps.check.outputs.ready == 'yes'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete v0.1 --yes --cleanup-tag 2>/dev/null || true
+          gh release create v0.1 LaunchOS.zip \
+            --title "LaunchOS v0.1 (test build)" \
+            --notes "Live test build for VirtualBox. Download **LaunchOS.zip**, unzip it, then in VirtualBox choose **Machine > Add** and pick **LaunchOS.vbox**. Boots in BIOS and UEFI. See the README for controls."
