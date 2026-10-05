@@ -1,6 +1,8 @@
 # LaunchOS
 
-A console-style Linux test build with an Xbox-like home screen, side menu, docked Discord preview, and power menu. It runs live from an ISO in VirtualBox.
+![LaunchOS boot screen](assets/boot-preview.gif)
+
+A console-style Linux test build with an Xbox-like home screen, side menu, docked Discord preview, and power menu. It boots to a spinning ferris wheel, then the home screen, and runs live from an ISO in VirtualBox.
 
 ## Download
 
