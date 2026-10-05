@@ -2,7 +2,15 @@
 
 ![LaunchOS boot screen](assets/boot-preview.gif)
 
-A console-style Linux test build with an Xbox-like home screen, side menu, docked Discord preview, and power menu. It boots to a spinning ferris wheel, then the home screen, and runs live from an ISO in VirtualBox.
+A console-style Linux test build with an Xbox-like home screen. It boots to a spinning ferris wheel, then the home screen, and runs live from an ISO in VirtualBox.
+
+**What's in it**
+
+- **Browser**: a lightweight web browser with a start page and shortcuts (YouTube, Discord, Twitch and more). `Ctrl+L` address bar, `Alt+Left` back, `F5` reload, `Ctrl+W` back to the home screen.
+- **Setup**: walks through your name and color, time zone, network, sound, screen size, controllers and devices, look, and the apps you want.
+- **Side menu** (`M` or the Menu button): devices, notifications, and settings for screen size, sound, network, time zone and power.
+
+It's a live system: changes reset when you shut down.
 
 ## Download
 
