@@ -19,6 +19,8 @@ Get **LaunchOS.zip** from the [Releases](../../releases) page. It contains:
 
 The machine uses 2 GB RAM, 2 CPUs, VMSVGA graphics and boots from the DVD.
 
+Making your own VM instead? Set **Type: Linux, Version: Ubuntu (64-bit)** and at least **2048 MB** of memory. LaunchOS is 64-bit and won't start on a 32-bit ("Other") VM.
+
 ## Controls
 
 | Action | Keyboard | Controller |
