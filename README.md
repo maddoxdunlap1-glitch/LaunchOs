@@ -10,6 +10,7 @@ A console-style Linux system with an Xbox-like home screen. It boots to a spinni
 - **Windows programs**: run .exe and .msi files with Wine, from your Downloads or a USB drive.
 - **Roblox** (through Sober) and **FreeTube**: they download from Flathub the first time you open them.
 - **Browser**: a lightweight web browser with a start page, shortcuts and downloads. `Ctrl+L` address bar, `Alt+Left` back, `F5` reload, `Ctrl+W` close.
+- **Files**: your Downloads, Documents, Pictures, Videos and Music, plus USB drives and disks. Copy, move, rename and delete, with progress you can stop. Look at pictures, play videos and music, read text files, and run Windows programs straight from a folder. Open drives inside the PC, eject USB drives safely, and format a drive as exFAT, FAT32, NTFS or ext4.
 - **System monitor**: live CPU, memory, network and storage, one-minute charts, the busiest processes and per-core load.
 - **Setup**: your name and color, time zone, network, sound, screen size, controller test, look, and which apps show on Home.
 - **Side menu** (`M`, Super, or the Menu or Xbox button): running apps, Discord as a portrait panel, devices, notifications, and Settings (screen size, sound, network, Wi-Fi, time zone, saving, install, power).
@@ -22,12 +23,13 @@ Get **LaunchOS.zip** from the [latest release](../../releases/latest). It contai
 - `LaunchOS.iso`: the system. Boots as a disc or a USB stick, on BIOS and UEFI.
 - `LaunchOS.vbox`: a ready-made VirtualBox machine
 - `LaunchOS-data.vdi`: its save disk (starts empty and grows as you use it)
+- `LaunchOS-storage.vdi`: a spare empty drive to try Files on (format it in Files first)
 
 Check which version you're running in **Settings → About LaunchOS**.
 
 ## Run it in VirtualBox
 
-1. Unzip `LaunchOS.zip` into one folder. Keep the three files together.
+1. Unzip `LaunchOS.zip` into one folder. Keep the files together.
 2. In VirtualBox, choose **Machine → Add…** and pick `LaunchOS.vbox`. If you added an older LaunchOS before, remove that one first (**Machine → Remove → Remove only**).
 3. Start the machine and click inside the window.
 
@@ -46,6 +48,10 @@ The first time it starts, LaunchOS uses the free space on the stick for saving, 
 ## Install it on a PC
 
 Start LaunchOS from a USB stick, then open **Settings → Install LaunchOS** and pick a drive (16 GB or more). **This erases everything on that drive.** LaunchOS asks twice before it starts.
+
+## Files and drives
+
+Open **Files** from Home. USB drives show up by themselves when you plug them in; drives inside the PC open when you select them. Select a file or folder and press X (or right-click) for Copy, Move, Rename, Delete and more, then go to another folder or drive and choose **Paste here**. Press X on a drive to **Eject** it before unplugging, or to **Format** it (exFAT works almost everywhere). Keyboard shortcuts work too: `Ctrl+C`, `Ctrl+X`, `Ctrl+V`, `Delete`, `F2` to rename, `Space` to select.
 
 ## Controls
 
