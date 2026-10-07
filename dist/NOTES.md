@@ -1,10 +1,23 @@
-LaunchOS v0.5: **Super key** and **app options** (End task and more).
+LaunchOS v0.6: **Steam, Wine, Roblox, FreeTube, Wi-Fi, saving, USB boot and installing**, plus a round of bug fixes.
 
-- **Super (Windows) key** works like the Xbox button: on Home it opens and closes the side menu; in an app, Setup or the System monitor it takes you back to Home. The Xbox (Guide) button on a controller does the same.
-- **Apps keep running** when you go Home, like on Xbox. Running apps show a green bar on their tile and are listed at the top of the side menu. Up to 3 web apps stay running; opening a 4th ends the one you used longest ago.
-- **Ctrl+click (or right-click) any app** to open its options: Resume, Restart, **End task** (closes it and frees its memory), Move, plus how long it's been running and what page it's on. On a controller press X; on a keyboard, the Menu key or Shift+F10.
-- **Move**: put any app wherever you want on Home (left/right, then A to drop, B to cancel). Your order is kept.
-- In an app: Super or the Home button goes back to Home and keeps it running; Ctrl+W closes it.
-- Fixes: going Home no longer leaves an old "Opening…" message on screen; apps use less memory in the background.
+**Games and apps**
+- **Steam** (with Proton for Windows games) is built in. The first time you open it, Steam downloads itself from Valve.
+- **Windows programs**: run .exe and .msi files with Wine, from Downloads or a USB drive. The browser can now download files.
+- **Roblox** (through Sober) and **FreeTube** download from Flathub the first time you open them.
+- One game or app runs at a time, like a console. **Super or the Xbox button** goes Home from inside any app or game; Ctrl+click the tile to Resume or End task.
 
-Download **LaunchOS.zip**, unzip it, then in VirtualBox choose **Machine > Add** and pick **LaunchOS.vbox**. Check the version in Settings > About LaunchOS.
+**Saving and installing**
+- **VirtualBox**: the included LaunchOS.vbox now has a save disk (LaunchOS-data.vdi), so your settings, sign-ins, downloads and games are kept.
+- **USB stick**: write LaunchOS.iso with balenaEtcher or Rufus (choose DD mode). It boots on BIOS and UEFI PCs, and uses the stick's free space for saving automatically. Secure Boot must be off.
+- **Install LaunchOS** (Settings) puts it on a drive in your PC. It erases that drive and asks twice first.
+
+**Also new**
+- **Wi-Fi** in Settings: scan, join with a password, forget.
+- **Discord** opens as a portrait panel beside Home (side menu > Chat).
+- Real graphics acceleration on AMD, Intel and NVIDIA PCs (VirtualBox keeps software drawing).
+- Game sound through PipeWire; drivers and firmware for common PC graphics, Wi-Fi and Bluetooth chips.
+- Setup's app picks now choose which apps show on Home.
+
+**Fixes**: Setup could get stuck if you pressed buttons quickly; pop-ups could leave the side menu in a broken state; controller buttons held while returning Home counted twice; the Menu key showed a copy/paste menu; misleading browser errors on downloads; safer handling of requests by the system helper; and more.
+
+Download **LaunchOS.zip**, unzip it, then in VirtualBox choose **Machine > Add** and pick **LaunchOS.vbox**. If you added an older LaunchOS before, remove it first (Machine > Remove > Remove only). Check the version in Settings > About LaunchOS.
