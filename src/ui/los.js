@@ -86,7 +86,7 @@
     const m = {
       installed: { 'org.videolan.VLC': { name: 'VLC', version: '3.0.21' } }, job: {}, upd: {}, admin: '',
       info: () => ({ apps: m.empty ? [] : apps, installed: m.installed, job: m.job, free: 20e9, catalog_age_h: 2 }),
-      home: () => Object.keys(m.installed).map(id => ({ id, name: m.installed[id].name, icon: '' })),
+      home: () => Object.keys(m.installed).filter(id => !MOCK_APPS.some(a => a[3] === id)).map(id => ({ id, name: m.installed[id].name, icon: '' })),   // (Setup's apps have their own tiles)
       act: a => {
         if (m.job.step && !m.job.done) return { ok: false, error: 'Wait for the app to finish first.' };
         const list = a.apps || [a.app];

@@ -64,7 +64,7 @@
 .chk.sel .tag.dl { color: var(--accent); }
 #apps.cols { gap: 0 14px; }
 #apps .chk { padding: 9px 14px; margin-bottom: 7px; }
-.inst { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 12px; background: var(--panel-2); margin-top: 22px; font-size: 16px; }
+.inst { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 12px; background: var(--panel-2); margin: 0 0 24px; font-size: 16px; }
 .inst .pic { width: 34px; height: 34px; }
 .inst .meterbar { flex: 1; height: 8px; border-radius: 4px; background: var(--chip); overflow: hidden; }
 .inst .meterbar i { display: block; height: 100%; background: var(--accent); transition: width .4s; }
@@ -176,7 +176,12 @@ const STEPS = [
 ];
 
 /* ---------- apps: install the ones you picked ---------- */
-const picked = () => new Set(LOS.prefs.appsPicked ? LOS.prefs.apps : DEFAULT_APPS);
+/* the apps on Home: the ones you picked, plus installed ones you haven't unticked (same as Home shows) */
+const picked = () => {
+  const hidden = Array.isArray(LOS.prefs.appsHidden) ? LOS.prefs.appsHidden : [];
+  return new Set([...(LOS.prefs.appsPicked ? LOS.prefs.apps : DEFAULT_APPS),
+    ...apps.filter(a => a.flatpak && a.installed && !hidden.includes(a.key)).map(a => a.key)]);
+};
 let instMsg = '', instTimer = null, instWait = null;
 function startInstall() {
   const want = apps.filter(a => a.flatpak && !a.installed && picked().has(a.key)).map(a => a.key);

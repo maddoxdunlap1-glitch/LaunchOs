@@ -567,7 +567,14 @@ async function aboutPanel() {
   const body = `<dl class="kv"><dt>Version</dt><dd>${esc(info.version)} (${esc(info.build)})</dd><dt>Processor</dt><dd>${esc(info.cpu)}, ${info.cores} cores</dd><dt>Memory</dt><dd>${info.mem_free_mb} MB free of ${info.mem_total_mb} MB</dd><dt>Screen</dt><dd>${esc(info.resolution)}</dd><dt>Running for</dt><dd>${info.uptime_min} min</dd></dl>`;
   storage = await call('storage'); appsInfo = await call('apps_info');
   const body2 = body.replace('</dl>', `<dt>Graphics</dt><dd>${appsInfo.gpu === 'hardware' ? 'Hardware accelerated' : 'Software (no acceleration)'}</dd><dt>Saving</dt><dd>${storage.installed ? 'Installed on a drive' : storage.saving ? 'On' : 'Off'}</dd></dl>`);
-  panel('About LaunchOS', storage.installed ? 'Installed on this PC.' : storage.saving ? 'Running live, with saving on.' : 'Running live: nothing you change is saved after you shut down.', [row('Done', '', 'check', () => closePanel())], { body: body2 });
+  panel('About LaunchOS', storage.installed ? 'Installed on this PC.' : storage.saving ? 'Running live, with saving on.' : 'Running live: nothing you change is saved after you shut down.', [
+    row('Open-source credits', 'The projects LaunchOS is built on', 'info', () => creditsPanel()), row('Done', '', 'check', () => closePanel())], { body: body2 });
+}
+const CREDITS = [['Debian 13', 'The base system. LaunchOS isn’t made or endorsed by Debian.'], ['Linux', 'GPL-2.0'], ['sway and wlroots', 'MIT'],
+  ['GTK, WebKitGTK and VTE', 'LGPL'], ['Wine', 'LGPL-2.1'], ['Flatpak', 'LGPL-2.1'], ['PipeWire', 'MIT'], ['Papirus icons', 'GPL-3.0'], ['Inter and Noto fonts', 'OFL-1.1']];
+function creditsPanel() {
+  const body = `<dl class="kv">${CREDITS.map(([n, l]) => `<dt>${esc(n)}</dt><dd>${esc(l)}</dd>`).join('')}</dl><p class="pnote">Every package’s license is in /usr/share/doc on this system, and its source code is on sources.debian.org. Steam is Valve’s own app; Discord, Spotify and other apps from Flathub belong to their makers.</p>`;
+  panel('Open-source credits', 'LaunchOS is built on free, open-source software.', [row('Back', '', 'check', () => aboutPanel())], { body });
 }
 /* ---------- Wi-Fi ---------- */
 async function wifiPanel(msg) {

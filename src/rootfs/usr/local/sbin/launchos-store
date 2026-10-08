@@ -93,6 +93,8 @@ def main():
         code, out = follow(["flatpak", "install", "--system", "-y", "flathub", *ids],
                            "Downloading " + NAME, 3, 99)
         missing = [i for i in ids if subprocess.run(["flatpak", "info", "--system", i], capture_output=True).returncode != 0]
+        if missing:   # what flatpak said, for the system log (journalctl -u launchos-store)
+            print("not installed:", ", ".join(missing), "| flatpak said:", out, file=sys.stderr)
         if not missing:
             st("Installed", 100, True)
             return 0

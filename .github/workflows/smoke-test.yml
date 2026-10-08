@@ -36,11 +36,13 @@ jobs:
             sudo mkdir -p $R/run/systemd/resolve
             sudo cp /etc/resolv.conf $R/run/systemd/resolve/stub-resolv.conf
             sudo chroot $R getent hosts dl.flathub.org
+            df -h $R
             sudo chroot $R /usr/local/sbin/launchos-store install com.discordapp.Discord,org.videolan.VLC "Discord and VLC"
             echo "exit code $?"
             echo "--- result"; sudo cat $R/run/launchos-status/store.json; echo
             sudo chroot $R flatpak list --app --system
             ls $R/var/lib/flatpak/exports/share/icons/hicolor/*/apps/ | head -20
+            df -h $R
           } > /tmp/smoke.log 2>&1 || true
           grep -q '"done": true' $R/run/launchos-status/store.json && grep -q '"error": ""' $R/run/launchos-status/store.json
       - name: Show the log as annotations
