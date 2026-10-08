@@ -39,6 +39,7 @@ jobs:
 
       - name: Write to a virtual disk
         run: |
+          Start-Transcript -Path "$PWD\vdisk.log"
           $vhd = "$env:RUNNER_TEMP\test.vhd"
           "create vdisk file=$vhd maximum=96 type=fixed`nselect vdisk file=$vhd`nattach vdisk" | Out-File dp.txt -Encoding ascii
           diskpart /s dp.txt
@@ -60,9 +61,11 @@ jobs:
           $fs = [IO.File]::OpenRead($vhd); $buf = New-Object byte[] $img.Length; [void]$fs.Read($buf, 0, $buf.Length); $fs.Close()
           $same = [Linq.Enumerable]::SequenceEqual([byte[]]$img, [byte[]]$buf)
           "disk matches the image: $same"
+          Stop-Transcript
           if ($p.ExitCode -ne 0 -or -not $same) { exit 1 }
 
       - name: Screenshot of the window
+        if: always()
         run: |
           Start-Process out/LaunchOS-Flasher.exe
           Start-Sleep 12
@@ -83,11 +86,23 @@ jobs:
           path: out/LaunchOS-Flasher.exe
           retention-days: 2
 
+      - name: Logs (readable through the API as annotations)
+        if: always()
+        run: |
+          foreach ($f in 'selftest.log', 'write.log', 'vdisk.log') {
+            if (Test-Path $f) {
+              $t = (Get-Content $f -Raw); if ($t.Length -gt 3800) { $t = $t.Substring($t.Length - 3800) }
+              $t = $t -replace '%', '%25' -replace "`r", '' -replace "`n", '%0A'
+              Write-Output "::notice title=$f::$t"
+            }
+          }
+
       - name: Publish the test build
-        if: github.workflow == 'Flasher'
+        if: always() && github.workflow == 'Flasher'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           Copy-Item out/LaunchOS-Flasher.exe .
           gh release delete build-flasher --yes --cleanup-tag -R $env:GITHUB_REPOSITORY 2>$null
-          gh release create build-flasher LaunchOS-Flasher.exe selftest.log write.log flasher-window.png -R $env:GITHUB_REPOSITORY --prerelease --title "Flasher test build (not a release)" --notes "LaunchOS Flasher built from $env:GITHUB_SHA, with its test results. Not a release."
+          $files = @('LaunchOS-Flasher.exe', 'selftest.log', 'write.log', 'vdisk.log', 'flasher-window.png') | Where-Object { Test-Path $_ }
+          gh release create build-flasher @files -R $env:GITHUB_REPOSITORY --prerelease --title "Flasher test build (not a release)" --notes "LaunchOS Flasher built from $env:GITHUB_SHA, with its test results. Not a release."

@@ -33,7 +33,14 @@ defaults:
     shell: bash
 
 jobs:
+  flasher:
+    if: inputs.kind == 'release' && inputs.test_release == ''
+    uses: ./.github/workflows/flasher.yml
+
   image:
+    needs: [flasher]
+    # (runs for test builds too, when the flasher job is skipped)
+    if: always() && needs.flasher.result != 'failure' && needs.flasher.result != 'cancelled'
     runs-on: ubuntu-24.04
     timeout-minutes: 200
     steps:
@@ -119,6 +126,13 @@ jobs:
           gh release create build-test $files -R "$GITHUB_REPOSITORY" --prerelease --title "Test build (not a release)" \
             --notes "Test build of LaunchOS $V from $GITHUB_SHA, with its start-up test report. Not a release."
 
+      - name: The flasher
+        if: inputs.kind == 'release' && inputs.test_release == ''
+        uses: actions/download-artifact@v4
+        with:
+          name: LaunchOS-Flasher
+          path: /mnt/w/flasher
+
       - name: Release files
         if: inputs.kind == 'release' && inputs.test_release == ''
         run: |
@@ -144,7 +158,7 @@ jobs:
           tar czf $W/boot-report.tar.gz -C out .
           gh release delete "$v" --yes --cleanup-tag -R "$GITHUB_REPOSITORY" 2>/dev/null || true
           gh release create "$v" $W/LaunchOS.zip $W/LaunchOS.iso $W/SHA256SUMS.txt $W/update/launchos-update.tar.gz \
-            $W/update/launchos-update.json -R "$GITHUB_REPOSITORY" \
+            $W/update/launchos-update.json $W/flasher/LaunchOS-Flasher.exe -R "$GITHUB_REPOSITORY" \
             --title "LaunchOS $v" --notes-file dist/NOTES.md
           # keep only the newest release (removed after the new one is up, so updates never find nothing)
           for t in $(gh release list -R "$GITHUB_REPOSITORY" --limit 50 --json tagName -q '.[].tagName'); do
