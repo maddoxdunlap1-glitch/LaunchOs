@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   installs:
@@ -24,7 +24,9 @@ jobs:
           cat base.squashfs.part* > base.squashfs
           sudo unsquashfs -q -d root base.squashfs
       - name: Install Discord and VLC with the Store job
+        shell: bash
         run: |
+          exec > >(tee /mnt/t/smoke.log) 2>&1
           R=/mnt/t/root
           sudo cp -a src/rootfs/. $R/
           sudo chmod 755 $R/usr/local/sbin/launchos-*
@@ -40,3 +42,11 @@ jobs:
           sudo chroot $R flatpak info --system org.videolan.VLC | head -5
           ls $R/var/lib/flatpak/exports/share/icons/hicolor/*/apps/ | head -20
           grep -q '"done": true' $R/run/launchos-status/store.json && grep -q '"error": ""' $R/run/launchos-status/store.json
+      - name: Publish the log
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete build-smoke-test --yes --cleanup-tag -R "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh release create build-smoke-test /mnt/t/smoke.log -R "$GITHUB_REPOSITORY" --prerelease \
+            --title "Smoke test log (build input)" --notes "Log of the app install test. Not a LaunchOS release."
