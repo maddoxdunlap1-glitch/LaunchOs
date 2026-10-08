@@ -6,6 +6,10 @@
 #   sudo ./make-image.sh BASE.squashfs WORKDIR VERSION [fast]
 #     -> WORKDIR/LaunchOS.iso        ("fast": quicker, larger compression for test builds)
 #
+# boot-order.txt (next to this script, made by the start-up test in tests/ci_boot.py) lists the
+# files LaunchOS reads while starting; they go first in the image so a USB stick reads them in
+# one sweep instead of jumping around.
+#
 # The unpacked base is kept in WORKDIR/root between runs and reused while BASE.squashfs is the
 # same, so trying a change takes minutes; a release build should start from an empty WORKDIR.
 set -euo pipefail
@@ -39,13 +43,16 @@ find "$R/usr/local" -name __pycache__ -prune -exec rm -rf {} +
 chown -R 0:0 "$R/usr/local" "$R/etc/launchos" "$R/etc/systemd/system" "$R/etc/initramfs-tools"
 chmod 755 "$R/usr/local/bin/launchos-session" "$R/usr/local/bin/launchos-inner" "$R"/usr/local/sbin/launchos-* \
   "$R/usr/local/lib/launchos/steam-shim/zenity" "$R/etc/initramfs-tools/hooks/launchos-saving" \
-  "$R/etc/initramfs-tools/scripts/live-premount/launchos-saving"
+  "$R/etc/initramfs-tools/scripts/live-premount/launchos-saving" "$R/etc/initramfs-tools/hooks/launchos-slim"
 chmod 644 "$R/usr/local/sbin/launchos-status" "$R/usr/local/lib/launchos/disks.py" "$R/etc/launchos/update.conf"
 # /media/player belongs to root: only root makes the drive folders in it
 mkdir -p "$R/media/player"; chown 0:0 "$R/media/player"; chmod 755 "$R/media/player"
 rm -rf "$R/opt/launcher"; mkdir -p "$R/opt/launcher"
 cp -a "$SRC/ui/." "$R/opt/launcher/"
 find "$R/opt/launcher" -name __pycache__ -prune -exec rm -rf {} +
+# compiled ahead of time: the launcher's own modules start without compiling (it can't write here)
+python3 -m compileall -q "$R/opt/launcher" >/dev/null 2>&1 || true
+$IN python3 -m compileall -q /opt/launcher >/dev/null 2>&1 || true
 chown -R 0:0 "$R/opt/launcher"; chmod -R a+rX,go-w "$R/opt/launcher"
 sed -i "s/^VERSION=.*/VERSION=\"$VERSION\"/; s/^BUILD_DATE=.*/BUILD_DATE=\"$(date -u +%F)\"/" "$R/etc/launchos-release"
 cat "$R/etc/launchos-release"
@@ -87,6 +94,12 @@ ARGS="boot=live persistence quiet splash loglevel=0 rd.systemd.show_status=false
 cat > "$IMG/boot/grub/grub.cfg" <<EOF
 set timeout=0
 set default=0
+# BIOS PCs: start Linux with a graphics screen, so the boot animation shows from the start
+# (UEFI PCs always have one)
+if [ "\$grub_platform" = "pc" ]; then
+  insmod all_video
+  set gfxpayload=auto
+fi
 
 # LaunchOS is 64-bit. On a 32-bit virtual machine, explain the fix instead of stopping silently.
 if [ "\$grub_platform" = "pc" ]; then
@@ -122,7 +135,7 @@ configfile ($root)/boot/grub/grub.cfg
 EOF
 G=$R/usr/lib/grub
 grub-mkimage -d "$G/i386-pc" -O i386-pc-eltorito -p /boot/grub -c "$W/embed.cfg" -o "$IMG/boot/grub/eltorito.img" \
-  biosdisk iso9660 part_msdos part_gpt fat ext2 search search_fs_file normal configfile linux echo test cpuid sleep halt
+  biosdisk iso9660 part_msdos part_gpt fat ext2 search search_fs_file normal configfile linux echo test cpuid sleep halt all_video
 grub-mkstandalone -d "$G/x86_64-efi" -O x86_64-efi \
   --modules="part_gpt part_msdos iso9660 fat ext2 search search_fs_file linux normal configfile all_video efi_gop" \
   --locales="" --fonts="" --themes="" -o "$W/bootx64.efi" "boot/grub/grub.cfg=$W/embed.cfg"
@@ -133,13 +146,46 @@ mkfs.vfat -n EFIBOOT "$IMG/boot/grub/efiboot.img" >/dev/null
 mmd -i "$IMG/boot/grub/efiboot.img" ::/EFI ::/EFI/BOOT
 mcopy -i "$IMG/boot/grub/efiboot.img" "$W/bootx64.efi" ::/EFI/BOOT/BOOTX64.EFI
 
-if [ "$FAST" = fast ]; then COMP=(-comp zstd -Xcompression-level 6); else COMP=(-comp xz -Xbcj x86); fi
-mksquashfs "$R" "$IMG/live/filesystem.squashfs" "${COMP[@]}" -b 1M -noappend -no-progress \
+# Compression: zstd unpacks several times faster than xz, which matters more for start-up time
+# than the slightly bigger image. SQUASH=xz gives the smallest image.
+case "${SQUASH:-zstd}" in
+  xz) COMP=(-comp xz -Xbcj x86 -b 1M) ;;
+  *)  COMP=(-comp zstd -Xcompression-level 19 -b 256K) ;;
+esac
+[ "$FAST" = fast ] && COMP=(-comp zstd -Xcompression-level 6 -b 256K)
+# the files read while starting go first (highest priority first), in the order they're listed
+SORT=()
+if [ -s "$HERE/boot-order.txt" ]; then
+  python3 - "$HERE/boot-order.txt" "$R" > "$W/sort.txt" <<'PY'
+import os, stat, sys
+listing, root = sys.argv[1], sys.argv[2]
+p = 32000
+for line in open(listing, encoding='utf-8', errors='replace'):
+    f = line.rstrip('\n')
+    if not f or f.startswith('#'):
+        continue
+    f = f[2:] if f.startswith('./') else f.lstrip('/')
+    if any(c.isspace() for c in f) or '..' in f.split('/'):
+        continue   # (the sort list can't hold names with spaces)
+    try:
+        if not stat.S_ISREG(os.lstat(os.path.join(root, f)).st_mode):
+            continue
+    except OSError:
+        continue
+    print(f, p)
+    p -= 1
+    if p < -32000:
+        break
+PY
+  echo "start-up files first: $(wc -l < "$W/sort.txt")"
+  SORT=(-sort "$W/sort.txt")
+fi
+mksquashfs "$R" "$IMG/live/filesystem.squashfs" "${COMP[@]}" "${SORT[@]}" -noappend -no-progress \
   -wildcards -e 'proc/*' 'sys/*' 'dev/*' 'run/*' 'tmp/*'
 ls -l "$IMG/live/filesystem.squashfs"
 
 rm -f "$W/LaunchOS.iso"
-xorriso -as mkisofs -o "$W/LaunchOS.iso" -V LAUNCHOS -J -joliet-long -R -l -iso-level 3 \
+xorriso -as mkisofs -o "$W/LaunchOS.iso" -V LAUNCHOS -A "LAUNCHOS $VERSION" -publisher LAUNCHOS -J -joliet-long -R -l -iso-level 3 \
   --grub2-mbr "$G/i386-pc/boot_hybrid.img" -partition_offset 16 --mbr-force-bootable \
   -append_partition 2 0xef "$IMG/boot/grub/efiboot.img" \
   -c boot.catalog -b boot/grub/eltorito.img -no-emul-boot -boot-load-size 4 -boot-info-table --grub2-boot-info \

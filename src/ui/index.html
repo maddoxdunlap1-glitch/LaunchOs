@@ -71,9 +71,6 @@ label.pw button { padding: 0 14px; border-radius: 10px; background: var(--chip);
 #pl { max-height: 430px; }
 #gl::-webkit-scrollbar, #pl::-webkit-scrollbar { display: none; }
 #bye { position: absolute; inset: 0; background: #000; display: none; align-items: center; justify-content: center; font-size: 20px; color: var(--mute); z-index: 40; }
-#intro { position: absolute; inset: 0; background: var(--bg); z-index: 50; transition: opacity .6s ease; }
-#intro.out { opacity: 0; pointer-events: none; }
-#intro img { position: absolute; display: block; }
 </style>
 </head>
 <body>
@@ -90,7 +87,6 @@ label.pw button { padding: 0 14px; border-radius: 10px; background: var(--chip);
 <section class="panel" id="panel" aria-live="polite"><h2 id="ph"></h2><p id="pp"></p><div id="pbody"></div><div id="pl"></div></section>
 <div id="bye"></div>
 <div id="toast"></div>
-<div id="intro" aria-hidden="true"><img id="iglow" src="img/glow.png" alt=""><img id="istand" src="img/stand.png" alt=""><img id="iwheel" src="img/wheel.png" alt=""></div>
 </div></div>
 <script src="los.js"></script>
 <script>
@@ -745,7 +741,6 @@ function back() { if (mode === 'panel') closePanel(); else if (mode === 'guide')
 function menu() { if (mode === 'home') openG(); else closeAll(); }
 function ok() { if (mode === 'home') act(); else if (mode === 'guide') gact(); else if (mode === 'panel') pact(); }
 function nav(a) {
-  if (introUp) { endIntro(); return; }
   if (mode === 'move') { const f = { left: () => moveBy(-1), right: () => moveBy(1), ok: dropMove, back: cancelMove, menu: cancelMove, guide: cancelMove }[a]; if (f) f(); return; }
   const f = { left: () => mv(-1, 0), right: () => mv(1, 0), up: () => mv(0, -1), down: () => mv(0, 1), ok, back, menu,
     guide: menu,                                              // Super key / Xbox button: open or close the side menu
@@ -782,37 +777,6 @@ $('#pl').onclick = e => {
   }
   rp(); pact();
 };
-
-/* ---------- ferris wheel intro (once per boot) ---------- */
-let introUp = false, endIntro = () => {};
-(function () {
-  const it = $('#intro');
-  let seen = false;
-  try { seen = sessionStorage.getItem('launchos.intro') === '1'; sessionStorage.setItem('launchos.intro', '1'); } catch (e) { /* no storage */ }
-  if (seen) { it.remove(); return; }
-  introUp = true;
-  const S = 720 / 1080 * 1.6, cx = 640, cy = 360 - 30 * S, Rw = 150 * S;
-  let ok = true, t0 = null, done = false;
-  const put = (el, w, h, x, y) => Object.assign(el.style, { width: w + 'px', height: h + 'px', left: x + 'px', top: y + 'px' });
-  put($('#iglow'), 560 * S, 560 * S, cx - 280 * S, cy - 280 * S); put($('#istand'), 260 * S, 240 * S, cx - 130 * S, cy - 18 * S); put($('#iwheel'), 332 * S, 332 * S, cx - 166 * S, cy - 166 * S);
-  const gs = [];
-  for (let i = 0; i < 8; i++) { const gi = document.createElement('img'); gi.src = 'img/gondola' + i + '.png'; gi.alt = ''; gi.style.width = 42 * S + 'px'; gi.style.height = 48 * S + 'px'; it.append(gi); gs.push(gi); }
-  it.querySelectorAll('img').forEach(i => i.onerror = () => { ok = false; });
-  endIntro = () => { if (done) return; done = true; introUp = false; it.classList.add('out'); setTimeout(() => it.remove(), 700); };
-  function step(t) {
-    if (!ok) { it.remove(); introUp = false; return; }
-    const wheel = $('#iwheel');
-    if (!wheel) return;   // intro already removed
-    if (t0 == null) t0 = t;
-    const ang = (t - t0) / 1000 * 0.4;
-    wheel.style.transform = `rotate(${ang}rad)`;
-    gs.forEach((gi, i) => { const a = ang + i * Math.PI / 4; gi.style.left = (cx + Math.cos(a) * Rw - 21 * S) + 'px'; gi.style.top = (cy + Math.sin(a) * Rw) + 'px'; });
-    if (!done || t - t0 < 2300) requestAnimationFrame(step);
-  }
-  requestAnimationFrame(step);
-  setTimeout(endIntro, 1600);
-  addEventListener('mousedown', endIntro, { once: true });
-})();
 
 /* ---------- start ---------- */
 renderHome();

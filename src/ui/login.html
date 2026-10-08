@@ -31,9 +31,11 @@
 .sq .pic { width: 28px; height: 28px; }
 .sq.f { transform: scale(1.06); }
 #hints { position: absolute; right: 44px; bottom: 12px; z-index: 4; }
-#intro { position: absolute; inset: 0; background: var(--bg); z-index: 50; transition: opacity .6s ease; }
+/* the boot animation's rocket takes off, and the sign-in screen appears behind it */
+#intro { position: absolute; inset: 0; z-index: 50; background: radial-gradient(70% 80% at 50% 46%, #11253c, #050b15); transition: opacity .55s ease; overflow: hidden; }
 #intro.out { opacity: 0; pointer-events: none; }
-#intro img { position: absolute; display: block; }
+#intro img { position: absolute; display: block; will-change: transform; }
+#intro i { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: #e1eeff; box-shadow: 0 0 4px 1px rgba(200, 225, 255, .5); }
 #bye { position: absolute; inset: 0; background: #000; display: none; align-items: center; justify-content: center; font-size: 20px; color: var(--mute); z-index: 40; }
 </style>
 </head>
@@ -55,7 +57,7 @@
 <section class="panel" id="panel" aria-live="polite"><h2 id="ph"></h2><p id="pp"></p><div id="pl"></div></section>
 <div id="bye"></div>
 <div id="toast"></div>
-<div id="intro" aria-hidden="true"><img id="iglow" src="img/glow.png" alt=""><img id="istand" src="img/stand.png" alt=""><img id="iwheel" src="img/wheel.png" alt=""></div>
+<div id="intro" aria-hidden="true"><img id="iglow" src="img/glow.png" alt=""><img id="iflame" src="img/flame0.png" alt=""><img id="irocket" src="img/rocket.png" alt=""></div>
 </div></div>
 <script src="los.js"></script>
 <script>
@@ -165,34 +167,57 @@ LOS.onNav((a, ev) => {
 }, { guide: true });
 document.addEventListener('mousemove', e => { const t = e.target.closest('[data-f]'); if (!t || P || !LOS.mouseRecent()) return; const k = F.indexOf(t); if (k >= 0 && k !== fi && F[fi] && F[fi].tagName !== 'INPUT') { fi = k; paint(); } });
 
-/* ---------- ferris wheel intro (once per start) ---------- */
+/* ---------- the rocket takes off (once per start, right after the boot animation) ---------- */
 let introUp = false, endIntro = () => {};
 (function () {
   const it = $('#intro');
   let seen = false;
   try { seen = sessionStorage.getItem('launchos.intro') === '1'; sessionStorage.setItem('launchos.intro', '1'); } catch (e) { /* no storage */ }
-  if (seen) { it.remove(); return; }
+  if (seen || matchMedia('(prefers-reduced-motion: reduce)').matches) { it.remove(); return; }
   introUp = true;
-  const S = 720 / 1080 * 1.6, cx = 640, cy = 360 - 30 * S, Rw = 150 * S;
-  let ok = true, t0 = null, done = false;
+  // same place and size as on the boot screen (drawn for 1080 lines; the stage has 720)
+  const k = 720 / 1080, cx = 640, top = 360 - 300 * k, rw = 210 * k, rh = 350 * k, noz = 320 * k;
+  const rocket = $('#irocket'), flame = $('#iflame'), glow = $('#iglow');
   const put = (el, w, h, x, y) => Object.assign(el.style, { width: w + 'px', height: h + 'px', left: x + 'px', top: y + 'px' });
-  put($('#iglow'), 560 * S, 560 * S, cx - 280 * S, cy - 280 * S); put($('#istand'), 260 * S, 240 * S, cx - 130 * S, cy - 18 * S); put($('#iwheel'), 332 * S, 332 * S, cx - 166 * S, cy - 166 * S);
-  const gs = [];
-  for (let i = 0; i < 8; i++) { const gi = document.createElement('img'); gi.src = 'img/gondola' + i + '.png'; gi.alt = ''; gi.style.width = 42 * S + 'px'; gi.style.height = 48 * S + 'px'; it.append(gi); gs.push(gi); }
+  put(rocket, rw, rh, cx - rw / 2, top);
+  put(flame, 128 * k, 260 * k, cx - 64 * k, top + noz - 8 * k);
+  put(glow, 440 * k, 440 * k, cx - 220 * k, top + noz - 220 * k + 40 * k);
+  flame.style.transformOrigin = '50% 0';
+  const frames = [];
+  for (let i = 0; i < 12; i++) { const im = new Image(); im.src = 'img/flame' + i + '.png'; frames.push(im.src); }
+  const stars = [];
+  for (let i = 0; i < 46; i++) {
+    const d = document.createElement('i'), z = i % 3;
+    d.style.left = (Math.random() * 1280).toFixed(1) + 'px';
+    d.style.opacity = String(1 - z * 0.25);
+    it.prepend(d);
+    stars.push({ d, y: Math.random() * 720, v: (2.6 - z * 0.9) * (0.6 + Math.random() * 0.8) });
+  }
+  let ok = true, t0 = null, last = null, done = false, fi = 0;
   it.querySelectorAll('img').forEach(i => i.onerror = () => { ok = false; });
-  endIntro = () => { if (done) return; done = true; introUp = false; it.classList.add('out'); setTimeout(() => { it.remove(); paint(); }, 700); };
+  endIntro = () => { if (done) return; done = true; introUp = false; it.classList.add('out'); setTimeout(() => { it.remove(); paint(); }, 600); };
   function step(t) {
     if (!ok) { it.remove(); introUp = false; return; }
-    const wheel = $('#iwheel');
-    if (!wheel) return;
-    if (t0 == null) t0 = t;
-    const ang = (t - t0) / 1000 * 0.4;
-    wheel.style.transform = `rotate(${ang}rad)`;
-    gs.forEach((gi, i) => { const a = ang + i * Math.PI / 4; gi.style.left = (cx + Math.cos(a) * Rw - 21 * S) + 'px'; gi.style.top = (cy + Math.sin(a) * Rw) + 'px'; });
-    if (!done || t - t0 < 2300) requestAnimationFrame(step);
+    if (!rocket.isConnected) return;
+    if (t0 == null) t0 = last = t;
+    const el = (t - t0) / 1000, dt = Math.min(50, t - last) / 16.7;
+    last = t;
+    // hover for a moment, then lift off: faster and faster, flame growing
+    const lift = Math.max(0, el - 0.3);
+    const y = Math.sin(el * 2.7) * 4 * k - 900 * lift * lift * lift - 120 * lift * lift;
+    const boost = 1 + Math.min(0.9, lift * 1.6);
+    rocket.style.transform = `translateY(${y.toFixed(1)}px)`;
+    flame.style.transform = `translateY(${y.toFixed(1)}px) scaleY(${boost.toFixed(3)})`;
+    glow.style.transform = `translateY(${y.toFixed(1)}px)`;
+    glow.style.opacity = String(Math.max(0, 1 - lift * 1.4));
+    if ((fi = (fi + 1) % 24) % 2 === 0) flame.src = frames[fi / 2];
+    const speed = 1 + lift * 14;
+    for (const s of stars) { s.y += s.v * speed * dt; if (s.y > 724) s.y -= 728; s.d.style.transform = `translateY(${s.y.toFixed(1)}px) scaleY(${Math.min(9, 1 + lift * 10).toFixed(2)})`; }
+    if (el > 0.75 && !done) endIntro();
+    if (el < 1.6) requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
-  setTimeout(endIntro, 1600);
+  setTimeout(endIntro, 1400);   // (if animations don't run, never keep the sign-in screen waiting)
   addEventListener('mousedown', endIntro, { once: true });
 })();
 

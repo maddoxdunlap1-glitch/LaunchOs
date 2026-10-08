@@ -3,6 +3,8 @@
 # display server starts: VMs without 3D (VirtualBox VMSVGA, plain VGA) get software
 # drawing; real AMD, Intel or NVIDIA (nouveau) graphics get full acceleration.
 gpu=software
+# the graphics driver may still be loading (AMD and NVIDIA drivers load after start-up): wait for it
+udevadm settle --timeout=10 2>/dev/null
 for d in /sys/class/drm/card[0-9]*/device/driver; do
   [ -e "$d" ] || continue
   case "$(basename "$(readlink -f "$d")")" in

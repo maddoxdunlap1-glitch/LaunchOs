@@ -1,6 +1,6 @@
 [Plymouth Theme]
 Name=LaunchOS
-Description=Spinning ferris wheel
+Description=A rocket climbing through space
 ModuleName=script
 
 [script]

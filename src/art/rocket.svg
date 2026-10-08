@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 400" width="240" height="400">
+  <!-- LaunchOS rocket. Drawn upright; the flame is a separate, animated image under the nozzle at (120, 366). -->
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8195ae"/>
+      <stop offset=".16" stop-color="#d4dfec"/>
+      <stop offset=".36" stop-color="#ffffff"/>
+      <stop offset=".6" stop-color="#eef3f9"/>
+      <stop offset=".84" stop-color="#aebfd3"/>
+      <stop offset="1" stop-color="#71859f"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#148a40"/>
+      <stop offset=".3" stop-color="#3fe57a"/>
+      <stop offset=".42" stop-color="#9dffbf"/>
+      <stop offset=".62" stop-color="#3ddc6b"/>
+      <stop offset="1" stop-color="#0f7a37"/>
+    </linearGradient>
+    <linearGradient id="finL" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5df08f"/>
+      <stop offset=".55" stop-color="#2fc461"/>
+      <stop offset="1" stop-color="#127a39"/>
+    </linearGradient>
+    <linearGradient id="finR" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2fc461"/>
+      <stop offset=".6" stop-color="#1c9c4b"/>
+      <stop offset="1" stop-color="#0c6630"/>
+    </linearGradient>
+    <linearGradient id="finC" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#127a39"/>
+      <stop offset=".4" stop-color="#5df08f"/>
+      <stop offset="1" stop-color="#147d3b"/>
+    </linearGradient>
+    <linearGradient id="nozzle" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2b3647"/>
+      <stop offset=".35" stop-color="#7d8ea6"/>
+      <stop offset=".55" stop-color="#4a5a71"/>
+      <stop offset="1" stop-color="#1f2a38"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f4f8fc"/>
+      <stop offset=".5" stop-color="#9fb1c7"/>
+      <stop offset="1" stop-color="#55677f"/>
+    </linearGradient>
+    <radialGradient id="glass" cx=".38" cy=".34" r=".75">
+      <stop offset="0" stop-color="#d4f1ff"/>
+      <stop offset=".35" stop-color="#5fb8ff"/>
+      <stop offset=".8" stop-color="#1d5a9e"/>
+      <stop offset="1" stop-color="#123d70"/>
+    </radialGradient>
+    <linearGradient id="warm" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#ff9a4d" stop-opacity=".42"/>
+      <stop offset=".35" stop-color="#ff9a4d" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#9fd8ff" stop-opacity=".9"/>
+      <stop offset=".12" stop-color="#9fd8ff" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="bodyclip"><path id="bp" d="M120 14 C152 40 184 116 184 196 L178 318 Q177 330 165 330 L75 330 Q63 330 62 318 L56 196 C56 116 88 40 120 14 Z"/></clipPath>
+  </defs>
+  <!-- side fins, behind the body -->
+  <path d="M66 226 C38 246 18 292 18 346 C18 357 28 361 36 354 L72 318 Z" fill="url(#finL)"/>
+  <path d="M174 226 C202 246 222 292 222 346 C222 357 212 361 204 354 L168 318 Z" fill="url(#finR)"/>
+  <path d="M66 226 C40 246 22 290 20 342" fill="none" stroke="#b8ffd2" stroke-opacity=".55" stroke-width="2"/>
+  <!-- nozzle -->
+  <path d="M82 328 L158 328 L166 358 Q167 366 158 366 L82 366 Q73 366 74 358 Z" fill="url(#nozzle)"/>
+  <ellipse cx="120" cy="364" rx="40" ry="5" fill="#141c27"/>
+  <!-- body -->
+  <g clip-path="url(#bodyclip)">
+    <rect x="40" y="0" width="160" height="340" fill="url(#body)"/>
+    <rect x="40" y="0" width="160" height="96" fill="url(#green)"/>
+    <rect x="40" y="94" width="160" height="5" fill="#0d5f2c" opacity=".35"/>
+    <rect x="40" y="99" width="160" height="2" fill="#ffffff" opacity=".6"/>
+    <path d="M40 262 Q120 272 200 262" fill="none" stroke="#7f93ad" stroke-opacity=".55" stroke-width="2"/>
+    <path d="M40 265 Q120 275 200 265" fill="none" stroke="#ffffff" stroke-opacity=".5" stroke-width="1.2"/>
+    <rect x="40" y="0" width="160" height="340" fill="url(#rim)"/>
+    <rect x="40" y="200" width="160" height="140" fill="url(#warm)"/>
+    <g fill="#8a9db5" opacity=".7"><circle cx="78" cy="282" r="2"/><circle cx="100" cy="286" r="2"/><circle cx="140" cy="286" r="2"/><circle cx="162" cy="282" r="2"/></g>
+  </g>
+  <!-- porthole -->
+  <circle cx="120" cy="170" r="31" fill="#0b1726" opacity=".18"/>
+  <circle cx="120" cy="168" r="30" fill="url(#ring)"/>
+  <circle cx="120" cy="168" r="24" fill="#0e2236"/>
+  <circle cx="120" cy="168" r="21" fill="url(#glass)"/>
+  <path d="M104 160 A17 17 0 0 1 126 150" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity=".85"/>
+  <circle cx="131" cy="178" r="2.2" fill="#ffffff" opacity=".7"/>
+</svg>

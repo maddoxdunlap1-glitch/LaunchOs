@@ -37,6 +37,10 @@ HOME = os.path.expanduser('~')
 HW = os.environ.get('LAUNCHOS_GPU') == 'hardware'
 ACCEL = WebKit.HardwareAccelerationPolicy.ALWAYS if HW else WebKit.HardwareAccelerationPolicy.NEVER
 
+# Written once the sign-in screen has loaded: seconds from power-on (kernel start) to LaunchOS
+# being ready. Shown in Settings > About, and read by the start-up speed test.
+READY_FILE = os.path.join(os.environ.get('XDG_RUNTIME_DIR') or '/run/player', 'launchos-ready')
+
 NAVY = Gdk.RGBA()
 NAVY.parse('#0b1726')
 WHITE = Gdk.RGBA()
@@ -75,7 +79,12 @@ def system_info():
             break
     up = float(read('/proc/uptime', '0').split()[0] or 0)
     rel = release()
+    try:
+        boot_s = round(float(read(READY_FILE, '0').strip() or 0), 1)
+    except ValueError:
+        boot_s = 0
     return {
+        'boot_s': boot_s,
         'version': rel.get('VERSION', '?'),
         'build': rel.get('BUILD_DATE', ''),
         'kernel': os.uname().release,
@@ -1914,6 +1923,7 @@ class Launcher(Gtk.Application):
         s.set_allow_file_access_from_file_urls(True)
         s.set_media_playback_requires_user_gesture(False)   # the viewer starts a video or song you picked in Files
         self.view.connect('context-menu', lambda *a: True)
+        self.view.connect('load-changed', self.on_first_load)
         self.view.load_uri(UI + 'login.html')
         self.overlay = Gtk.Overlay()
         self.overlay.set_child(self.view)
@@ -1930,6 +1940,21 @@ class Launcher(Gtk.Application):
         self.win.add_controller(keys)
         self.win.fullscreen()
         self.win.present()
+
+    def on_first_load(self, view, event):
+        """The first page (the sign-in screen) has loaded: note how long start-up took."""
+        if event != WebKit.LoadEvent.FINISHED or getattr(self, 'ready_noted', False):
+            return
+        self.ready_noted = True
+        try:
+            up = read('/proc/uptime', '0').split()[0]
+            tmp = READY_FILE + '.tmp'
+            with open(tmp, 'w') as f:
+                f.write(up + '\n')
+            os.replace(tmp, READY_FILE)
+            print(f'LaunchOS ready {up} s after start', flush=True)
+        except OSError:
+            pass
 
     def js(self, code):
         self.view.evaluate_javascript(code, -1, None, None, None, None, None)
