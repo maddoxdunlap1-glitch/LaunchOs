@@ -33,10 +33,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           v="v$(cat dist/VERSION)"
-          # Keep only the newest build: remove older releases so nobody downloads a broken one.
-          for t in $(gh release list --limit 50 --json tagName -q '.[].tagName'); do
-            gh release delete "$t" --yes --cleanup-tag || true
-          done
-          gh release create "$v" LaunchOS.zip \
+          # the small update package (Settings > Updates on LaunchOS downloads it)
+          extra=""
+          [ -f dist/update/launchos-update.json ] && extra="dist/update/launchos-update.tar.gz dist/update/launchos-update.json"
+          gh release delete "$v" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$v" LaunchOS.zip $extra \
             --title "LaunchOS $v" \
             --notes-file dist/NOTES.md
+          # Keep only the newest build (removed after the new one is up, so updates never find nothing)
+          for t in $(gh release list --limit 50 --json tagName -q '.[].tagName'); do
+            [ "$t" = "$v" ] || gh release delete "$t" --yes --cleanup-tag || true
+          done
