@@ -70,6 +70,9 @@ $IN groupadd -f netdev
 $IN usermod -aG audio,video,input,render,netdev player
 $IN passwd -l root >/dev/null
 
+# font cache made now, not on first start (the Terminal's first window waits for it)
+$IN fc-cache -s >/dev/null 2>&1 || true
+
 # start-up image with the live system and the LaunchOS boot screen
 KVER=$(ls "$R/lib/modules" | sort -V | tail -1)
 $IN update-initramfs -u -k "$KVER"

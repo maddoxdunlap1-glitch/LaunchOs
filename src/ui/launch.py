@@ -505,6 +505,9 @@ class Browser(Gtk.ApplicationWindow):
                                              WebKit.UserScriptInjectionTime.END, None, None))
         # Apps share the engine's default context: it keeps at most one spare process, reused by the next app.
         self.view = WebKit.WebView(vexpand=True, user_content_manager=ucm)
+        # never laid out at zero height: WebKit (2.48+, software drawing) doesn't recover from a first
+        # frame of 0 pixels and the page stays blank
+        self.view.set_size_request(200, 200)
         self.view.set_background_color(NAVY)
         s = self.view.get_settings()
         s.set_hardware_acceleration_policy(ACCEL)
@@ -2167,7 +2170,8 @@ class Launcher(Gtk.Application):
         GLib.idle_add(self.push_tasks)
 
     def show_home(self):
-        GLib.idle_add(lambda: (self.win.present(), self.view.grab_focus(), False)[2])
+        # (sway takes full screen away from Home while an app is full screen: give it back)
+        GLib.idle_add(lambda: (self.win.fullscreen(), self.win.present(), self.view.grab_focus(), False)[3])
 
     # ---------- outside apps: Steam, games, FreeTube, Windows programs ----------
     # Only one runs at a time, like a console. It draws its own window on top of Home.
@@ -2297,6 +2301,7 @@ class Launcher(Gtk.Application):
         ucm.add_script(WebKit.UserScript.new(PAD_EXIT_JS, WebKit.UserContentInjectedFrames.TOP_FRAME,
                                              WebKit.UserScriptInjectionTime.END, None, None))
         self.panel_view = WebKit.WebView(vexpand=True, user_content_manager=ucm)
+        self.panel_view.set_size_request(200, 200)   # (see Browser: never zero height)
         self.panel_view.set_background_color(NAVY)
         st = self.panel_view.get_settings()
         st.set_hardware_acceleration_policy(ACCEL)
