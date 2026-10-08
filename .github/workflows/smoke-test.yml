@@ -42,11 +42,15 @@ jobs:
           sudo chroot $R flatpak info --system org.videolan.VLC | head -5
           ls $R/var/lib/flatpak/exports/share/icons/hicolor/*/apps/ | head -20
           grep -q '"done": true' $R/run/launchos-status/store.json && grep -q '"error": ""' $R/run/launchos-status/store.json
-      - name: Publish the log
+      - name: Show the log as annotations
         if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
         run: |
-          gh release delete build-smoke-test --yes --cleanup-tag -R "$GITHUB_REPOSITORY" 2>/dev/null || true
-          gh release create build-smoke-test /mnt/t/smoke.log -R "$GITHUB_REPOSITORY" --prerelease \
-            --title "Smoke test log (build input)" --notes "Log of the app install test. Not a LaunchOS release."
+          f=/mnt/t/smoke.log
+          [ -f "$f" ] || { echo "::warning title=log::no log file"; exit 0; }
+          # annotations are readable through the API: the last part of the log, in pieces
+          tail -c 12000 "$f" | sed 's/\x1b\[[0-9;]*[A-Za-z]//g' | tr -d '\r' | split -b 3500 - /tmp/piece.
+          for p in /tmp/piece.*; do
+            body=$(sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g' "$p")
+            echo "::notice title=log $(basename $p)::$body"
+          done
