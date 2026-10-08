@@ -1,13 +1,18 @@
 #!/bin/sh
 # The first time LaunchOS starts from a USB stick, it sets aside the stick's free space for
 # your saves (a partition labelled "persistence"), before the live system looks for one.
-# Only on a stick written from the LaunchOS image, only in free space, and only once.
+# Only on a stick written from the LaunchOS image, only in free space (or a new, still empty
+# partition this script made before), and only until saving is set up.
 PREREQ=""
 prereqs() { echo "$PREREQ"; }
 case "$1" in prereqs) prereqs; exit 0 ;; esac
 
 grep -qw persistence /proc/cmdline || exit 0
-command -v sfdisk >/dev/null && command -v mke2fs >/dev/null || exit 0
+T=/usr/libexec/launchos   # full versions of these tools (see the launchos-saving hook)
+[ -x $T/sfdisk ] && [ -x $T/mke2fs ] && [ -x $T/blkid ] || exit 0
+sfdisk() { $T/sfdisk "$@"; }
+mke2fs() { $T/mke2fs "$@"; }
+blkid() { $T/blkid "$@"; }
 log() { echo "LaunchOS saving: $*" > /dev/kmsg 2>/dev/null; }
 
 find_stick() {
@@ -21,6 +26,8 @@ find_stick() {
   done
   return 1
 }
+# the third partition: after the system (1) and its UEFI start-up files (2)
+third() { case "$1" in *[0-9]) echo "${1}p3" ;; *) echo "${1}3" ;; esac; }
 
 udevadm settle --timeout=10 2>/dev/null
 i=0; disk=""
@@ -33,21 +40,32 @@ done
 for p in /dev/sd* /dev/nvme* /dev/mmcblk* /dev/vd*; do
   [ -b "$p" ] && [ "$(blkid -o value -s LABEL "$p" 2>/dev/null)" = persistence ] && exit 0
 done
-free=$(sfdisk -F "$disk" 2>/dev/null | awk '/^ *[0-9]+ +[0-9]+ +[0-9]+/{s=$3} END{print s+0}')
-[ "${free:-0}" -ge 2097152 ] || { log "less than 1 GB free on $disk"; exit 0; }
-log "setting up saving on $disk"
-echo ",,L" | sfdisk --append "$disk" >/dev/null 2>&1 || { log "couldn't add a partition"; exit 0; }
-udevadm settle --timeout=10 2>/dev/null; sleep 1
-part=""
-for p in "$disk"*; do [ "$p" != "$disk" ] && [ -b "$p" ] && part=$p; done
-case "$disk" in *[0-9]) part2=$(ls -d "${disk}p"* 2>/dev/null | tail -1); [ -n "$part2" ] && part=$part2 ;; esac
-[ -b "$part" ] || { log "new partition not found"; exit 0; }
+
+part=$(third "$disk")
+if [ ! -b "$part" ]; then
+  free=$(sfdisk -F "$disk" 2>/dev/null | awk '/^ *[0-9]+ +[0-9]+ +[0-9]+/{s=$3} END{print s+0}')
+  [ "${free:-0}" -ge 2097152 ] || { log "less than 1 GB free on $disk"; exit 0; }
+  log "setting up saving on $disk"
+  echo ",,L" | sfdisk --append "$disk" >/dev/null 2>&1 || { log "couldn't add a partition"; exit 0; }
+  udevadm settle --timeout=10 2>/dev/null
+  i=0; while [ ! -b "$part" ] && [ $i -lt 10 ]; do sleep 1; i=$((i + 1)); done
+  [ -b "$part" ] || { log "new partition not found"; exit 0; }
+fi
+# only a partition with nothing on it (one this script made), and of a useful size
 [ -z "$(blkid -o value -s TYPE "$part" 2>/dev/null)" ] || { log "$part isn't empty: leaving it alone"; exit 0; }
-mke2fs -t ext4 -F -q -L persistence "$part" || { log "couldn't format $part"; exit 0; }
+size=$(cat "/sys/class/block/${part##*/}/size" 2>/dev/null || echo 0)
+[ "$size" -ge 2097152 ] || { log "$part is too small"; exit 0; }
+[ -e /etc/mtab ] || ln -s /proc/mounts /etc/mtab
+if ! mke2fs -t ext4 -F -q -L persistence "$part" > /run/launchos-mke2fs.log 2>&1; then
+  log "couldn't format $part: $(tail -n 2 /run/launchos-mke2fs.log | tr '\n' ' ')"
+  exit 0
+fi
 mkdir -p /run/launchos-save
 if mount -t ext4 "$part" /run/launchos-save; then
   echo "/ union" > /run/launchos-save/persistence.conf
   umount /run/launchos-save
   log "saving is on ($part)"
+else
+  log "couldn't open $part"
 fi
 exit 0

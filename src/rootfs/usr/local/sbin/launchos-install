@@ -80,7 +80,7 @@ ROOT_UUID=$(blkid -s UUID -o value "${P}3")
 EFI_UUID=$(blkid -s UUID -o value "${P}2")
 cat > $T/etc/fstab <<EOF
 UUID=$ROOT_UUID / ext4 defaults,noatime 0 1
-UUID=$EFI_UUID /boot/efi vfat umask=0077 0 2
+UUID=$EFI_UUID /boot/efi vfat umask=0077,nofail,x-systemd.device-timeout=10s 0 2
 EOF
 mkdir -p $T/boot/efi $T/etc/launchos
 mount "${P}2" $T/boot/efi
