@@ -1,0 +1,42 @@
+name: Smoke test (app installs)
+
+# Checks, on a machine with internet, that LaunchOS's Store job really installs apps from
+# Flathub on the Debian base: several apps in one go, the way Setup does it.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  installs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get the Debian base
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq squashfs-tools
+          mkdir -p /mnt/t && cd /mnt/t
+          gh release download build-debian-base -R "$GITHUB_REPOSITORY" -p 'base.squashfs.part*'
+          cat base.squashfs.part* > base.squashfs
+          sudo unsquashfs -q -d root base.squashfs
+      - name: Install Discord and VLC with the Store job
+        run: |
+          R=/mnt/t/root
+          sudo cp -a src/rootfs/. $R/
+          sudo chmod 755 $R/usr/local/sbin/launchos-*
+          for m in dev dev/pts proc sys; do sudo mount --bind /$m $R/$m; done
+          sudo mount -t tmpfs tmpfs $R/run
+          sudo mkdir -p $R/run/systemd/resolve && sudo cp /etc/resolv.conf $R/run/systemd/resolve/stub-resolv.conf
+          ( while sleep 10; do sudo cat $R/run/launchos-status/store.json 2>/dev/null; echo; done ) &
+          sudo chroot $R /usr/local/sbin/launchos-store install com.discordapp.Discord,org.videolan.VLC "Discord and VLC" || true
+          kill %1 || true
+          echo "--- result"; sudo cat $R/run/launchos-status/store.json; echo
+          sudo chroot $R flatpak list --app --system
+          sudo chroot $R flatpak info --system com.discordapp.Discord | head -5
+          sudo chroot $R flatpak info --system org.videolan.VLC | head -5
+          ls $R/var/lib/flatpak/exports/share/icons/hicolor/*/apps/ | head -20
+          grep -q '"done": true' $R/run/launchos-status/store.json && grep -q '"error": ""' $R/run/launchos-status/store.json
