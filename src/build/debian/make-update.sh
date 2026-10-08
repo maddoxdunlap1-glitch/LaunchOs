@@ -10,7 +10,7 @@
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 SRC=$(cd "$HERE/../.." && pwd)
-V=${1:?usage: make-update.sh VERSION OUTDIR [APT PACKAGES...]}; OUT=$2; shift 2
+V=${1:?usage: make-update.sh VERSION OUTDIR [APT PACKAGES...]}; OUT=$(realpath -m "${2:?}"); shift 2
 S=$(mktemp -d)
 mkdir -p "$S/opt/launcher"
 cp -a "$SRC/ui/." "$S/opt/launcher/"

@@ -57,7 +57,7 @@ def follow(cmd, step, lo, hi):
 
 def friendly(out):
     low = out.lower()
-    if "no space" in low or "not enough" in low and "space" in low:
+    if "no space" in low or ("not enough" in low and "space" in low) or "min-free-space" in low:
         return "There isn’t enough space for that app."
     if "could not resolve" in low or "unable to connect" in low or "network" in low or "timeout" in low:
         return "Couldn’t reach Flathub. Check your internet connection and try again."

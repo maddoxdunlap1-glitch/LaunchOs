@@ -1,21 +1,24 @@
-LaunchOS v0.8: **Store, Terminal and Updates**.
+LaunchOS v0.9: **now based on Debian 13**, with a **sign-in screen**, **real app icons** and **real apps from Setup**.
 
-**Store** (new tile on Home and in the top bar)
-- Thousands of free apps and games from Flathub: Discord, Spotify, VLC, OBS Studio, Heroic Games Launcher, Prism Launcher (Minecraft), Lutris, RetroArch, Dolphin, Firefox, LibreOffice, GIMP and more.
-- Featured picks, shelves (Games, Internet & chat, Music & video, Creative, Work & school, Tools), search, and an Installed list.
-- Install, open and uninstall with progress. Apps you install show up on Home with their icons, and run like any other game or app (Super or the Xbox button comes back Home).
+**Debian 13 inside**
+- LaunchOS is rebuilt on Debian 13 "trixie" (Linux 6.12, Mesa 25, Wine 10). Everything from 0.8 works the same: Home, Files, Store, Terminal, Updates, Steam, Windows programs, Wi-Fi, saving and Install.
+- **Update the system** in Settings → Updates now installs Debian's security fixes.
+- From a USB stick, saving still turns on by itself the first time it starts.
 
-**Terminal**
-- A full Linux terminal (bash). Copy and paste buttons, bigger and smaller text. It keeps running when you go Home.
-- **Admin password** (Settings): set one to use `sudo`. Setting it the first time asks you to press Enter or A, so only someone at the PC can do it. LaunchOS no longer has a fixed root password.
+**Sign-in screen**
+- LaunchOS starts at a sign-in screen with your name, color, clock and power options.
+- Set a password in **Settings → Password** and only you can sign in. You can turn the sign-in question off and still use the password for `sudo`.
+- **Lock** (Settings → Power) keeps your apps running behind the sign-in screen. **Sign out** closes them.
 
-**Updates** (Settings → Updates)
-- **LaunchOS updates** straight from its GitHub releases: checks for a newer version, downloads a small update package, checks it, and installs it. From now on you won't need to download the whole zip for most updates.
-- **Update your apps** from the Store, and **update the system** (Ubuntu's security fixes).
-- Updates need saving to be on (or LaunchOS installed), otherwise they'd be gone at the next start.
+**Real apps, picked in Setup**
+- Setup and **Settings → Apps on Home** offer Discord, Spotify, FreeTube, Roblox, Minecraft (Prism Launcher), Heroic, OBS Studio and VLC. The ones you tick download from Flathub as real apps, not websites. Their Home tiles show the download, and an app you haven't got yet says **Get**.
+- In the side menu, **Discord** opens the Discord app. The web version beside Home is still there.
+
+**Real icons everywhere**
+- Apps show their own icons, and LaunchOS's own apps, settings, folders and file types have full-color icons.
 
 **Fixes**
-- Install couldn't see a drive that was open in Files. It now closes the drive by itself.
-- Install could list a drive with files on it as empty.
+- The Browser could open to a blank page.
+- Settings → About LaunchOS → **Open-source credits**.
 
-Download **LaunchOS.zip**, unzip it, then in VirtualBox choose **Machine > Add** and pick **LaunchOS.vbox**. If you added an older LaunchOS before, remove it first (Machine > Remove > Remove only). Check the version in Settings > About LaunchOS.
+**Coming from 0.8?** 0.9 is a fresh start, so Settings → Updates can't update 0.8 to it. Download **LaunchOS.zip** and write `LaunchOS.iso` to your USB stick again, or in VirtualBox remove the old machine (Machine > Remove > Remove only) and add the new **LaunchOS.vbox**. Check the version in Settings > About LaunchOS.
