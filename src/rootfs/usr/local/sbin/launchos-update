@@ -4,7 +4,7 @@
   launchos-update check    is there a newer LaunchOS on GitHub?
   launchos-update apply    download it, check it, and put it in place
   launchos-update apps     update the apps installed from the Store
-  launchos-update system   Ubuntu's own updates (security fixes)
+  launchos-update system   Debian's own updates (security fixes)
 
 A LaunchOS update is a small package published with each release: launchos-update.json
 (the version, the package's SHA-256 and any system packages it needs) and
@@ -216,10 +216,11 @@ def put(tar, name, member):
 
 
 def saving():
-    with open("/proc/cmdline") as f:
-        persistent = "persistent" in f.read().split()
-    labels = D.sh("lsblk", "-rno", "LABEL").stdout.split()
-    return os.path.exists("/etc/launchos/installed") or (persistent and ("casper-rw" in labels or "writable" in labels))
+    """Installed on a drive, or running live with the save area in use."""
+    if os.path.exists("/etc/launchos/installed"):
+        return True
+    with open("/proc/self/mounts") as f:
+        return any(len(l.split()) > 1 and l.split()[1].startswith("/run/live/persistence/") for l in f)
 
 
 def apps():
@@ -238,7 +239,7 @@ def apps():
 
 
 def system():
-    """Ubuntu's updates. 'upgrade' (not full-upgrade) never adds or removes packages, so the
+    """Debian's updates. 'upgrade' (not full-upgrade) never adds or removes packages, so the
     tested kernel and start-up files stay as they are."""
     def say_s(step, pct, done=False, err=""):
         D.status("sysupdate", step, pct, done, err)
@@ -251,7 +252,7 @@ def system():
     out = r.stdout + r.stderr
     offline = any(t in out for t in ("Failed to fetch", "Could not resolve", "Temporary failure resolving", "Unable to connect"))
     if r.returncode != 0 or offline:
-        say_s("", 100, True, "Couldn’t reach Ubuntu’s servers. Check your internet connection and try again.")
+        say_s("", 100, True, "Couldn’t reach Debian’s servers. Check your internet connection and try again.")
         return
     rfd, wfd = os.pipe()
     p = subprocess.Popen(["apt-get", "-y", "-o", "APT::Status-Fd=%d" % wfd, "-o", "Dpkg::Options::=--force-confold",

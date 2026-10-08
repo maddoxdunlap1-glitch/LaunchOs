@@ -1,0 +1,12 @@
+#!/bin/sh
+# Puts the tools that set up saving on a LaunchOS USB stick into the start-up image.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0 ;; esac
+. /usr/share/initramfs-tools/hook-functions
+for t in sfdisk blkid mke2fs partx; do
+  p=$(command -v $t) && copy_exec "$p" /sbin
+done
+[ -f /etc/mke2fs.conf ] && mkdir -p "$DESTDIR/etc" && cp /etc/mke2fs.conf "$DESTDIR/etc/"
+manual_add_modules ext4
+exit 0

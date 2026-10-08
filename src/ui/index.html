@@ -12,6 +12,7 @@
 #av:after { content: ""; position: absolute; left: 15px; top: 10px; width: 16px; height: 16px; border-radius: 50%; background: #1b3a5a; }
 #tb { position: absolute; left: 50%; top: 0; transform: translateX(-50%); display: flex; gap: 16px; }
 .tb { width: 46px; height: 46px; border-radius: 50%; background: #16273b; display: grid; place-items: center; color: #cfe6ff; transition: box-shadow .2s, transform .2s; }
+.tb .pic { width: 30px; height: 30px; }
 .tb.f { transform: scale(1.15); box-shadow: 0 0 0 2px var(--accent), 0 0 0 7px rgba(var(--accent-glow), .16), 0 0 24px 10px rgba(var(--accent-glow), .2); }
 #status { position: absolute; right: 0; top: 8px; display: flex; align-items: center; gap: 14px; font-size: 19px; color: #dce6f0; }
 #net { color: #cfe6ff; display: flex; }
@@ -28,12 +29,13 @@
 .t1.big { width: 180px; height: 178px; }
 .t1 .g { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(255, 255, 255, .92); font-size: 34px; font-weight: 700; }
 .t1 .g .ic { width: 40px; height: 40px; }
-.t1 .g .appimg { width: 64px; height: 64px; object-fit: contain; }
+.t1 .g .appimg { width: 64px; height: 64px; object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .35)); }
 .t1.big .g .appimg { width: 104px; height: 104px; }
 .t1.big .g .ic { width: 58px; height: 58px; }
 .t1 b { position: absolute; left: 0; right: 0; bottom: 0; padding: 8px 10px; font-weight: 600; font-size: 15px; background: rgba(8, 14, 22, .78); display: none; }
 .t1.big b { display: block; }
 .t1 .soon { position: absolute; top: 7px; right: 7px; font-size: 11px; font-weight: 600; background: rgba(8, 14, 22, .8); color: var(--ink-2); padding: 2px 7px; border-radius: 8px; }
+.t1 .soon.get { background: var(--accent); color: var(--accent-ink); }
 .t1.soonish .g { opacity: .5; }
 .t1.run::after { content: ""; position: absolute; left: 50%; bottom: 8px; width: 20px; height: 4px; margin-left: -10px; border-radius: 2px; background: var(--accent); box-shadow: 0 0 10px 1px rgba(var(--accent-glow), .9); }
 .t1.big.run::after { left: 12px; top: 12px; bottom: auto; margin: 0; }
@@ -50,6 +52,7 @@ label.pw button { padding: 0 14px; border-radius: 10px; background: var(--chip);
 .t2 { flex: 1; height: 146px; color: #fff; }
 .t2 .g { position: absolute; right: 16px; top: 14px; color: rgba(255, 255, 255, .7); }
 .t2 .g .ic { width: 34px; height: 34px; }
+.t2 .g .pic { width: 44px; height: 44px; }
 .t2 b { position: absolute; left: 16px; bottom: 14px; font-weight: 600; font-size: 19px; text-shadow: 0 1px 6px rgba(0, 0, 0, .6); }
 .t2 small { position: absolute; left: 16px; bottom: 40px; font-size: 13px; color: rgba(255, 255, 255, .78); }
 #cap { position: absolute; left: 60px; top: 304px; font-size: 19px; font-weight: 600; }
@@ -91,8 +94,10 @@ label.pw button { padding: 0 14px; border-radius: 10px; background: var(--chip);
 </div></div>
 <script src="los.js"></script>
 <script>
-const { $, call, toast, icon, esc } = LOS;
+const { $, call, toast, icon, pic, appPic, esc } = LOS;
 const st = $('#stage');
+call('session_state').then(s => { if (s && s.signed_in === false) location.href = 'login.html'; });
+const TILE = 'linear-gradient(160deg,#1d3550,#11233a)';
 
 /* ---------- home tiles ---------- */
 /* Web apps run in their own window. Going Home keeps them running; Ctrl+click a tile to end one. */
@@ -114,7 +119,6 @@ async function openApp(id, name, url) {
 const monitor = () => { location.href = 'monitor.html'; };
 const files = () => { location.href = 'files.html'; };
 const store = hash => () => { location.href = 'store.html' + (hash ? '#' + encodeURIComponent(hash) : ''); };
-const fileUrl = p => 'file://' + String(p).split('/').map(encodeURIComponent).join('/');
 async function terminal() {
   toast((running.terminal ? 'Back to ' : 'Opening ') + 'Terminal');
   const r = await call('open_terminal');
@@ -130,26 +134,43 @@ async function loadStoreApps() {
   storeApps = list;
   if (sig !== old && mode === 'home') renderHome();
 }
+/* Steam, Discord, Spotify… : the apps LaunchOS offers, with their own icons and whether they're on this PC */
+let appsList = [], storeJob = {}, jobTimer = null;
+async function loadApps() {
+  const r = await call('apps_info');
+  if (!r || !Array.isArray(r.apps)) return;
+  const sig = JSON.stringify([r.apps, r.job && [r.job.app, r.job.done, r.job.percent]]), old = JSON.stringify([appsList, storeJob && [storeJob.app, storeJob.done, storeJob.percent]]);
+  appsList = r.apps; storeJob = r.job || {}; appsInfo = r;
+  if (sig !== old && mode === 'home') renderHome();
+  // while apps are installing, keep their tiles' progress fresh
+  clearTimeout(jobTimer);
+  if (storeJob.step && !storeJob.done) jobTimer = setTimeout(loadApps, 2000);
+}
+const installing = a => !!(a.flatpak && storeJob.step && !storeJob.done && String(storeJob.app || '').split(',').includes(a.flatpak));
+const DEFAULT_APPS = ['steam', 'winprog'];
+function shownApps() {
+  const picked = LOS.prefs.appsPicked ? LOS.prefs.apps : DEFAULT_APPS;
+  // apps you picked, plus (until you've picked) any that are already installed
+  return appsList.filter(a => picked.includes(a.key) || (!LOS.prefs.appsPicked && a.flatpak && a.installed));
+}
+const appArt = a => a.key === 'winprog' ? 'wine' : a.key === 'steam' ? 'steam' : '';
 const goSetup = hash => () => { location.href = 'setup.html' + (hash ? '#' + hash : ''); };
 function tiles() {
   const W = (id, name, url, extra) => Object.assign({ id, name, url, act: web(id, name, url) }, extra);
   const all = [
-    W('browser', 'Browser', '', { bg: 'linear-gradient(160deg,#1f6fb0,#123e66)', glyph: 'globe' }),
-    { id: 'setup', name: LOS.prefs.setupDone ? 'Setup' : 'Start here: Setup', bg: 'linear-gradient(160deg,#2f8a55,#185033)', glyph: 'wand', act: goSetup() },
-    { id: 'settings', name: 'Settings', bg: '#34495f', glyph: 'gear', act: () => openG(4) },
-    W('youtube', 'YouTube', 'https://www.youtube.com', { bg: '#b3261e', glyph: 'play' }),
-    W('discord', 'Discord', 'https://discord.com/app', { bg: '#5865f2', letter: 'D' }),
-    W('twitch', 'Twitch', 'https://www.twitch.tv', { bg: '#7b3fe4', letter: 'T' }),
-    { id: 'files', name: 'Files', bg: 'linear-gradient(160deg,#b8862b,#7a5615)', glyph: 'folder', act: files },
-    { id: 'store', name: 'Store', bg: 'linear-gradient(160deg,#2d7ff9,#1b4fa8)', glyph: 'bag', act: store() },
-    { id: 'terminal', name: 'Terminal', bg: '#1d2733', glyph: 'terminal', act: terminal },
-    { id: 'monitor', name: 'System monitor', bg: '#1f4a5c', glyph: 'chart', act: monitor },
-    { id: 'steam', name: 'Steam', bg: 'linear-gradient(160deg,#1b2838,#2a475e)', letter: 'S', outside: true, act: () => openExt('steam', 'Steam') },
-    { id: 'roblox', name: 'Roblox', bg: '#393b3d', letter: 'R', outside: true, act: () => openExt('roblox', 'Roblox') },
-    { id: 'freetube', name: 'FreeTube', bg: '#d1453b', letter: 'F', outside: true, act: () => openExt('freetube', 'FreeTube') },
-    { id: 'winprog', name: 'Windows programs', bg: '#2b5797', glyph: 'grid', outside: true, act: () => running.winprog ? openExt('winprog', 'Windows program') : programsPanel() },
+    W('browser', 'Browser', '', { bg: TILE, pic: 'browser' }),
+    { id: 'setup', name: LOS.prefs.setupDone ? 'Setup' : 'Start here: Setup', bg: 'linear-gradient(160deg,#2f8a55,#185033)', pic: 'setup', act: goSetup() },
+    { id: 'settings', name: 'Settings', bg: TILE, pic: 'settings', act: () => openG(4) },
+    // Steam, Discord, Spotify and the rest: real apps, installed from Flathub when you pick them in Setup
+    ...shownApps().map(a => ({ id: a.key, name: a.name, bg: TILE, img: a.icon, pic: appArt(a), letter: a.name[0], outside: true, app: a,
+      badge: installing(a) ? 'Installing ' + Math.max(0, Math.min(99, storeJob.percent || 0)) + '%' : a.flatpak && !a.installed ? 'Get' : '',
+      act: a.key === 'winprog' ? () => running.winprog ? openExt('winprog', 'Windows program') : programsPanel() : () => openExt(a.key, a.name) })),
+    { id: 'files', name: 'Files', bg: TILE, pic: 'files', act: files },
+    { id: 'store', name: 'Store', bg: TILE, pic: 'store', act: store() },
+    { id: 'terminal', name: 'Terminal', bg: TILE, pic: 'terminal', act: terminal },
+    { id: 'monitor', name: 'System monitor', bg: TILE, pic: 'monitor', act: monitor },
     // apps you got from the Store
-    ...storeApps.map(a => ({ id: 'app:' + a.id, name: a.name, bg: '#22344a', img: a.icon, letter: (a.name || '?')[0].toUpperCase(), outside: true, store: a.id,
+    ...storeApps.map(a => ({ id: 'app:' + a.id, name: a.name, bg: TILE, img: a.icon, letter: (a.name || '?')[0].toUpperCase(), outside: true, store: a.id,
       act: () => openExt('app:' + a.id, a.name) })),
   ];
   // your own order (Move in a tile's options), then anything new at the end
@@ -157,27 +178,24 @@ function tiles() {
   const rank = t => { const i = order.indexOf(t.id); return i < 0 ? order.length + all.indexOf(t) : i; };
   const list = order.length ? all.slice().sort((a, b) => rank(a) - rank(b)) : all;
   if (!LOS.prefs.setupDone) list.unshift(...list.splice(list.findIndex(t => t.id === 'setup'), 1));   // setup stays first until it's done
-  // apps you turned off in Setup are left off Home
-  const PICKABLE = ['steam', 'roblox', 'freetube', 'winprog', 'youtube', 'discord', 'twitch'];
-  if (LOS.prefs.appsPicked) return list.filter(t => !PICKABLE.includes(t.id) || LOS.prefs.apps.includes(t.id));
   return list;
 }
 const T2 = [
-  { name: 'Browse the web', sub: 'Start page', bg: 'linear-gradient(120deg,#123e66,#1f6fb0 60%,#2aa6a0)', glyph: 'globe', app: 'browser', act: web('browser', 'Browser', '') },
-  { name: 'Run Setup', sub: 'Name, time zone, sound and more', bg: 'linear-gradient(120deg,#185033,#2f8a55)', glyph: 'wand', app: 'setup', act: goSetup() },
-  { name: 'Customize your Home', sub: 'Colors and background', bg: '#0f2233', glyph: 'palette', act: goSetup('look') },
-  { name: 'Test your controller', sub: 'Buttons and sticks', bg: '#0a0a0a', glyph: 'pad', act: goSetup('controller') },
+  { name: 'Browse the web', sub: 'Start page', bg: 'linear-gradient(120deg,#123e66,#1f6fb0 60%,#2aa6a0)', pic: 'browser', app: 'browser', act: web('browser', 'Browser', '') },
+  { name: 'Get apps', sub: 'Discord, Spotify, games and more', bg: 'linear-gradient(120deg,#1b3f7a,#2d7ff9)', pic: 'store', app: 'store', act: store() },
+  { name: 'Customize your Home', sub: 'Colors and background', bg: '#0f2233', pic: 'look', act: goSetup('look') },
+  { name: 'Test your controller', sub: 'Buttons and sticks', bg: '#0a0a0a', pic: 'controller', act: goSetup('controller') },
 ];
-const TB = [['globe', 'Browser', web('browser', 'Browser', ''), 'browser'], ['wand', 'Setup', goSetup(), 'setup'], ['folder', 'Files', files, 'files'], ['bag', 'Store', store(), 'store'], ['chart', 'System monitor', monitor, 'monitor'], ['pad', 'Devices', () => openG(2)], ['gear', 'Settings', () => openG(4), 'settings']];
+const TB = [['browser', 'Browser', web('browser', 'Browser', ''), 'browser'], ['setup', 'Setup', goSetup(), 'setup'], ['files', 'Files', files, 'files'], ['store', 'Store', store(), 'store'], ['monitor', 'System monitor', monitor, 'monitor'], ['controller', 'Devices', () => openG(2)], ['settings', 'Settings', () => openG(4), 'settings']];
 
 let T1 = [], R = [], pos = { r: 1, c: 0 }, mode = 'home';
 // come back to the tile you left from (monitor, setup, browser) instead of the first one
 try { const p = JSON.parse(sessionStorage.getItem('launchos.pos') || 'null'); if (p && Number.isInteger(p.r) && Number.isInteger(p.c)) pos = p; } catch (e) { /* no storage */ }
 function renderHome(keep) {
   if (!keep) T1 = tiles();
-  $('#tb').innerHTML = TB.map(t => `<button class="tb" aria-label="${t[1]}">${icon(t[0])}</button>`).join('');
-  $('#r1').innerHTML = T1.map((t, i) => `<div class="t t1${i === 0 ? ' big' : ''}${t.soon ? ' soonish' : ''}" style="background:${t.bg}"><span class="g" style="${t.ink ? 'color:' + t.ink : ''}">${t.img ? `<img class="appimg" src="${esc(fileUrl(t.img))}" alt="">` : t.glyph ? icon(t.glyph) : esc(t.letter)}</span>${t.soon ? '<span class="soon">Soon</span>' : ''}<b>${esc(t.name)}</b></div>`).join('');
-  $('#r2').innerHTML = T2.map(t => `<div class="t t2" style="background:${t.bg}"><span class="g">${icon(t.glyph)}</span><small>${esc(t.sub)}</small><b>${esc(t.name)}</b></div>`).join('');
+  $('#tb').innerHTML = TB.map(t => `<button class="tb" aria-label="${t[1]}">${pic(t[0])}</button>`).join('');
+  $('#r1').innerHTML = T1.map((t, i) => `<div class="t t1${i === 0 ? ' big' : ''}" style="background:${t.bg}"><span class="g">${t.img || t.pic ? appPic(t.img, t.pic, 'appimg') : t.glyph ? icon(t.glyph) : esc(t.letter)}</span>${t.badge ? `<span class="soon${t.badge === 'Get' ? ' get' : ''}">${esc(t.badge)}</span>` : ''}<b>${esc(t.name)}</b></div>`).join('');
+  $('#r2').innerHTML = T2.map(t => `<div class="t t2" style="background:${t.bg}"><span class="g">${pic(t.pic)}</span><small>${esc(t.sub)}</small><b>${esc(t.name)}</b></div>`).join('');
   R = [[...document.querySelectorAll('.tb')], [...document.querySelectorAll('.t1')], [...document.querySelectorAll('.t2')]];
   if (!R[pos.r] || !R[pos.r].length) pos = { r: 1, c: 0 };
   pos.c = Math.max(0, Math.min(pos.c, R[pos.r].length - 1));   // the app list may have changed
@@ -229,11 +247,12 @@ function act() {
 
 /* ---------- outside apps: Steam, Roblox, FreeTube, Windows programs ---------- */
 let appsInfo = null, storage = null;
-const GET = { roblox: { name: 'Roblox', size: 'about 1 GB', what: 'Roblox runs through Sober, a free app made for Linux.' },
-              freetube: { name: 'FreeTube', size: 'about 300 MB', what: 'FreeTube plays YouTube without ads or tracking.' } };
+const GET_NOTES = { roblox: 'Roblox runs through Sober, a free app made for Linux.', freetube: 'FreeTube plays YouTube without ads or tracking.',
+  minecraft: 'Prism Launcher runs Minecraft: Java Edition. Sign in with your Microsoft account.', heroic: 'Heroic plays your games from Epic Games, GOG and Amazon.' };
 async function openExt(id, name, path, checked) {
-  appsInfo = appsInfo || await call('apps_info');
-  if (GET[id] && appsInfo[id] && !appsInfo[id].installed) { getPanel(id); return; }
+  if (!appsList.length) await loadApps();
+  const a = appsList.find(x => x.key === id);
+  if (a && a.flatpak && !a.installed) { installing(a) ? progressPanel('store', 'Getting ' + a.name, () => { loadApps(); }) : getPanel(a); return; }
   if (!checked && !running[id] && (id === 'steam' || id === 'roblox')) {
     storage = storage || await call('storage');
     const notes = [];
@@ -256,10 +275,14 @@ async function openExt(id, name, path, checked) {
   }
   refreshTasks();
 }
-function getPanel(id) {
-  const g0 = GET[id];
-  panel('Get ' + g0.name, g0.what + ' It’s a one-time download (' + g0.size + ') from Flathub, the Linux app store.', [
-    row('Download ' + g0.name, 'Needs an internet connection', 'usb', async () => { await call('get_app', id); progressPanel('get-' + id, 'Getting ' + g0.name, () => { appsInfo = null; openExt(id, g0.name); }); }),
+function getPanel(a) {
+  panel('Get ' + a.name, (GET_NOTES[a.key] ? GET_NOTES[a.key] + ' ' : '') + a.name + ' isn’t on this PC yet. It’s a one-time download from Flathub, the Linux app store.', [
+    row('Download ' + a.name, 'Needs an internet connection', 'download', async () => {
+      const r = await call('get_app', a.key);
+      if (!r || !r.ok) { panel('Get ' + a.name, (r && r.error) || 'Couldn’t start the download. Try again.', [row('Close', '', 'check', () => closePanel())]); return; }
+      loadApps();
+      progressPanel('store', 'Getting ' + a.name, async () => { await loadApps(); openExt(a.key, a.name); });
+    }, { img: a.icon }),
     row('Cancel', '', 'check', () => closePanel())]);
 }
 /* Shows a background job's progress (downloads, saving, installing) until it's done. */
@@ -388,54 +411,61 @@ async function refreshNet() {
 const TABS = [['home', 'Home'], ['chat', 'Chat'], ['pad', 'Devices'], ['bell', 'Notifications'], ['gear', 'Settings']];
 let g = { t: 0, i: 0 };
 const row = (t, s, glyph, a, extra) => Object.assign({ t, s, glyph, a }, extra || {});
+/* a row's icon: the app's own (img), a full-color one (pic), or a simple glyph for actions */
+const rowIcon = o => (o.img || o.pic) ? `<span class="glyph p">${o.img && o.img.startsWith('/opt/launcher/') ? `<img class="pic" src="${esc(o.img.slice(14))}" alt="">` : appPic(o.img, o.pic)}</span>` : `<span class="glyph">${icon(o.glyph || 'check')}</span>`;
 function items() {
   const ip = net && net.connected ? (net.links.find(l => l.ipv4.length) || {}).ipv4 : null;
   switch (g.t) {
     case 0: return [
-      ...Object.values(running).map(t => row(t.outside ? t.title || t.name : t.name, 'Running · ' + dur(t.running_s), 'play', () => { closeAll(); t.outside ? openExt(t.id, t.name) : openApp(t.id, t.name, ''); })),
-      row('Browser', 'Browse the web', 'globe', web('browser', 'Browser', '')),
-      row('Setup', LOS.prefs.setupDone ? 'Go through setup again' : 'Not finished yet', 'wand', goSetup()),
-      row('Customize your Home', 'Colors and background', 'palette', goSetup('look')),
-      row('Files', 'Downloads, USB drives and disks', 'folder', files),
-      row('Store', 'Get apps and games from Flathub', 'bag', store()),
-      row('Terminal', 'Type commands', 'terminal', terminal),
-      row('System monitor', 'CPU, memory, network and apps', 'chart', monitor),
+      ...Object.values(running).map(t => { const tile = T1.find(x => x.id === t.id) || {};
+        return row(t.outside ? t.title || t.name : t.name, 'Running · ' + dur(t.running_s), 'play', () => { closeAll(); t.outside ? openExt(t.id, t.name) : openApp(t.id, t.name, ''); }, { img: tile.img, pic: tile.pic }); }),
+      row('Browser', 'Browse the web', 'globe', web('browser', 'Browser', ''), { pic: 'browser' }),
+      row('Setup', LOS.prefs.setupDone ? 'Go through setup again' : 'Not finished yet', 'wand', goSetup(), { pic: 'setup' }),
+      row('Customize your Home', 'Colors and background', 'palette', goSetup('look'), { pic: 'look' }),
+      row('Files', 'Downloads, USB drives and disks', 'folder', files, { pic: 'files' }),
+      row('Store', 'Get apps and games from Flathub', 'bag', store(), { pic: 'store' }),
+      row('Terminal', 'Type commands', 'terminal', terminal, { pic: 'terminal' }),
+      row('System monitor', 'CPU, memory, network and apps', 'chart', monitor, { pic: 'monitor' }),
       row('Reload home screen', 'Refresh this screen', 'refresh', () => location.reload()),
     ];
-    case 1: return [
-      row('Discord', 'Opens beside Home. Super closes it.', 'chat', () => { closeAll(); call('discord_panel', { open: true }); }),
-      row('Discord full screen', 'As its own app', 'chat', web('discord', 'Discord', 'https://discord.com/app')),
-      row('Discord status', 'Check if Discord is having problems', 'info', web('discordstatus', 'Discord status', 'https://discordstatus.com')),
-    ];
+    case 1: { const d = appsList.find(a => a.key === 'discord') || { key: 'discord', name: 'Discord', flatpak: 'com.discordapp.Discord', icon: '' };
+      return [
+        row('Discord', d.installed ? 'The Discord app' : 'Get the Discord app', 'chat', () => { closeAll(); openExt('discord', 'Discord'); }, { img: d.icon }),
+        row('Discord beside Home', 'The web version, in a panel. Super closes it.', 'chat', () => { closeAll(); call('discord_panel', { open: true }); }, { img: d.icon }),
+        row('Discord status', 'Check if Discord is having problems', 'info', web('discordstatus', 'Discord status', 'https://discordstatus.com')),
+      ]; }
     case 2: return [
-      ...inputs.map(d => row(d.name, (d.kind === 'controller' ? 'Controller' : d.kind === 'mouse' ? 'Mouse or touchpad' : 'Keyboard') + (d.usb ? ', USB' : ''), d.kind === 'controller' ? 'pad' : d.kind === 'mouse' ? 'mouse' : 'keyboard', () => toast(d.name + ' is working'))),
+      ...inputs.map(d => row(d.name, (d.kind === 'controller' ? 'Controller' : d.kind === 'mouse' ? 'Mouse or touchpad' : 'Keyboard') + (d.usb ? ', USB' : ''), 'pad', () => toast(d.name + ' is working'), { pic: d.kind === 'controller' ? 'controller' : d.kind === 'mouse' ? 'mouse' : 'keyboard' })),
       row('Detect new device', 'Plug it in, then select this', 'usb', detect),
-      row('USB drives and disks', 'Open, eject or format them in Files', 'drive', files),
-      row('Test your controller', 'See every button and stick', 'pad', goSetup('controller')),
+      row('USB drives and disks', 'Open, eject or format them in Files', 'drive', files, { pic: 'drive' }),
+      row('Test your controller', 'See every button and stick', 'pad', goSetup('controller'), { pic: 'controller' }),
     ];
     case 3: {
       const n = [];
-      if (!LOS.prefs.setupDone) n.push(row('Finish setting up', 'Run Setup to pick your name, time zone and more', 'wand', goSetup()));
-      if (net && !net.connected) n.push(row('No network connection', 'Open Network settings', 'wifi', () => netPanel()));
-      if (vol && vol.available && vol.muted) n.push(row('Sound is muted', 'Open Sound settings', 'sound', () => volPanel()));
-      if (storage && !storage.saving) n.push(row('Saving is off', 'Changes reset when you shut down', 'info', () => savingPanel()));
+      if (!LOS.prefs.setupDone) n.push(row('Finish setting up', 'Run Setup to pick your name, time zone and apps', 'wand', goSetup(), { pic: 'setup' }));
+      if (net && !net.connected) n.push(row('No network connection', 'Open Network settings', 'wifi', () => netPanel(), { pic: 'network' }));
+      if (vol && vol.available && vol.muted) n.push(row('Sound is muted', 'Open Sound settings', 'sound', () => volPanel(), { pic: 'sound' }));
+      if (storage && !storage.saving) n.push(row('Saving is off', 'Changes reset when you shut down', 'info', () => savingPanel(), { pic: 'saving' }));
+      if (storeJob.step && !storeJob.done) n.push(row(storeJob.step, (storeJob.percent || 0) + '%', 'download', () => progressPanel('store', storeJob.name ? 'Getting ' + storeJob.name : 'Store', () => loadApps()), { pic: 'store' }));
+      else if (storeJob.done && storeJob.error) n.push(row('An app didn’t install', storeJob.error, 'info', () => { closeAll(); store()(); }, { pic: 'store' }));
       return n;
     }
     case 4: return [
-      row('Screen size', LOS.SIZE_NAMES[LOS.prefs.size] || 'Fill screen', 'display', () => sizePanel()),
-      row('Sound', vol ? (vol.available ? (vol.muted ? 'Muted' : 'Volume ' + vol.value + '%') : 'No sound device found') : 'Checking…', 'sound', () => volPanel()),
-      row('Network', net ? (net.connected ? 'Connected' + (ip ? ', ' + ip[0] : '') : 'Not connected') : 'Checking…', 'wifi', () => netPanel()),
-      row('Wi-Fi', 'Find and join networks', 'wifi', () => wifiPanel()),
-      row('Time zone', (LOS.prefs.timezone || zone || 'UTC').replace(/^Etc\//, '').replace(/_/g, ' '), 'clock', goSetup('timezone')),
-      row('Name and colors', LOS.prefs.name, 'user', goSetup('name')),
-      row('Saving', storage ? (storage.saving ? 'On' : 'Off · changes reset at shut down') : 'Checking…', 'usb', () => savingPanel()),
-      row('Drives', 'Open, eject or format drives in Files', 'drive', files),
-      ...(storage && storage.installed ? [] : [row('Install LaunchOS', 'Put it on a drive in this PC', 'usb', () => installPanel())]),
-      row('System monitor', 'CPU, memory, network and apps', 'chart', monitor),
-      row('Updates', 'LaunchOS, your apps and the system', 'refresh', () => updatesPanel()),
-      row('Admin password', adminSet ? 'Set · for sudo in the Terminal' : 'Not set', 'user', () => adminPanel()),
-      row('About LaunchOS', info ? 'Version ' + info.version : 'Version', 'info', () => aboutPanel()),
-      row('Power', 'Shut down or restart', 'power', () => powerPanel()),
+      row('Screen size', LOS.SIZE_NAMES[LOS.prefs.size] || 'Fill screen', 'display', () => sizePanel(), { pic: 'display' }),
+      row('Sound', vol ? (vol.available ? (vol.muted ? 'Muted' : 'Volume ' + vol.value + '%') : 'No sound device found') : 'Checking…', 'sound', () => volPanel(), { pic: 'sound' }),
+      row('Network', net ? (net.connected ? 'Connected' + (ip ? ', ' + ip[0] : '') : 'Not connected') : 'Checking…', 'wifi', () => netPanel(), { pic: 'network' }),
+      row('Wi-Fi', 'Find and join networks', 'wifi', () => wifiPanel(), { pic: 'wifi' }),
+      row('Time zone', (LOS.prefs.timezone || zone || 'UTC').replace(/^Etc\//, '').replace(/_/g, ' '), 'clock', goSetup('timezone'), { pic: 'time' }),
+      row('Name and colors', LOS.prefs.name, 'user', goSetup('name'), { pic: 'user' }),
+      row('Apps on Home', 'Pick apps like Discord and Steam', 'grid', goSetup('apps'), { pic: 'games' }),
+      row('Password', adminSet ? (session && session.ask ? 'Set · asked at sign-in and for sudo' : 'Set · used for sudo') : 'Not set', 'user', () => adminPanel(), { pic: 'password' }),
+      row('Saving', storage ? (storage.saving ? 'On' : 'Off · changes reset at shut down') : 'Checking…', 'usb', () => savingPanel(), { pic: 'saving' }),
+      row('Drives', 'Open, eject or format drives in Files', 'drive', files, { pic: 'drive' }),
+      ...(storage && storage.installed ? [] : [row('Install LaunchOS', 'Put it on a drive in this PC', 'usb', () => installPanel(), { pic: 'install' })]),
+      row('System monitor', 'CPU, memory, network and apps', 'chart', monitor, { pic: 'monitor' }),
+      row('Updates', 'LaunchOS, your apps and the system', 'refresh', () => updatesPanel(), { pic: 'updates' }),
+      row('About LaunchOS', info ? 'Version ' + info.version : 'Version', 'info', () => aboutPanel(), { img: '/opt/launcher/img/launchos-icon.png' }),
+      row('Power', adminSet ? 'Lock, sign out, shut down or restart' : 'Sign out, shut down or restart', 'power', () => powerPanel(), { pic: 'power' }),
     ];
   }
   return [];
@@ -452,12 +482,14 @@ function rg() {
   $('#gh').textContent = TABS[g.t][1];
   const L = items();
   g.i = Math.min(g.i, L.length - 1);
-  $('#gl').innerHTML = L.map((o, k) => `<div class="it${k === g.i ? ' f' : ''}" data-k="${k}"><span class="glyph">${icon(o.glyph)}</span><span class="txt"><span>${esc(o.t)}</span><small>${esc(o.s)}</small></span></div>`).join('');
+  $('#gl').innerHTML = L.map((o, k) => `<div class="it${k === g.i ? ' f' : ''}" data-k="${k}">${rowIcon(o)}<span class="txt"><span>${esc(o.t)}</span><small>${esc(o.s)}</small></span></div>`).join('');
   keepVisible($('#gl'));
 }
-let adminSet = false;
+let adminSet = false, session = null;
 async function refreshAll() {
   call('admin_set').then(r => { adminSet = !!(r && r.set); if (mode === 'guide') rg(); });
+  call('session_state').then(r => { session = r; if (mode === 'guide') rg(); });
+  loadApps();
   [vol, info, inputs, storage] = await Promise.all([call('volume_get'), call('info'), call('inputs'), call('storage'), refreshTasks()]);
   const z = await call('timezone_get'); zone = z && z.zone;
   await refreshNet();
@@ -492,7 +524,7 @@ function dropInput() { const a = document.activeElement; if (a && a.closest && a
 function rp() {
   $('#pl').innerHTML = P.rows.map((o, k) => o.slider != null
     ? `<div class="slider${k === P.i ? ' f' : ''}" data-k="${k}" role="slider" aria-valuenow="${o.slider}"><i style="width:${o.slider}%"></i><b style="left:${o.slider}%"></b></div>`
-    : `<div class="it${k === P.i ? ' f' : ''}" data-k="${k}"><span class="glyph">${icon(o.glyph || 'check')}</span><span class="txt"><span>${esc(o.t)}</span>${o.s ? `<small>${esc(o.s)}</small>` : ''}</span></div>`).join('');
+    : `<div class="it${k === P.i ? ' f' : ''}" data-k="${k}">${rowIcon(o)}<span class="txt"><span>${esc(o.t)}</span>${o.s ? `<small>${esc(o.s)}</small>` : ''}</span></div>`).join('');
   keepVisible($('#pl'));
 }
 function closePanel(silent) {
@@ -627,7 +659,7 @@ async function updatesPanel(msg) {
   else if (c.done && c.available) rows.push(row('Update to LaunchOS ' + c.latest, c.full ? 'Needs a fresh download from GitHub' : u.saving ? 'Downloads from GitHub, then restart' : 'Needs saving turned on', 'usb', () => runUpdate('apply', 'update', 'Updating LaunchOS')));
   else rows.push(row('Check for LaunchOS updates', c.done && !c.error ? c.step : 'From LaunchOS on GitHub', 'refresh', () => runUpdate('check', 'update', 'Checking for updates')));
   rows.push(row('Update your apps', u.saving ? 'Apps from the Store' : 'Needs saving turned on', 'bag', () => runUpdate('apps', 'appupdate', 'Updating your apps')));
-  rows.push(row('Update the system', u.saving ? 'Ubuntu security fixes' : 'Needs saving turned on', 'gear', () => runUpdate('system', 'sysupdate', 'Updating the system')));
+  rows.push(row('Update the system', u.saving ? 'Debian security fixes' : 'Needs saving turned on', 'gear', () => runUpdate('system', 'sysupdate', 'Updating the system')));
   rows.push(row('Done', '', 'check', () => closePanel()));
   const notes = c.done && c.available && c.notes ? `<p class="pnote">${esc(c.notes.slice(0, 400))}${c.notes.length > 400 ? '…' : ''}</p>` : '';
   panel('Updates', msg || ('You have LaunchOS ' + u.version + (u.build ? ' (' + u.build + ')' : '') + '.'), rows, { body: notes });
@@ -643,12 +675,15 @@ async function adminPanel(err) {
   const body = (adminSet ? `<label class="pw"><input id="apo" type="password" maxlength="128" autocomplete="off" placeholder="Current password"></label>` : '')
     + `<label class="pw"><input id="apn" type="password" maxlength="128" autocomplete="off" placeholder="New password"></label>`
     + `<label class="pw"><input id="apn2" type="password" maxlength="128" autocomplete="off" placeholder="Type it again"></label>`;
-  panel('Admin password', err || (adminSet ? 'Change the password you use for sudo in the Terminal.' : 'Set a password to run admin commands (sudo) in the Terminal. Keep it somewhere safe.'), [
+  session = await call('session_state');
+  const askRow = adminSet ? [row('Ask for it at sign-in: ' + (session && session.ask ? 'On' : 'Off'), session && session.ask ? 'Turn off to sign in by pressing A' : 'Turn on so only you can sign in', 'user', async () => {
+    await call('signin_ask', !(session && session.ask)); adminPanel(); }, { pic: 'lock' })] : [];
+  panel('Password', err || (adminSet ? 'Change your password. It’s asked for when you sign in, and for admin commands (sudo) in the Terminal.' : 'Set a password so only you can sign in, and to run admin commands (sudo) in the Terminal. Keep it somewhere safe.'), [
     row('Save', 'Or press Enter', 'check', async () => {
       const n = $('#apn').value, n2 = $('#apn2').value, o = adminSet ? $('#apo').value : '';
       if (n.length < 6) { adminPanel('Use 6 or more characters.'); return; }
       if (n !== n2) { adminPanel('The two passwords don’t match.'); return; }
-      panel('Admin password', 'Saving…', [], { busy: true });
+      panel('Password', 'Saving…', [], { busy: true });
       let res = await call('admin_password', { new: n, old: o });
       // the first time, LaunchOS asks for a key press, so only someone at the PC can do this
       for (let i = 0; i < 90 && res && !res.done && !res.error; i++) {
@@ -656,9 +691,10 @@ async function adminPanel(err) {
         await new Promise(r => setTimeout(r, 1000));
         res = await call('job_status', 'admin');
       }
-      if (res && res.done && !res.error) { adminSet = true; if (P) P.from = 'guide'; panel('Admin password', 'Saved. In the Terminal, type sudo before a command and enter this password.', [row('Done', '', 'check', () => closePanel())]); }
+      if (res && res.done && !res.error) { adminSet = true; if (P) P.from = 'guide'; panel('Password', 'Saved. You’ll type it when you sign in. In the Terminal, type sudo before a command and enter this password.', [row('Done', '', 'check', () => closePanel())]); }
       else adminPanel((res && res.error) || 'Couldn’t save the password.');
     }),
+    ...askRow,
     row('Cancel', '', 'close', () => closePanel())], { body });
   setTimeout(() => { const i = $(adminSet ? '#apo' : '#apn'); if (i) i.focus(); }, 60);
 }
@@ -668,7 +704,13 @@ function powerPanel() {
     const r = await call('power', a);
     if (!r || !r.ok) setTimeout(() => { b.style.display = 'none'; toast('Power controls work when running as LaunchOS'); }, 1200);
   };
-  panel('Power', 'Turn off or restart your console.', [row('Shut down', 'Turn off the console', 'power', go('poweroff')), row('Restart', 'Turn it off and back on', 'refresh', go('reboot')), row('Cancel', 'Go back', 'check', () => closePanel())]);
+  const n = Object.keys(running).length;
+  panel('Power', 'Lock, sign out, or turn off your console.', [
+    ...(adminSet ? [row('Lock', n ? 'Your apps keep running' : 'Go to the sign-in screen', 'user', () => call('lock'), { pic: 'lock' })] : []),
+    row('Sign out', n ? 'Closes your apps first' : 'Go to the sign-in screen', 'user', () => call('sign_out'), { pic: 'signout' }),
+    row('Shut down', 'Turn off the console', 'power', go('poweroff'), { pic: 'power' }),
+    row('Restart', 'Turn it off and back on', 'refresh', go('reboot'), { pic: 'restart' }),
+    row('Cancel', 'Go back', 'check', () => closePanel())]);
 }
 
 /* ---------- navigation ---------- */
@@ -703,7 +745,7 @@ function nav(a) {
   if (f) f();
 }
 LOS.onNav(nav, { guide: true });
-addEventListener('focus', () => { backHome(); refreshTasks(); loadStoreApps(); });
+addEventListener('focus', () => { backHome(); refreshTasks(); loadStoreApps(); loadApps(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) backHome(); });
 $('#hx').onclick = () => { if (mode === 'home') appOptions(); };
 // on-screen hints and the avatar go through the same handler as keys and buttons, so every mode handles them

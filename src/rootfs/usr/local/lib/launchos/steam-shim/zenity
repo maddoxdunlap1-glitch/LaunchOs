@@ -1,6 +1,6 @@
 #!/bin/sh
 # Used only when LaunchOS starts Steam: the player already chose to install Steam by
-# opening it, so Ubuntu's "Steam installer" question is answered yes. Everything else
+# opening it, so the Steam installer's question is answered yes. Everything else
 # goes to the real zenity.
 case "$*" in
   *--question*"--title=Steam installer"*) exit 0 ;;

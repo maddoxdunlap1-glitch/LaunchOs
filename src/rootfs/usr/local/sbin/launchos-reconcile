@@ -2,7 +2,7 @@
 # Runs at start-up on a live system with saving. If the LaunchOS image (a newer USB stick or
 # disc) is newer than LaunchOS's own files kept in the save area (from an earlier update),
 # the image's files win, so an old update can never hide a newer LaunchOS.
-IMG=/rofs
+IMG=/run/live/rootfs/filesystem.squashfs   # the LaunchOS image, as Debian's live system mounts it
 [ -f $IMG/etc/launchos-release ] || exit 0
 v() { grep -oE '^VERSION="?[0-9.]+' "$1" 2>/dev/null | grep -oE '[0-9.]+$'; }
 img=$(v $IMG/etc/launchos-release); cur=$(v /etc/launchos-release)

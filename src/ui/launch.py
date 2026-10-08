@@ -776,7 +776,24 @@ class TermWin(Gtk.ApplicationWindow):
 
 # ---------- outside apps ----------
 
-FLATPAKS = {'roblox': ('org.vinegarhq.Sober', 'Roblox'), 'freetube': ('io.freetubeapp.FreeTube', 'FreeTube')}
+# Apps LaunchOS offers in Setup and shows on Home. Apps with a Flathub id install from Flathub
+# (picked in Setup, or the first time you open them); Steam and Windows programs come with LaunchOS.
+APPS = [
+    {'key': 'steam', 'name': 'Steam', 'what': 'PC games, with Proton for Windows games'},
+    {'key': 'discord', 'name': 'Discord', 'what': 'Chat, voice and video with friends', 'flatpak': 'com.discordapp.Discord'},
+    {'key': 'spotify', 'name': 'Spotify', 'what': 'Music and podcasts', 'flatpak': 'com.spotify.Client'},
+    {'key': 'freetube', 'name': 'FreeTube', 'what': 'Watch YouTube without ads', 'flatpak': 'io.freetubeapp.FreeTube'},
+    {'key': 'roblox', 'name': 'Roblox', 'what': 'Through Sober, made for Linux', 'flatpak': 'org.vinegarhq.Sober'},
+    {'key': 'minecraft', 'name': 'Minecraft', 'what': 'Java Edition, through Prism Launcher', 'flatpak': 'org.prismlauncher.PrismLauncher'},
+    {'key': 'heroic', 'name': 'Heroic', 'what': 'Your Epic Games, GOG and Amazon games', 'flatpak': 'com.heroicgameslauncher.hgl'},
+    {'key': 'obs', 'name': 'OBS Studio', 'what': 'Record and stream your games', 'flatpak': 'com.obsproject.Studio'},
+    {'key': 'vlc', 'name': 'VLC', 'what': 'Plays any video or music file', 'flatpak': 'org.videolan.VLC'},
+    {'key': 'winprog', 'name': 'Windows programs', 'what': 'Run .exe files with Wine'},
+]
+APP_BY_KEY = {a['key']: a for a in APPS}
+FLATPAKS = {a['key']: (a['flatpak'], a['name']) for a in APPS if a.get('flatpak')}
+CURATED_IDS = {a['flatpak'] for a in APPS if a.get('flatpak')}
+FLATPAK_ICONS = '/var/lib/flatpak/exports/share/icons/hicolor'
 PROGRAM_ROOTS = [os.path.join(HOME, d) for d in ('Downloads', 'Desktop', 'Documents')] + ['/media/player']   # searched by Windows programs
 
 
@@ -784,12 +801,52 @@ def flatpak_installed(app):
     return os.path.isdir(os.path.join('/var/lib/flatpak/app', app))
 
 
+def app_icon(app_id):
+    """The app's own icon: from the installed app, else from Flathub's catalog. '' if none."""
+    if not APP_ID.fullmatch(app_id or ''):
+        return ''
+    for size in ('256x256', '128x128', '512x512', 'scalable', '64x64'):
+        for ext in ('png', 'svg'):
+            p = os.path.join(FLATPAK_ICONS, size, 'apps', f'{app_id}.{ext}')
+            if os.path.exists(p):
+                return p
+    for size in ('128x128', '64x64'):
+        p = os.path.join(APPSTREAM, 'icons', size, app_id + '.png')
+        if os.path.exists(p):
+            return p
+    return ''
+
+
+def steam_icon():
+    """Steam's own icon, which Steam puts in place the first time it runs. (Debian's icon is
+    for the Steam installer; until then the page shows the icon theme's Steam icon.)"""
+    for size in ('256x256', '128x128', '48x48'):
+        p = os.path.join(HOME, '.local/share/icons/hicolor', size, 'apps/steam.png')
+        if os.path.exists(p):
+            return p
+    return ''
+
+
 def apps_info():
-    return {'steam': {'installed': os.path.exists('/usr/games/steam')},
-            'roblox': {'installed': flatpak_installed(FLATPAKS['roblox'][0])},
-            'freetube': {'installed': flatpak_installed(FLATPAKS['freetube'][0])},
-            'wine': {'installed': os.path.exists('/usr/bin/wine')},
-            'gpu': 'hardware' if HW else 'software'}
+    """The apps LaunchOS offers, whether each is on this PC, and its icon."""
+    apps = []
+    for a in APPS:
+        x = dict(a)
+        if a.get('flatpak'):
+            x['installed'] = flatpak_installed(a['flatpak'])
+            x['icon'] = app_icon(a['flatpak'])
+        elif a['key'] == 'steam':
+            x['installed'] = os.path.exists('/usr/games/steam')
+            x['icon'] = steam_icon()
+        else:
+            x['installed'] = os.path.exists('/usr/bin/wine')
+            x['icon'] = ''
+        apps.append(x)
+    by = {a['key']: a for a in apps}
+    return {'apps': apps, 'job': job_status('store'), 'gpu': 'hardware' if HW else 'software',
+            # older pages ask by name
+            'steam': {'installed': by['steam']['installed']}, 'wine': {'installed': by['winprog']['installed']},
+            'roblox': {'installed': by['roblox']['installed']}, 'freetube': {'installed': by['freetube']['installed']}}
 
 
 def program_path_ok(path):
@@ -961,10 +1018,19 @@ def job_status(name):
         return {}
 
 
-def get_app(app_id):
-    if app_id not in FLATPAKS:
-        return {'ok': False}
-    return helper_request({'action': 'get_app', 'app': FLATPAKS[app_id][0]})
+def get_app(arg):
+    """Install apps from Setup or Home: one key ('discord') or a list of keys."""
+    keys = arg if isinstance(arg, list) else [arg]
+    ids = [FLATPAKS[k][0] for k in keys if isinstance(k, str) and k in FLATPAKS and not flatpak_installed(FLATPAKS[k][0])]
+    if not ids:
+        return {'ok': True, 'nothing': True}
+    names = [FLATPAKS[k][1] for k in keys if isinstance(k, str) and k in FLATPAKS and FLATPAKS[k][0] in ids]
+    return store_action({'op': 'install', 'apps': ids, 'name': and_list(names)})
+
+
+def and_list(names):
+    names = list(names)
+    return names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' and ' + names[-1]
 
 
 def win_programs():
@@ -1163,27 +1229,37 @@ def parent_disk(dev):
     return dev
 
 
+LIVE_MEDIUM = '/run/live/medium'   # where Debian's live system mounts the LaunchOS disc or USB stick
+SAVE_LABELS = ('persistence',)      # the partition (or VirtualBox save disk) that holds your saves
+
+
 def save_device():
-    """The partition or disk holding the saves: 'casper-rw' (VirtualBox save disk, Rufus),
-    or 'writable', which Ubuntu's live system makes by itself on a USB stick's free space."""
-    for label in ('casper-rw', 'writable'):
+    """The partition or disk holding the saves: labelled 'persistence' (the VirtualBox save disk,
+    or the space LaunchOS sets aside on its USB stick)."""
+    for label in SAVE_LABELS:
         path = f'/dev/disk/by-label/{label}'
         if os.path.exists(path):
             return os.path.realpath(path)
     return ''
 
 
+def saving_on():
+    """Installed on a drive, or running live with a save area in use."""
+    if os.path.exists('/etc/launchos/installed'):
+        return True
+    return any(m.startswith('/run/live/persistence/') for m in mount_table())
+
+
 def storage_info():
     installed = os.path.exists('/etc/launchos/installed')
-    persistent = 'persistent' in read('/proc/cmdline').split()
     has_cow = bool(save_device())
-    saving = installed or (persistent and has_cow)
+    saving = saving_on()
     try:
         st = os.statvfs('/')
         total, free = st.f_blocks * st.f_frsize, st.f_bavail * st.f_frsize
     except OSError:
         total = free = 0
-    src = findmnt_source('/cdrom')
+    src = findmnt_source(LIVE_MEDIUM)
     boot, usb = 'drive' if installed else 'disc', False
     if src.startswith('/dev/'):
         disk = parent_disk(src)
@@ -1198,7 +1274,7 @@ def storage_info():
 def install_disks():
     """Drives LaunchOS can be installed on: whole drives of 16 GB or more that aren't
     in use, aren't the drive it started from and don't hold the LaunchOS saves."""
-    src = findmnt_source('/cdrom')
+    src = findmnt_source(LIVE_MEDIUM)
     boot = parent_disk(src) if src.startswith('/dev/') else ''
     cow = save_device()
     cow_disk = parent_disk(cow) if cow else ''
@@ -1326,9 +1402,10 @@ def system_disks():
     if time.monotonic() - _sysdisks['t'] < 20:
         return _sysdisks['v']
     table = mount_table()
-    devs = [table.get(t, ('',))[0] for t in ('/cdrom', '/', '/boot/efi', '/var/log', '/home')]
+    devs = [table.get(t, ('',))[0] for t in (LIVE_MEDIUM, '/', '/boot/efi', '/var/log', '/home')]
+    devs += [v[0] for m, v in table.items() if m.startswith('/run/live/')]   # the live system's own disks
     for d in lsblk('-o', 'PATH,LABEL'):   # every save label: a second stick may carry the same one
-        if d.get('label') in ('casper-rw', 'writable'):
+        if d.get('label') in SAVE_LABELS:
             devs.append(d.get('path', ''))
     out = set()
     for dev in devs:
@@ -1388,7 +1465,7 @@ def fs_drives():
             fs = n.get('fstype') or ''
             if fs not in DRIVE_FS or n.get('path') in sysd or (n.get('parttype') or '').lower() in SYSTEM_PARTTYPES:
                 continue
-            if n.get('label') in ('casper-rw', 'writable'):
+            if n.get('label') in SAVE_LABELS:
                 continue
             psize = int(n.get('size') or 0)
             if len(nodes) > 1 and psize < 64 << 20:
@@ -1436,8 +1513,7 @@ def fs_places():
     except OSError:
         home_free = home_total = 0
     return {'places': places, 'drives': fs_drives(), 'home_free': home_free, 'home_total': home_total,
-            'job': fs_job(), 'saving': os.path.exists('/etc/launchos/installed') or
-            ('persistent' in read('/proc/cmdline').split() and bool(save_device()))}
+            'job': fs_job(), 'saving': saving_on()}
 
 
 def helper_wait(payload, name, timeout, until_done=True):
@@ -1661,7 +1737,7 @@ def store_info():
     except OSError:
         free = 0
     path = store_catalog_file()
-    saving = os.path.exists('/etc/launchos/installed') or ('persistent' in read('/proc/cmdline').split() and bool(save_device()))
+    saving = saving_on()
     return {'apps': apps, 'installed': inst, 'job': job_status('store'), 'free': free, 'saving': saving,
             'catalog_age_h': int((time.time() - os.stat(path).st_mtime) / 3600) if path else None}
 
@@ -1674,8 +1750,8 @@ def store_home_apps():
     by_id = _store['by_id'] or {a['id']: a for a in store_apps()}
     out = []
     for aid, v in sorted(inst.items(), key=lambda kv: kv[1]['name'].casefold()):
-        if aid in ('org.vinegarhq.Sober', 'io.freetubeapp.FreeTube'):
-            continue   # these have their own tiles (Roblox, FreeTube)
+        if aid in CURATED_IDS:
+            continue   # these have their own tiles (Discord, Roblox, FreeTube…)
         a = by_id.get(aid, {})
         out.append({'id': aid, 'name': a.get('name') or v['name'], 'icon': a.get('icon', '')})
     return out
@@ -1696,15 +1772,19 @@ def job_running(name, unit):
 
 def store_action(arg):
     arg = arg if isinstance(arg, dict) else {}
-    op, aid = str(arg.get('op', '')), str(arg.get('app', ''))
-    if op not in ('install', 'remove', 'refresh') or (op != 'refresh' and not APP_ID.fullmatch(aid)):
+    op = str(arg.get('op', ''))
+    # one app, or (installing from Setup) several at once
+    ids = arg.get('apps') if op == 'install' and isinstance(arg.get('apps'), list) else [str(arg.get('app', ''))]
+    ids = [str(i) for i in ids][:12]
+    if op not in ('install', 'remove', 'refresh') or (op != 'refresh' and not (ids and all(APP_ID.fullmatch(i) for i in ids))):
         return {'ok': False, 'error': 'That isn’t a Store app.'}
     if job_running('store', 'launchos-store'):
         return {'ok': False, 'error': 'Wait for ' + (job_status('store').get('name') or 'the app') + ' to finish first.'}
-    a = _store['by_id'].get(aid, {})
-    name = re.sub(r'[^\w .,:+&()\'-]', '', str(a.get('name') or arg.get('name') or aid))[:60]
+    a = _store['by_id'].get(ids[0], {}) if len(ids) == 1 else {}
+    name = re.sub(r'[^\w .,:+&()\'-]', '', str(a.get('name') or arg.get('name') or ids[0]))[:60]
     # wait until the job has really started, so the page never reads the last job's result
-    st = helper_wait({'action': 'store', 'op': op, 'app': aid, 'name': name}, 'store', 15, until_done=False)
+    st = helper_wait({'action': 'store', 'op': op, 'app': ','.join(ids) if op != 'refresh' else '', 'name': name},
+                     'store', 15, until_done=False)
     if st.get('error') == 'The drive didn’t answer. Try again.':
         return {'ok': False, 'error': 'LaunchOS didn’t answer. Try again.'}
     return {'ok': True}
@@ -1717,7 +1797,7 @@ def update_info():
     return {'version': rel.get('VERSION', '?'), 'build': rel.get('BUILD_DATE', ''),
             'check': job_status('update'), 'system': job_status('sysupdate'), 'apps': job_status('appupdate'),
             'installed': os.path.exists('/etc/launchos/installed'),
-            'saving': os.path.exists('/etc/launchos/installed') or ('persistent' in read('/proc/cmdline').split() and bool(save_device()))}
+            'saving': saving_on()}
 
 
 def update_action(arg):
@@ -1751,7 +1831,52 @@ def admin_set():
     return {'set': os.path.exists('/etc/launchos/admin-set')}
 
 
+# ---------- sign-in ----------
+# LaunchOS starts at the sign-in screen. With a password set (Settings > Password) it asks
+# for it, unless you turned that off; the password is checked by the system's own helper.
+
+SIGNIN_CONF = os.path.join(HOME, '.config', 'launchos', 'signin.json')
+CHKPWD = '/usr/sbin/unix_chkpwd'
+
+
+def signin_ask():
+    try:
+        with open(SIGNIN_CONF) as f:
+            return bool(json.load(f).get('ask', True))
+    except (OSError, ValueError, AttributeError):
+        return True
+
+
+def set_signin_ask(on):
+    os.makedirs(os.path.dirname(SIGNIN_CONF), exist_ok=True)
+    with open(SIGNIN_CONF + '.tmp', 'w') as f:
+        json.dump({'ask': bool(on)}, f)
+    os.replace(SIGNIN_CONF + '.tmp', SIGNIN_CONF)
+    return {'ok': True, 'ask': bool(on)}
+
+
+def password_needed():
+    return os.path.exists('/etc/launchos/admin-set') and signin_ask()
+
+
+def password_ok(pw):
+    """Checks the player's password with unix_chkpwd, which may check your own password
+    without being root (the same way the lock screens of other systems do)."""
+    if not pw or len(pw) > 128 or '\0' in pw:
+        return False
+    user = os.environ.get('USER') or 'player'
+    try:
+        r = subprocess.run([CHKPWD, user, 'nonull'], input=pw.encode() + b'\0', capture_output=True, timeout=15)
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
 # ---------- home screen ----------
+
+# What the sign-in screen may use before anyone has signed in
+SIGNED_OUT_OK = {'session_state', 'sign_in', 'power', 'info', 'network', 'log_error', 'inputs', 'timezone_get'}
+
 
 class Launcher(Gtk.Application):
     def __init__(self):
@@ -1760,6 +1885,8 @@ class Launcher(Gtk.Application):
         self.ext = None   # the one outside app (game, Steam, FreeTube…) that may run, like a console
         self.panel = None   # Discord side panel
         self.quiet_super = 0.0
+        self.signed_in = False
+        self.fails, self.wait_until = 0, 0.0   # wrong passwords in a row, and when the next try is allowed
         self.connect('activate', self.on_activate)
 
     def on_activate(self, app):
@@ -1782,7 +1909,7 @@ class Launcher(Gtk.Application):
         s.set_allow_file_access_from_file_urls(True)
         s.set_media_playback_requires_user_gesture(False)   # the viewer starts a video or song you picked in Files
         self.view.connect('context-menu', lambda *a: True)
-        self.view.load_uri(UI + 'index.html')
+        self.view.load_uri(UI + 'login.html')
         self.overlay = Gtk.Overlay()
         self.overlay.set_child(self.view)
         self.win.set_child(self.overlay)
@@ -1833,6 +1960,9 @@ class Launcher(Gtk.Application):
                 helper_request({'action': text})
             return
         rid, action, arg = msg.get('id', 0), msg.get('action'), msg.get('arg')
+        if not self.signed_in and action not in SIGNED_OUT_OK:
+            self.reply(rid, {'error': 'signed_out'})
+            return
 
         slow = {'internet_test': internet_test, 'wifi_connect': lambda: wifi_connect(arg),
                 'win_programs': win_programs, 'install_disks': install_disks,
@@ -1842,7 +1972,8 @@ class Launcher(Gtk.Application):
                 'fs_format': lambda: fs_format(arg),
                 # Store: reading Flathub's catalog the first time takes a few seconds
                 'store_info': store_info, 'store_home': store_home_apps, 'admin_password': lambda: admin_password(arg),
-                'store_action': lambda: store_action(arg), 'update_action': lambda: update_action(arg)}
+                'store_action': lambda: store_action(arg), 'update_action': lambda: update_action(arg),
+                'get_app': lambda: get_app(arg), 'apps_info': apps_info, 'sign_in': lambda: self.sign_in(arg)}
         if action in slow:
             def work():
                 try:
@@ -1870,8 +2001,6 @@ class Launcher(Gtk.Application):
             'tasks': self.tasks,
             'stats': system_stats,
             'open_ext': lambda: self.open_ext(arg),
-            'apps_info': apps_info,
-            'get_app': lambda: get_app(arg),
             'job_status': lambda: job_status(arg),
             'wifi_status': wifi_status,
             'wifi_scan': wifi_scan,
@@ -1895,6 +2024,10 @@ class Launcher(Gtk.Application):
             'fs_job': fs_job,
             'fs_cancel': fs_cancel,
             'log_error': lambda: log_error(arg),
+            'session_state': self.session_state,
+            'lock': lambda: self.sign_out(end_apps=False),
+            'sign_out': lambda: self.sign_out(end_apps=True),
+            'signin_ask': lambda: set_signin_ask(bool(arg)),
         }
         fn = handlers.get(action)
         try:
@@ -1902,6 +2035,49 @@ class Launcher(Gtk.Application):
         except Exception as e:  # never let one bad request take the launcher down
             result = {'error': str(e)}
         self.reply(rid, result)
+
+    # ---------- sign-in ----------
+
+    def session_state(self):
+        return {'signed_in': self.signed_in, 'password': password_needed(),
+                'password_set': os.path.exists('/etc/launchos/admin-set'), 'ask': signin_ask(),
+                'wait_s': max(0, int(self.wait_until - time.monotonic() + 0.99)), 'running': len(self.tasks())}
+
+    def sign_in(self, arg):
+        """Runs off the main thread (checking a password takes a moment)."""
+        pw = str((arg or {}).get('password', '')) if isinstance(arg, dict) else ''
+        if password_needed():
+            now = time.monotonic()
+            if now < self.wait_until:
+                return {'ok': False, 'error': f'Wait {int(self.wait_until - now + 0.99)} seconds, then try again.'}
+            if not password_ok(pw):
+                self.fails += 1
+                # after a few wrong tries, each try waits longer
+                self.wait_until = time.monotonic() + (0 if self.fails < 3 else min(60, 5 * 2 ** (self.fails - 3)))
+                return {'ok': False, 'error': 'That password isn’t right.' if self.fails < 3
+                        else 'That password isn’t right. Wait a moment before trying again.'}
+        self.fails, self.wait_until = 0, 0.0
+        self.signed_in = True
+        return {'ok': True}
+
+    def sign_out(self, end_apps):
+        """Lock (apps keep running) or sign out (apps are closed), then show the sign-in screen."""
+        if end_apps:
+            for app_id in list(self.apps):
+                self.end_app(app_id)
+            if self.ext is not None:
+                self.ext.end()
+                self.ext = None
+        for w in self.apps.values():
+            if w.get_visible():
+                w.set_visible(False)
+        if self.panel is not None:
+            self.panel.set_visible(False)
+        self.signed_in = False
+        self.ext_waiting = 0
+        self.bring_home()
+        GLib.idle_add(lambda: (self.view.load_uri(UI + 'login.html'), False)[1])
+        return {'ok': True}
 
     # ---------- running apps ----------
 
@@ -2021,6 +2197,10 @@ class Launcher(Gtk.Application):
     def on_new_window(self):
         """A window that isn't ours appeared. If it's the first one from the app just
         started, Home steps aside so it (and any dialog it shows) is in front."""
+        if not self.signed_in:   # signed out: the sign-in screen stays in front
+            if self.win.get_visible():
+                GLib.idle_add(self.bring_home)
+            return False
         waiting = getattr(self, 'ext_waiting', 0)
         if self.ext is not None and waiting and time.monotonic() - waiting < 600 and self.win.get_visible():
             self.ext_waiting = 0
@@ -2028,6 +2208,8 @@ class Launcher(Gtk.Application):
         return False
 
     def resume_ext(self):
+        if not self.signed_in:
+            return
         for w in self.apps.values():
             if w.get_visible():
                 w.set_visible(False)

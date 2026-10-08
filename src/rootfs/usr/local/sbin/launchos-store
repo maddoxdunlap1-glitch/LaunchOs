@@ -1,7 +1,8 @@
 #!/usr/bin/python3
 """Store jobs, run as root by launchos-helper: installs or removes a Flathub app for
 everyone on this PC, or refreshes the list of apps.
-Usage: launchos-store install|remove|refresh APP-ID NAME"""
+Usage: launchos-store install|remove|refresh APP-ID[,APP-ID...] NAME
+(install takes several apps at once: Setup installs everything you picked in one go)"""
 import os, re, subprocess, sys
 sys.path.insert(0, "/usr/local/lib/launchos")
 import disks as D
@@ -68,7 +69,8 @@ def friendly(out):
 def main():
     global OP, APP, NAME
     OP, APP, NAME = (sys.argv[1:4] + ["", "", ""])[:3]
-    if OP not in ("install", "remove", "refresh") or (OP != "refresh" and not APP_ID.fullmatch(APP)):
+    ids = APP.split(",") if OP == "install" else [APP]
+    if OP not in ("install", "remove", "refresh") or (OP != "refresh" and not all(APP_ID.fullmatch(i) for i in ids)):
         return 1
     if OP == "refresh":
         st("Getting the app list from Flathub", 5)
@@ -88,11 +90,15 @@ def main():
             return 1
         st("Downloading " + NAME, 3)
         # (no --noninteractive: in that mode flatpak doesn't show its progress)
-        code, out = follow(["flatpak", "install", "--system", "-y", "flathub", APP],
+        code, out = follow(["flatpak", "install", "--system", "-y", "flathub", *ids],
                            "Downloading " + NAME, 3, 99)
-        if subprocess.run(["flatpak", "info", "--system", APP], capture_output=True).returncode == 0:
+        missing = [i for i in ids if subprocess.run(["flatpak", "info", "--system", i], capture_output=True).returncode != 0]
+        if not missing:
             st("Installed", 100, True)
             return 0
+        if len(missing) < len(ids):   # some made it: say which didn't
+            st("", 0, True, friendly(out) + " (" + str(len(missing)) + " of " + str(len(ids)) + " apps didn’t install.)")
+            return 1
         st("", 0, True, friendly(out))
         return 1
     # remove, then the shared parts no other app needs any more

@@ -36,6 +36,10 @@ body.nopattern .bgsvg { display: none; }
 .it.f { border-color: var(--accent); box-shadow: 0 0 0 6px rgba(var(--accent-glow), .1), 0 0 28px 6px rgba(var(--accent-glow), .12); transform: scale(1.025); }
 .it .glyph { width: 38px; height: 38px; border-radius: 10px; background: #1f3550; display: grid; place-items: center; font-size: 15px; color: #cfe6ff; flex: none; }
 .it .glyph .ic { width: 20px; height: 20px; }
+/* full-color icons (apps, settings): no tile behind them */
+.it .glyph.p { background: none; }
+.it .glyph .pic { width: 38px; height: 38px; object-fit: contain; }
+.pic { display: block; }
 .it .txt { flex: 1; min-width: 0; }
 .it .txt span { display: block; font-size: 17px; }
 .it .txt small { display: block; font-size: 13px; color: var(--mute); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

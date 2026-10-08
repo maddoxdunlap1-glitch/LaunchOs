@@ -89,17 +89,26 @@
       home: () => Object.keys(m.installed).map(id => ({ id, name: m.installed[id].name, icon: '' })),
       act: a => {
         if (m.job.step && !m.job.done) return { ok: false, error: 'Wait for the app to finish first.' };
-        const j = m.job = { op: a.op, app: a.app, name: a.name || a.app, step: a.op === 'remove' ? 'Removing ' + a.name : 'Downloading ' + a.name, percent: 0, done: false, error: '' };
+        const list = a.apps || [a.app];
+        const j = m.job = { op: a.op, app: list.join(','), name: a.name || a.app, step: a.op === 'remove' ? 'Removing ' + a.name : 'Downloading ' + a.name, percent: 0, done: false, error: '' };
         let t = 0;
         const step = () => { t++; j.percent = Math.min(100, t * 25); if (t < 4) { setTimeout(step, 250); return; }
           j.done = true; j.step = a.op === 'remove' ? 'Removed' : 'Installed';
-          if (a.op === 'install') m.installed[a.app] = { name: a.name, version: '1.0' }; else if (a.op === 'remove') delete m.installed[a.app]; else m.empty = false; };
+          if (a.op === 'install') list.forEach(id => { m.installed[id] = { name: a.name, version: '1.0' }; }); else if (a.op === 'remove') delete m.installed[a.app]; else m.empty = false; };
         setTimeout(step, 250);
         return { ok: true };
       },
     };
     return m;
   })();
+  const MOCK_APPS = [['steam', 'Steam', 'PC games'], ['discord', 'Discord', 'Chat', 'com.discordapp.Discord'], ['spotify', 'Spotify', 'Music', 'com.spotify.Client'],
+    ['freetube', 'FreeTube', 'YouTube without ads', 'io.freetubeapp.FreeTube'], ['roblox', 'Roblox', 'Through Sober', 'org.vinegarhq.Sober'],
+    ['minecraft', 'Minecraft', 'Prism Launcher', 'org.prismlauncher.PrismLauncher'], ['heroic', 'Heroic', 'Epic and GOG', 'com.heroicgameslauncher.hgl'],
+    ['obs', 'OBS Studio', 'Record', 'com.obsproject.Studio'], ['vlc', 'VLC', 'Video', 'org.videolan.VLC'], ['winprog', 'Windows programs', 'Wine']];
+  // (preview: signed in unless the page is the sign-in screen or ?signedout is in the address)
+  const mockSession = { signed: !/login\.html$/.test(location.pathname) && !/signedout/.test(location.search), ask: true };
+  try { const v = sessionStorage.getItem('launchos.mock'); if (v) { const o = JSON.parse(v); mockStore.admin = o.admin || ''; mockSession.ask = o.ask !== false; if (o.signed) mockSession.signed = true; } } catch (e) { /* no storage */ }
+  addEventListener('pagehide', () => { try { sessionStorage.setItem('launchos.mock', JSON.stringify({ admin: mockStore.admin, ask: mockSession.ask, signed: mockSession.signed })); } catch (e) { /* no storage */ } });
   const MOCK = {
     info: () => ({ version: '0.5', build: '2026-10-05', kernel: 'preview', cpu: 'Preview CPU', cores: 2, mem_total_mb: 2048, mem_free_mb: 1200, uptime_min: 3, resolution: screen.width + ' x ' + screen.height }),
     network: () => ({ connected: true, gateway: '10.0.2.2', dns: ['10.0.2.3'], links: [{ name: 'enp0s3', up: true, mac: '08:00:27:00:00:01', ipv4: ['10.0.2.15'] }] }),
@@ -122,10 +131,24 @@
     open_browser: url => { window.open(url && url.startsWith('http') ? url : 'start.html', '_blank'); return { ok: true }; },
     open_app: a => { const was = !!mockApps[a.id]; mockApps[a.id] = mockApps[a.id] || { id: a.id, name: a.name, t0: Date.now(), title: a.name, uri: a.url || 'start.html', shown: false }; return { ok: true, resumed: was }; },
     end_app: id => { const ok = !!mockApps[id]; delete mockApps[id]; return { ok }; },
-    apps_info: () => ({ steam: { installed: true }, roblox: { installed: false }, freetube: { installed: false }, wine: { installed: true }, gpu: 'software' }),
+    apps_info: () => {
+      const apps = MOCK_APPS.map(([key, name, what, flatpak]) => ({ key, name, what, flatpak, icon: '', installed: key === 'steam' || key === 'winprog' || !!(flatpak && mockStore.installed[flatpak]) }));
+      const by = k => apps.find(a => a.key === k);
+      return { apps, job: mockStore.job, gpu: 'software', steam: { installed: true }, wine: { installed: true }, roblox: { installed: by('roblox').installed }, freetube: { installed: by('freetube').installed } };
+    },
+    get_app: keys => {
+      const ids = (Array.isArray(keys) ? keys : [keys]).map(k => (MOCK_APPS.find(a => a[0] === k) || [])[3]).filter(id => id && !mockStore.installed[id]);
+      if (!ids.length) return { ok: true, nothing: true };
+      return mockStore.act({ op: 'install', apps: ids, name: ids.length + ' apps' });
+    },
+    session_state: () => ({ signed_in: mockSession.signed, password: !!mockStore.admin && mockSession.ask, password_set: !!mockStore.admin, ask: mockSession.ask, wait_s: 0, running: Object.keys(mockApps).length }),
+    sign_in: a => { if (mockStore.admin && mockSession.ask && (a || {}).password !== mockStore.admin) return { ok: false, error: 'That password isn’t right.' }; mockSession.signed = true; return { ok: true }; },
+    lock: () => { mockSession.signed = false; setTimeout(() => { location.href = 'login.html'; }, 10); return { ok: true }; },
+    sign_out: () => { mockSession.signed = false; Object.keys(mockApps).forEach(k => delete mockApps[k]); setTimeout(() => { location.href = 'login.html'; }, 10); return { ok: true }; },
+    signin_ask: on => { mockSession.ask = !!on; return { ok: true, ask: !!on }; },
     storage: () => ({ installed: false, saving: false, total: 2e9, free: 1.5e9, boot: 'usb', can_usb_saving: true, job: {} }),
     job_status: () => ({ step: 'Done', percent: 100, done: true, error: '' }),
-    get_app: () => ({ ok: true }), usb_saving: () => ({ ok: true }), mount_drives: () => ({ ok: true }), install_system: () => ({ ok: true }),
+    usb_saving: () => ({ ok: true }), mount_drives: () => ({ ok: true }), install_system: () => ({ ok: true }),
     win_programs: () => [{ name: 'setup', path: '/home/player/Downloads/setup.exe', where: 'Downloads', size: 2400000, mtime: 1 }],
     install_disks: () => [{ path: '/dev/sdb', size: 64e9, model: 'Samsung SSD', usb: false, parts: 2 }],
     wifi_status: () => ({ available: true, state: 'disconnected', scanning: false, networks: [{ name: 'Home WiFi', type: 'psk', connected: false, known: false, bars: 4 }, { name: 'Cafe', type: 'open', connected: false, known: false, bars: 2 }] }),
@@ -145,16 +168,23 @@
     tasks: () => Object.values(mockApps).map(a => ({ id: a.id, name: a.name, running_s: Math.round((Date.now() - a.t0) / 1000), title: a.title, uri: a.uri, shown: false })),
   };
 
+  /* Signed out (locked) while on a page other than the sign-in screen: go there. */
+  const guard = r => { if (r && r.error === 'signed_out' && !/login\.html$/.test(location.pathname)) location.href = 'login.html'; return r; };
   function call(action, arg) {
     if (!native) {
       const fn = MOCK[action];
-      return new Promise(r => setTimeout(() => r(fn ? fn(arg) : { error: 'unknown' }), action === 'internet_test' ? 600 : 30));
+      const quiet = ['session_state', 'sign_in', 'power', 'info', 'network', 'log_error', 'inputs', 'timezone_get'];
+      return new Promise(r => setTimeout(() => r(guard(!mockSession.signed && !quiet.includes(action) ? { error: 'signed_out' } : fn ? fn(arg) : { error: 'unknown' })), action === 'internet_test' ? 600 : 30));
     }
+    return raw(action, arg).then(guard);
+  }
+  function raw(action, arg) {
     return new Promise(resolve => {
       const id = PAGE + '-' + (++seq);   // unique to this page, so a late reply can't answer another page's request
       pending[id] = resolve;
       const wait = { wifi_connect: 50000, fs_eject: 200000, fs_mount: 50000, fs_format: 20000, fs_list: 30000,   // drives can be slow
-        store_info: 120000, store_home: 120000, store_action: 30000, update_action: 30000, admin_password: 30000 }[action] || 15000;   // so is reading Flathub's list
+        store_info: 120000, store_home: 120000, store_action: 30000, update_action: 30000, admin_password: 30000,   // so is reading Flathub's list
+        get_app: 30000, sign_in: 30000 }[action] || 15000;
       setTimeout(() => { if (pending[id]) { delete pending[id]; resolve({ error: 'timeout' }); } }, wait);
       window.webkit.messageHandlers.launchos.postMessage(JSON.stringify({ id, action, arg }));
     });
@@ -339,6 +369,11 @@
     bag: 'M5 8h14l-1 12H6zM9 8V6a3 3 0 016 0v2',
     terminal: 'M4 5h16v14H4zM7 9l3 3-3 3M12 15h5',
   };
+  /* Full-color icons (Papirus icon theme, in icons/) for LaunchOS's own apps and settings,
+     and the apps' own icons for Steam, Discord and everything from Flathub. */
+  const fileUrl = p => 'file://' + String(p).split('/').map(encodeURIComponent).join('/');
+  const pic = (n, cls) => `<img class="pic ${cls || ''}" src="icons/${n}.svg" alt="" draggable="false">`;
+  const appPic = (path, fallback, cls) => path ? `<img class="pic ${cls || ''}" src="${esc(fileUrl(path))}" alt="" draggable="false">` : fallback ? pic(fallback, cls) : '';
   const icon = (n, cls) => `<svg class="ic ${cls || ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${P[n] || P.grid}"/></svg>`;
 
   /* ---------- clock in the chosen time zone ---------- */
@@ -352,7 +387,7 @@
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   window.LOS = {
-    $, call, native, toast, icon, esc, fit, clockText, mouseRecent,
+    $, call, native, toast, icon, pic, appPic, fileUrl, esc, fit, clockText, mouseRecent,
     get prefs() { return prefs; }, save, ACCENTS, SIZE_NAMES,
     onNav(fn, opts) { handler = fn; guideHere = !!(opts && opts.guide); },   // opts.guide: the page handles the Super key itself
   };

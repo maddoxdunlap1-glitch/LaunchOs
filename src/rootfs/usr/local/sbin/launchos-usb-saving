@@ -1,15 +1,19 @@
 #!/bin/bash
-# Turns on saving on the USB stick LaunchOS was started from: makes a casper-rw
+# Turns on saving on the USB stick LaunchOS was started from: makes a "persistence"
 # partition in the free space after the system. Nothing existing is touched.
+# (LaunchOS also does this by itself the first time it starts from a stick; this is for
+# sticks where that didn't happen, for example when it started without the stick ready.)
 . /usr/local/sbin/launchos-status
 fail() { status usb-saving "" 0 true "$1"; exit 1; }
 status usb-saving "Checking the USB stick" 5 false ""
-src=$(findmnt -no SOURCE /cdrom 2>/dev/null)
+src=$(findmnt -no SOURCE /run/live/medium 2>/dev/null)
 [ -b "$src" ] || fail "LaunchOS wasn't started from a USB stick."
 disk=/dev/$(lsblk -no PKNAME "$src" | head -1)
-[ -b "$disk" ] && [ "$disk" != /dev/ ] || fail "LaunchOS wasn't started from a USB stick."
+[ "$disk" = /dev/ ] && disk="$src"   # written with Etcher or Rufus (DD mode), the stick itself is the system
+[ -b "$disk" ] || fail "LaunchOS wasn't started from a USB stick."
+[ "$(lsblk -dno TYPE "$disk")" = disk ] || fail "LaunchOS wasn't started from a USB stick."
 [ "$(lsblk -dno TRAN "$disk")" = usb ] || [ "$(lsblk -dno RM "$disk" | tr -d ' ')" = 1 ] || fail "LaunchOS wasn't started from a USB stick."
-blkid -L casper-rw >/dev/null 2>&1 || blkid -L writable >/dev/null 2>&1 && fail "Saving is already set up. Restart to use it."
+lsblk -rno LABEL "$disk" | grep -qx persistence && fail "Saving is already set up. Restart to use it."
 # free space at the end of the stick, in 512-byte sectors
 free=$(sfdisk -F "$disk" 2>/dev/null | awk '/^ *[0-9]+ +[0-9]+ +[0-9]+/{s=$3} END{print s+0}')
 [ "$free" -ge 2097152 ] || fail "There's less than 1 GB of free space on this USB stick."
@@ -19,6 +23,9 @@ partx -u "$disk" 2>/dev/null; partx -a "$disk" 2>/dev/null; udevadm settle
 part=$(lsblk -rpno NAME,TYPE "$disk" | awk '$2=="part"{p=$1} END{print p}')
 [ -b "$part" ] || fail "Couldn't find the new partition."
 status usb-saving "Preparing it" 60 false ""
-mkfs.ext4 -F -q -L casper-rw "$part" || fail "Couldn't prepare the new partition."
+mkfs.ext4 -F -q -L persistence "$part" || fail "Couldn't prepare the new partition."
+m=$(mktemp -d)
+mount "$part" "$m" && echo "/ union" > "$m/persistence.conf" && umount "$m" || { rmdir "$m"; fail "Couldn't prepare the new partition."; }
+rmdir "$m"
 sync
 status usb-saving "Done. Restart LaunchOS to start saving." 100 true ""

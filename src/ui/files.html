@@ -38,6 +38,8 @@
 .fr:hover { background: rgba(255, 255, 255, .03); }
 .fr .ico { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: #1f3550; color: #cfe6ff; position: relative; }
 .fr .ico .ic { width: 18px; height: 18px; }
+.fr .ico.p { background: none !important; }
+.fr .ico .pic { width: 32px; height: 32px; }
 .fr .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fr .sz, .fr .dt { text-align: right; color: var(--ink-2); font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .fr.f { border-color: var(--accent); background: rgba(var(--accent-glow), .07); box-shadow: 0 0 0 4px rgba(var(--accent-glow), .08); }
@@ -94,7 +96,9 @@ label.pw input:focus { border-color: var(--accent); }
 </div></div>
 <script src="los.js"></script>
 <script>
-const { $, call, toast, icon, esc } = LOS;
+const { $, call, toast, icon, pic, esc } = LOS;
+/* full-color icons for each kind of file */
+const PICS = { folder: 'folder', image: 'file-image', video: 'file-video', audio: 'file-audio', program: 'file-program', archive: 'file-archive', doc: 'file-doc', text: 'file-text', web: 'browser', other: 'file-other' };
 
 /* ---------- state ---------- */
 let places = [], drives = [], sideRows = [], si = 0;      // left column
@@ -156,20 +160,20 @@ function driveSub(d) {
 function renderSide() {
   sideRows = [];
   let h = '<h3>Your folders</h3>';
-  const glyph = { downloads: 'download', documents: 'doc', pictures: 'image', videos: 'film', music: 'music' };
-  places.forEach(p => { sideRows.push({ kind: 'place', p }); h += sideRow(sideRows.length - 1, glyph[p.id] || 'folder', p.name, p.id === 'downloads' ? 'Browser downloads go here' : ''); });
+  places.forEach(p => { sideRows.push({ kind: 'place', p }); h += sideRow(sideRows.length - 1, '@folder-' + p.id.replace('downloads', 'download'), p.name, p.id === 'downloads' ? 'Browser downloads go here' : ''); });
   h += '<h3>Drives</h3>';
   drives.forEach(d => {
     sideRows.push({ kind: 'drive', d });
     const pct = d.total ? 100 * (1 - d.free / d.total) : 0;
-    h += sideRow(sideRows.length - 1, d.removable ? 'usb' : 'drive', d.name, driveSub(d), d.mount ? `<div class="dm"><i class="${level(pct)}" style="width:${pct.toFixed(1)}%"></i></div>` : '');
+    h += sideRow(sideRows.length - 1, d.removable ? '@drive' : '@saving', d.name, driveSub(d), d.mount ? `<div class="dm"><i class="${level(pct)}" style="width:${pct.toFixed(1)}%"></i></div>` : '');
   });
   if (!drives.length) h += '<div style="color:var(--mute);font-size:14px;padding:4px 6px 0">Plug in a USB drive and it shows up here.</div>';
   $('#side').innerHTML = h;
   si = Math.max(0, Math.min(si, sideRows.length - 1));
   paintSide();
 }
-const sideRow = (k, g, t, s, extra) => `<div class="it" data-k="${k}"><span class="glyph">${icon(g)}</span><span class="txt"><span>${esc(t)}</span>${s ? `<small>${esc(s)}</small>` : ''}${extra || ''}</span></div>`;
+// g: a glyph name, or "@name" for a full-color icon
+const sideRow = (k, g, t, s, extra) => `<div class="it" data-k="${k}"><span class="glyph${g[0] === '@' ? ' p' : ''}">${g[0] === '@' ? pic(g.slice(1)) : icon(g)}</span><span class="txt"><span>${esc(t)}</span>${s ? `<small>${esc(s)}</small>` : ''}${extra || ''}</span></div>`;
 function sideRoot(row) { return row.kind === 'place' ? row.p.path : row.d.mount; }
 function paintSide() {
   document.querySelectorAll('#side .it').forEach(el => {
@@ -251,7 +255,7 @@ function drawRows(force) {
   for (let k = from; k < to; k++) {
     const e = entries[k];
     const cls = ['fr', e.dir ? 'dir' : '', sel.has(e.name) ? 'sel' : '', cutting && cutting.has(pjoin(cur.path, e.name)) ? 'cutting' : ''].join(' ');
-    h += `<div class="${cls}" data-k="${k}" role="option" style="position:absolute;left:0;right:0;top:${k * ROW}px"><span class="ico k-${e.kind}">${icon(ICONS[e.kind] || 'file')}</span><span class="nm">${esc(e.name)}</span><span class="sz">${e.dir ? '' : size(e.size)}</span><span class="dt">${when(e.mtime)}</span></div>`;
+    h += `<div class="${cls}" data-k="${k}" role="option" style="position:absolute;left:0;right:0;top:${k * ROW}px"><span class="ico p">${pic(PICS[e.kind] || 'file-other')}</span><span class="nm">${esc(e.name)}</span><span class="sz">${e.dir ? '' : size(e.size)}</span><span class="dt">${when(e.mtime)}</span></div>`;
   }
   sp.innerHTML = h;
   paintList();

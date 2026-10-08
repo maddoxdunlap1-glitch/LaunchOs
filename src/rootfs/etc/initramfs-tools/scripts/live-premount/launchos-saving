@@ -1,0 +1,53 @@
+#!/bin/sh
+# The first time LaunchOS starts from a USB stick, it sets aside the stick's free space for
+# your saves (a partition labelled "persistence"), before the live system looks for one.
+# Only on a stick written from the LaunchOS image, only in free space, and only once.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0 ;; esac
+
+grep -qw persistence /proc/cmdline || exit 0
+command -v sfdisk >/dev/null && command -v mke2fs >/dev/null || exit 0
+log() { echo "LaunchOS saving: $*" > /dev/kmsg 2>/dev/null; }
+
+find_stick() {
+  for b in /sys/block/sd* /sys/block/nvme* /sys/block/mmcblk* /sys/block/vd*; do
+    [ -e "$b" ] || continue
+    d=/dev/${b##*/}
+    [ -b "$d" ] || continue
+    [ "$(blkid -o value -s TYPE "$d" 2>/dev/null)" = iso9660 ] || continue
+    [ "$(blkid -o value -s LABEL "$d" 2>/dev/null)" = LAUNCHOS ] || continue
+    echo "$d"; return 0
+  done
+  return 1
+}
+
+udevadm settle --timeout=10 2>/dev/null
+i=0; disk=""
+while [ $i -lt 8 ]; do   # USB sticks can take a few seconds to show up
+  disk=$(find_stick) && break
+  sleep 1; i=$((i + 1))
+done
+[ -n "$disk" ] || exit 0
+# a save area anywhere already? Then nothing to do
+for p in /dev/sd* /dev/nvme* /dev/mmcblk* /dev/vd*; do
+  [ -b "$p" ] && [ "$(blkid -o value -s LABEL "$p" 2>/dev/null)" = persistence ] && exit 0
+done
+free=$(sfdisk -F "$disk" 2>/dev/null | awk '/^ *[0-9]+ +[0-9]+ +[0-9]+/{s=$3} END{print s+0}')
+[ "${free:-0}" -ge 2097152 ] || { log "less than 1 GB free on $disk"; exit 0; }
+log "setting up saving on $disk"
+echo ",,L" | sfdisk --append "$disk" >/dev/null 2>&1 || { log "couldn't add a partition"; exit 0; }
+udevadm settle --timeout=10 2>/dev/null; sleep 1
+part=""
+for p in "$disk"*; do [ "$p" != "$disk" ] && [ -b "$p" ] && part=$p; done
+case "$disk" in *[0-9]) part2=$(ls -d "${disk}p"* 2>/dev/null | tail -1); [ -n "$part2" ] && part=$part2 ;; esac
+[ -b "$part" ] || { log "new partition not found"; exit 0; }
+[ -z "$(blkid -o value -s TYPE "$part" 2>/dev/null)" ] || { log "$part isn't empty: leaving it alone"; exit 0; }
+mke2fs -t ext4 -F -q -L persistence "$part" || { log "couldn't format $part"; exit 0; }
+mkdir -p /run/launchos-save
+if mount -t ext4 "$part" /run/launchos-save; then
+  echo "/ union" > /run/launchos-save/persistence.conf
+  umount /run/launchos-save
+  log "saving is on ($part)"
+fi
+exit 0

@@ -117,10 +117,6 @@ def handle(req):
             os.replace(tmp, path)
     elif action == "mount_drives":
         background("launchos-drives-scan", "/usr/local/sbin/launchos-drives")
-    elif action == "get_app":
-        app = str(req.get("app", ""))
-        if app in ("org.vinegarhq.Sober", "io.freetubeapp.FreeTube"):
-            background("launchos-get-" + app.split(".")[-1].lower(), "/usr/local/sbin/launchos-getapp", app)
     elif action == "usb_saving":
         background("launchos-usb-saving", "/usr/local/sbin/launchos-usb-saving")
     elif action == "install_system":
@@ -148,9 +144,11 @@ def handle(req):
         name = str(req.get("name", ""))
         if not re.fullmatch(r"[\w .,:+&()'-]{0,60}", name):
             name = ""
-        if op == "refresh" or (op in ("install", "remove") and APP_ID.fullmatch(app) and len(app) <= 255):
+        ids = app.split(",") if op == "install" else [app]   # Setup installs several apps in one go
+        if op == "refresh" or (op in ("install", "remove") and 0 < len(ids) <= 12
+                               and all(APP_ID.fullmatch(i) and len(i) <= 255 for i in ids)):
             background("launchos-store", "/usr/local/sbin/launchos-store", op, app or "-", name or app or "-")
-    # Updates: LaunchOS itself (from its GitHub releases), Store apps, and Ubuntu's own updates
+    # Updates: LaunchOS itself (from its GitHub releases), Store apps, and Debian's own updates
     elif action == "update":
         what = str(req.get("what", ""))
         if what in ("check", "apply", "apps"):

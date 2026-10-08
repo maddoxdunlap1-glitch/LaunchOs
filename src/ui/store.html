@@ -83,6 +83,7 @@
 <script src="los.js"></script>
 <script>
 const { $, call, toast, icon, esc } = LOS;
+const jobHas = id => String(job.app || '').split(',').includes(id);   // (Setup installs several apps in one job)
 
 /* Picks for the Featured shelf. Names and descriptions here are used until Flathub's own list has arrived. */
 const FEATURED = [
@@ -205,7 +206,7 @@ function closeDetail() {
 }
 function buttons() {
   const a = app(detail), inst = !!installed[detail], busy = job.step && !job.done;
-  const mine = busy && job.app === detail;
+  const mine = busy && jobHas(detail);
   const b = [];
   if (mine) b.push(['Working…', 'refresh', () => {}, true]);
   else if (inst) { b.push(['Open', 'play', () => openApp(a), true]); b.push(['Uninstall', 'trash', () => confirmRemove(a)]); }
@@ -219,10 +220,10 @@ function drawDetail() {
   $('#dhead').innerHTML = iconHtml(a) + `<div><h2>${esc(a.name)}</h2>${a.dev ? `<div class="dev">${esc(a.dev)}</div>` : ''}<div class="sum">${esc(a.summary || '')}</div></div>`;
   const b = buttons();
   dbtn = Math.min(dbtn, b.length - 1);
-  const mine = job.step && !job.done && job.app === detail;
+  const mine = job.step && !job.done && jobHas(detail);
   $('#dbtns').innerHTML = b.map((x, k) => `<button class="btn${x[3] ? ' main' : ''}${k === dbtn ? ' f' : ''}" data-k="${k}">${icon(x[1])}${esc(x[0])}</button>`).join('')
     + `<div id="dprog" class="${mine ? 'on' : ''}"><div class="meterbar"><i style="width:${mine ? job.percent || 0 : 0}%"></i></div><p>${mine ? esc(job.step) + ' · ' + (job.percent || 0) + '%' : ''}</p></div>`
-    + (job.done && job.error && job.app === detail && !mine ? `<span style="color:#ffb3ae;font-size:14px;max-width:420px">${esc(job.error)}</span>` : '')
+    + (job.done && job.error && jobHas(detail) && !mine ? `<span style="color:#ffb3ae;font-size:14px;max-width:420px">${esc(job.error)}</span>` : '')
     + (inst ? `<span style="color:var(--mute);font-size:14px">Installed${inst.version ? ' · version ' + esc(inst.version) : ''}</span>` : `<span style="color:var(--mute);font-size:14px">Free from Flathub · ${size(free)} free on this PC</span>`);
   $('#ddesc').textContent = a.desc || a.summary || '';
   const shot = (a.shots || [])[0];
