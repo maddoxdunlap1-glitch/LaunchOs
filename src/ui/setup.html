@@ -159,7 +159,10 @@ const STEPS = [
       content.innerHTML = `<div class="cols" id="apps">${apps.map(a => `<div class="chk${sel.has(a.key) ? ' sel' : ''}" data-f data-k="${a.key}"><span class="mark">${sel.has(a.key) ? icon('check') : ''}</span>${appPic(a.icon, a.key === 'winprog' ? 'wine' : a.key === 'steam' ? 'steam' : 'store')}<span>${esc(a.name)}<small>${esc(a.what)}</small></span><span class="tag${a.installed ? '' : ' dl'}">${tag(a)}</span></div>`).join('')}</div>`;
       content.querySelectorAll('.chk').forEach(c => c.onclick = () => {
         const s = picked(); s.has(c.dataset.k) ? s.delete(c.dataset.k) : s.add(c.dataset.k);
-        LOS.save({ apps: [...s], appsPicked: true }); const on = s.has(c.dataset.k); c.classList.toggle('sel', on); c.querySelector('.mark').innerHTML = on ? icon('check') : '';
+        // unticked on purpose: kept off Home even while it's installed
+        const h = new Set(Array.isArray(LOS.prefs.appsHidden) ? LOS.prefs.appsHidden : []);
+        s.has(c.dataset.k) ? h.delete(c.dataset.k) : h.add(c.dataset.k);
+        LOS.save({ apps: [...s], appsPicked: true, appsHidden: [...h] }); const on = s.has(c.dataset.k); c.classList.toggle('sel', on); c.querySelector('.mark').innerHTML = on ? icon('check') : '';
       });
     },
     leave(forward) { if (forward) startInstall(); } },
@@ -174,17 +177,25 @@ const STEPS = [
 
 /* ---------- apps: install the ones you picked ---------- */
 const picked = () => new Set(LOS.prefs.appsPicked ? LOS.prefs.apps : DEFAULT_APPS);
-let instMsg = '', instTimer = null;
-async function startInstall() {
+let instMsg = '', instTimer = null, instWait = null;
+function startInstall() {
   const want = apps.filter(a => a.flatpak && !a.installed && picked().has(a.key)).map(a => a.key);
-  if (!want.length) { instMsg = ''; return; }
-  const r = await call('get_app', want);
-  instMsg = r && r.ok ? '' : (r && r.error) || 'Couldn’t start the downloads. Get your apps from Home later.';
+  if (!want.length) { instMsg = ''; instWait = null; return; }
+  // (the last step waits for this: the answer comes once the downloads have really started)
+  instWait = call('get_app', want).then(r => {
+    instMsg = r && r.ok ? '' : (r && r.error) || 'Couldn’t start the downloads. Get your apps from Home later.';
+    return !!(r && r.ok && !r.nothing);
+  });
 }
 /* On the last step: how the downloads are going (they keep going after Setup). */
 async function watchInstall() {
   clearTimeout(instTimer);
   const el = $('#inst'); if (!el) return;
+  if (!instWait) { el.innerHTML = ''; return; }   // nothing to download
+  if (!el.innerHTML) el.innerHTML = `<div class="inst">${pic('store')}<span>Starting your downloads…</span></div>`;
+  const started = await instWait;
+  if (!$('#inst')) return;
+  if (!started && !instMsg) { el.innerHTML = ''; return; }   // everything was already here
   if (instMsg) { el.innerHTML = `<div class="inst">${pic('store')}<span>${esc(instMsg)}</span></div>`; return; }
   const j = await call('store_job');
   if (!$('#inst')) return;
@@ -291,12 +302,12 @@ function collect() { F = [...document.querySelectorAll('#content [data-f], #nav 
 function paint() { F.forEach((e, k) => e.classList.toggle('f', k === fi)); const e = F[fi]; if (!e) return; if (e.tagName === 'INPUT') e.focus(); else if (document.activeElement && document.activeElement.tagName === 'INPUT') document.activeElement.blur(); e.scrollIntoView && e.scrollIntoView({ block: 'nearest' }); }
 function focusAt(key) { collect(); const k = F.findIndex(e => e.dataset.z === key || e.dataset.k === key); if (k >= 0) { fi = k; paint(); } }
 function next() { if (only >= 0) return finish(); if (cur < STEPS.length - 1) show(cur + 1); }
-function finish(early) { const s = STEPS[cur]; if (s.leave) s.leave(true); if (only < 0 && !early) LOS.save({ setupDone: true }); location.href = 'index.html'; }
+function finish(early, forward) { const s = STEPS[cur]; if (s.leave) s.leave(!!forward); if (only < 0 && !early) LOS.save({ setupDone: true }); location.href = 'index.html'; }
 function navAct(k) {
   if (k === 'next') next();
   else if (k === 'back') { if (cur > 0) show(cur - 1); }
   else if (k === 'skip') location.href = 'index.html';
-  else if (k === 'finish' || k === 'done') finish();
+  else if (k === 'finish' || k === 'done') finish(false, true);
 }
 function activate() {
   const e = F[fi]; if (!e) return;

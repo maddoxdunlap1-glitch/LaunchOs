@@ -944,8 +944,9 @@ class SwayWatcher(threading.Thread):
                     except ValueError:
                         continue
                     con = ev.get('container') or {}
-                    if ev.get('change') == 'new' and con.get('app_id') != 'os.launch.home':
-                        GLib.idle_add(self.callback)
+                    change = ev.get('change')
+                    if change in ('new', 'focus', 'fullscreen_mode') and con.get('app_id') != 'os.launch.home':
+                        GLib.idle_add(self.callback, change)
                 p.wait()
             except Exception:
                 pass
@@ -1890,6 +1891,7 @@ class Launcher(Gtk.Application):
         self.quiet_super = 0.0
         self.signed_in = False
         self.fails, self.wait_until = 0, 0.0   # wrong passwords in a row, and when the next try is allowed
+        self.signin_lock = threading.Lock()
         self.connect('activate', self.on_activate)
 
     def on_activate(self, app):
@@ -2049,6 +2051,10 @@ class Launcher(Gtk.Application):
     def sign_in(self, arg):
         """Runs off the main thread (checking a password takes a moment)."""
         pw = str((arg or {}).get('password', '')) if isinstance(arg, dict) else ''
+        with self.signin_lock:   # one try at a time
+            return self._sign_in(pw)
+
+    def _sign_in(self, pw):
         if password_needed():
             now = time.monotonic()
             if now < self.wait_until:
@@ -2198,12 +2204,17 @@ class Launcher(Gtk.Application):
         GLib.idle_add(self.push_tasks)
         return {'ok': True, 'resumed': False}
 
-    def on_new_window(self):
-        """A window that isn't ours appeared. If it's the first one from the app just
-        started, Home steps aside so it (and any dialog it shows) is in front."""
-        if not self.signed_in:   # signed out: the sign-in screen stays in front
-            if self.win.get_visible():
-                GLib.idle_add(self.bring_home)
+    def on_new_window(self, change='new'):
+        """A window that isn't ours appeared (or came to the front). If it's the first one from
+        the app just started, Home steps aside so it (and any dialog it shows) is in front.
+        Signed out, the sign-in screen always stays in front, whatever an app still running does."""
+        if not self.signed_in:
+            now = time.monotonic()
+            if now - getattr(self, 'last_guard', 0) > 0.3:
+                self.last_guard = now
+                self.bring_home()
+            return False
+        if change != 'new':
             return False
         waiting = getattr(self, 'ext_waiting', 0)
         if self.ext is not None and waiting and time.monotonic() - waiting < 600 and self.win.get_visible():

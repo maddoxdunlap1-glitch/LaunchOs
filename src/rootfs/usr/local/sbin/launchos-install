@@ -66,12 +66,12 @@ done
 rsync -aHAX /home/player/ $T/home/player/ 2>/dev/null
 step "Copying your apps" 78
 rsync -aHAX /var/lib/flatpak/ $T/var/lib/flatpak/ 2>/dev/null
-if [ -f /etc/launchos/admin-set ]; then
+hash=$(getent shadow player | cut -d: -f2)
+if [ -f /etc/launchos/admin-set ] && [ -n "$hash" ] && usermod -R $T -p "$hash" player 2>/dev/null; then
+  # (only once the password is really there: otherwise sign-in would ask for one that can't match)
   mkdir -p $T/etc/launchos $T/etc/sudoers.d
-  cp -a /etc/launchos/admin-set $T/etc/launchos/
   [ -f /etc/sudoers.d/launchos-player ] && cp -a /etc/sudoers.d/launchos-player $T/etc/sudoers.d/
-  hash=$(getent shadow player | cut -d: -f2)
-  [ -n "$hash" ] && chroot $T usermod -p "$hash" player 2>/dev/null
+  cp -a /etc/launchos/admin-set $T/etc/launchos/
 fi
 [ -f $T/boot/vmlinuz-$KVER ] || cp $LIVE/live/vmlinuz $T/boot/vmlinuz-$KVER
 

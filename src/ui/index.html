@@ -150,8 +150,9 @@ const installing = a => !!(a.flatpak && storeJob.step && !storeJob.done && Strin
 const DEFAULT_APPS = ['steam', 'winprog'];
 function shownApps() {
   const picked = LOS.prefs.appsPicked ? LOS.prefs.apps : DEFAULT_APPS;
-  // apps you picked, plus (until you've picked) any that are already installed
-  return appsList.filter(a => picked.includes(a.key) || (!LOS.prefs.appsPicked && a.flatpak && a.installed));
+  const hidden = Array.isArray(LOS.prefs.appsHidden) ? LOS.prefs.appsHidden : [];
+  // apps you picked, plus installed ones (from the Store, say) unless you unticked them in Setup
+  return appsList.filter(a => picked.includes(a.key) || (a.flatpak && a.installed && !hidden.includes(a.key)));
 }
 const appArt = a => a.key === 'winprog' ? 'wine' : a.key === 'steam' ? 'steam' : '';
 const goSetup = hash => () => { location.href = 'setup.html' + (hash ? '#' + hash : ''); };

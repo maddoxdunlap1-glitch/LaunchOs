@@ -19,14 +19,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq squashfs-tools
-          mkdir -p /mnt/t && cd /mnt/t
+          mkdir -p "$RUNNER_TEMP/t" && cd "$RUNNER_TEMP/t"
           gh release download build-debian-base -R "$GITHUB_REPOSITORY" -p 'base.squashfs.part*'
           cat base.squashfs.part* > base.squashfs
-          sudo unsquashfs -q -d root base.squashfs
+          sudo unsquashfs -q -d root base.squashfs && ls root | head -3 && df -h .
       - name: Install Discord and VLC with the Store job
         shell: bash
         run: |
-          R=/mnt/t/root
+          R=$RUNNER_TEMP/t/root
           {
             set -x
             sudo cp -a src/rootfs/. $R/
