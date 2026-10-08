@@ -313,7 +313,7 @@ function nav(a, e) {
     case 'right': if (area === 'tabs') { tab = (tab + 1) % TABS.length; pos = 0; render(); } else if (area === 'grid' && pos % COLS < COLS - 1 && pos + 1 < n) { pos++; paint(); } break;
     case 'up': if (area === 'grid') { if (pos >= COLS) pos -= COLS; else area = 'tabs'; } else if (area === 'tabs') area = 'search'; paint(); break;
     case 'down': if (area === 'search') area = 'tabs'; else if (area === 'tabs') { if (n) { area = 'grid'; pos = 0; } } else if (pos + COLS < n) pos += COLS; else if (Math.floor(pos / COLS) < Math.floor((n - 1) / COLS)) pos = n - 1; paint(); break;
-    case 'ok': if (area === 'search') { $('#q').focus(); } else if (area === 'tabs') { if (n) { area = 'grid'; pos = 0; paint(); } else if (refreshError) getCatalog(); } else openCard(pos); break;
+    case 'ok': if (area === 'search') { $('#q').focus(); if (!e) LOS.osk.show($('#q'), { onDone: () => { $('#q').blur(); area = 'grid'; pos = 0; paint(); } }); } else if (area === 'tabs') { if (n) { area = 'grid'; pos = 0; paint(); } else if (refreshError) getCatalog(); } else openCard(pos); break;
     case 'opts': area = 'search'; paint(); $('#q').focus(); break;
     case 'back': if (query) { $('#q').value = ''; setQuery(''); } else home(); break;
     case 'menu': home(); break;

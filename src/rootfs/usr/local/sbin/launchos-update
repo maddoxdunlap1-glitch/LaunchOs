@@ -84,6 +84,44 @@ def manifest():
     return m
 
 
+# ---------- early access (LaunchOS Pro): newer versions from the Pro server ----------
+
+def pro_download_url(name):
+    """A short-lived link to one of the Pro server's files, or None without Pro."""
+    try:
+        st = json.load(open("/var/lib/launchos/pro.json"))
+        key = open("/var/lib/launchos/pro-key").read().strip()
+        conf = dict(l.strip().split("=", 1) for l in open("/etc/launchos/pro.conf") if "=" in l and not l.lstrip().startswith("#"))
+    except (OSError, ValueError):
+        return None
+    url = conf.get("url", "").strip().rstrip("/")
+    if st.get("status") != "active" or not st.get("instance_id") or not re.fullmatch(r"https://[A-Za-z0-9.-]+(:\d+)?|http://10\.0\.2\.2(:\d+)?", url):
+        return None
+    req = urllib.request.Request(url + "/v1/download", method="POST", headers={"content-type": "application/json", "User-Agent": "LaunchOS-updater"},
+                                 data=json.dumps({"key": key, "instance_id": st["instance_id"], "file": name}).encode())
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            a = json.loads(r.read(65536) or b"{}")
+    except Exception:
+        return None
+    link = str(a.get("url", ""))
+    return link if a.get("ok") and link.startswith(url + "/") else None
+
+
+def early_manifest():
+    """The early-access update, if there is one (Pro only)."""
+    link = pro_download_url("early-update.json")
+    if not link:
+        return None
+    try:
+        m = json.loads(fetch("", 1 << 20, url=link).decode("utf-8"))
+    except Exception:
+        return None
+    if not isinstance(m, dict) or not re.fullmatch(r"[0-9]+(\.[0-9]+){0,3}", str(m.get("version", ""))):
+        return None
+    return m
+
+
 def say(step, pct, done=False, err="", **extra):
     D.status("update", step, pct, done, err, **extra)
 
@@ -97,18 +135,31 @@ def offline(e):
     return "Couldn’t reach GitHub. Check your internet connection and try again."
 
 
-def check():
-    say("Checking for updates", 10)
+def best_manifest():
+    """The newest update: the public one, or with Pro an early-access one if that's newer."""
+    m, err = None, None
     try:
         m = manifest()
     except Exception as e:
-        say("", 100, True, offline(e))
+        err = e
+    e = early_manifest()
+    if e and (m is None or vtuple(e["version"]) > vtuple(m["version"])):
+        e["early"] = True
+        return e, None
+    return m, err
+
+
+def check():
+    say("Checking for updates", 10)
+    m, err = best_manifest()
+    if m is None:
+        say("", 100, True, offline(err))
         return
     cur, new = current(), str(m["version"])
     notes = str(m.get("notes", ""))[:2000]
     if vtuple(new) > vtuple(cur):
-        say("LaunchOS " + new + " is available", 100, True, available=True, latest=new, current=cur, notes=notes,
-            full=bool(m.get("full")))
+        say("LaunchOS " + new + (" (early access)" if m.get("early") else "") + " is available", 100, True, available=True,
+            latest=new, current=cur, notes=notes, full=bool(m.get("full")), early=bool(m.get("early")))
     else:
         say("LaunchOS is up to date (" + cur + ")", 100, True, available=False, latest=new, current=cur)
 
@@ -135,10 +186,9 @@ def safe_members(tar):
 
 def apply():
     say("Checking for updates", 3)
-    try:
-        m = manifest()
-    except Exception as e:
-        say("", 100, True, offline(e))
+    m, err = best_manifest()
+    if m is None:
+        say("", 100, True, offline(err))
         return
     new = str(m["version"])
     if vtuple(new) <= vtuple(current()):
@@ -154,6 +204,11 @@ def apply():
     base = base_url()
     # the package of exactly this version (not "latest", which may change in between)
     url = base.replace("/releases/latest/download/", "/releases/download/v" + new + "/") + name
+    if m.get("early"):   # early access: from the Pro server
+        url = pro_download_url("early-update.tar.gz")
+        if not url:
+            say("", 100, True, "Couldn’t reach the Pro server. Try again later.")
+            return
     try:
         data = fetch(name, MAX_SIZE, lambda got, total: say("Downloading LaunchOS " + new, 5 + 55 * got // total), url=url)
     except Exception as e:

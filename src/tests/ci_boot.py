@@ -162,9 +162,41 @@ ls -la /run/live/ > live.txt 2>&1
 cat /home/player/.cache/launchos/ui-errors.log > ui-errors.txt 2>/dev/null
 journalctl -b -u launcher --no-pager -o cat > launcher.txt 2>&1
 '''
-ORDER = r'''
-cd /run/live/rootfs/filesystem.squashfs && find . -xdev -type f -size +0 -print0 2>/dev/null | xargs -0 fincore --noheadings --bytes --output RES,FILE 2>/dev/null | awk '$1 > 0 { sub(/^[0-9]+[ \t]+/, ""); print }' > /tmp/rep/bootfiles.txt; wc -l < /tmp/rep/bootfiles.txt
-'''
+# which files of the system were read while starting: their pages are in memory (mincore)
+INCORE = r"""
+import ctypes, os, stat
+libc = ctypes.CDLL(None, use_errno=True)
+libc.mmap.restype = ctypes.c_void_p
+libc.mmap.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_long]
+libc.mincore.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_char_p]
+libc.munmap.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+PS = os.sysconf('SC_PAGE_SIZE')
+root = '/run/live/rootfs/filesystem.squashfs'
+out = open('/tmp/rep/bootfiles.txt', 'w')
+for dp, dns, fns in os.walk(root):
+    for f in fns:
+        p = os.path.join(dp, f)
+        try:
+            st = os.lstat(p)
+            if not stat.S_ISREG(st.st_mode) or st.st_size == 0:
+                continue
+            fd = os.open(p, os.O_RDONLY)
+        except OSError:
+            continue
+        try:
+            a = libc.mmap(None, st.st_size, 1, 1, fd, 0)
+            if a and a != ctypes.c_void_p(-1).value:
+                vec = ctypes.create_string_buffer((st.st_size + PS - 1) // PS)
+                if libc.mincore(a, st.st_size, vec) == 0 and any(b & 1 for b in vec.raw):
+                    out.write(os.path.relpath(p, root) + '\n')
+                libc.munmap(a, st.st_size)
+        finally:
+            os.close(fd)
+out.close()
+print(sum(1 for _ in open('/tmp/rep/bootfiles.txt')))
+"""
+ORDER = 'echo ' + __import__('base64').b64encode(INCORE.encode()).decode() + ' | base64 -d > /tmp/incore.py && python3 /tmp/incore.py'
+
 
 
 def boot_once(a, disk, work, outdir, label):

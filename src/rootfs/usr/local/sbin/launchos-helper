@@ -72,6 +72,16 @@ def iwd_name(ssid):
     return "=" + ssid.encode("utf-8").hex()
 
 
+def fresh_status(job):
+    """A new job's status starts fresh, so the screen never shows the last job's result."""
+    os.makedirs("/run/launchos-status", exist_ok=True)
+    path = "/run/launchos-status/" + job + ".json"
+    fd = os.open(path + ".tmp", os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
+    with os.fdopen(fd, "w") as f:
+        json.dump({"step": "Starting", "percent": 2, "done": False, "error": ""}, f)
+    os.replace(path + ".tmp", path)
+
+
 def background(unit, *cmd):
     """Long jobs run as their own unit so this helper returns at once."""
     run("systemctl", "reset-failed", unit + ".service")
@@ -157,6 +167,31 @@ def handle(req):
             background("launchos-sysupdate", "/usr/local/sbin/launchos-update", "system")
     elif action == "admin_password":
         admin_password(str(req.get("new", "")), str(req.get("old", "")))
+    # LaunchOS Pro: unlock with a key, get or update the extras, remove from this PC
+    elif action == "pro":
+        op = str(req.get("op", ""))
+        if op == "activate":
+            key = str(req.get("key", "")).strip()
+            if re.fullmatch(r"[A-Za-z0-9-]{8,64}", key):
+                path = "/run/launchos-status/.pro-request"
+                os.makedirs("/run/launchos-status", exist_ok=True)
+                fd = os.open(path + ".tmp", os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+                with os.fdopen(fd, "w") as f:
+                    json.dump({"key": key}, f)
+                os.replace(path + ".tmp", path)
+                fresh_status("pro")
+                background("launchos-pro", "/usr/local/sbin/launchos-pro", "activate")
+        elif op in ("install", "remove"):
+            fresh_status("pro")
+            background("launchos-pro", "/usr/local/sbin/launchos-pro", op)
+        elif op == "check":
+            background("launchos-pro-check", "/usr/local/sbin/launchos-pro", "check", "--now")
+    # Gaming mode (Pro): performance settings while a game runs, back to normal after
+    elif action == "game":
+        op = str(req.get("op", ""))
+        pid = req.get("pid")
+        if op in ("on", "off") and (pid is None or (isinstance(pid, int) and 1 < pid < 4194304)):
+            run("/usr/local/sbin/launchos-game", op, str(pid or 0))
 
 
 APP_ID = re.compile(r"[A-Za-z][A-Za-z0-9_-]*(\.[A-Za-z0-9_-]+){2,}")

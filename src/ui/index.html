@@ -49,6 +49,14 @@ label.pw { display: flex; gap: 8px; margin-bottom: 14px; }
 label.pw input { flex: 1; font-size: 17px; padding: 11px 14px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel-2); color: var(--ink); outline: none; }
 label.pw input:focus { border-color: var(--accent); }
 label.pw button { padding: 0 14px; border-radius: 10px; background: var(--chip); font-size: 14px; }
+.probadge { display: inline-block; margin-left: 10px; padding: 2px 8px; border-radius: 9px; font-size: 11px; font-weight: 800; letter-spacing: .06em; color: #1a1406; background: linear-gradient(180deg, #ffe08a, #e0a52e); vertical-align: 2px; text-shadow: none; }
+#av.pro { box-shadow: 0 0 0 3px #e6b84a, 0 0 16px 2px rgba(230, 184, 74, .45); }
+.feats { margin: 0 0 14px; padding: 0; list-style: none; font-size: 15px; color: var(--ink-2); display: grid; gap: 6px; }
+.feats li { display: flex; gap: 10px; align-items: center; }
+.feats li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #e6b84a; flex: none; }
+.buy { display: flex; gap: 16px; align-items: center; margin: 0 0 14px; font-size: 14px; color: var(--ink-2); }
+.buy .qr { width: 104px; height: 104px; border-radius: 10px; background: #fff; padding: 6px; flex: none; }
+.buy .qr svg { width: 100%; height: 100%; display: block; }
 .t2 { flex: 1; height: 146px; color: #fff; }
 .t2 .g { position: absolute; right: 16px; top: 14px; color: rgba(255, 255, 255, .7); }
 .t2 .g .ic { width: 34px; height: 34px; }
@@ -206,8 +214,9 @@ function renderHome(keep) {
     el.oncontextmenu = e => { e.preventDefault(); if (mode !== 'home') return; pos = { r, c }; foc(); appOptions(); };
     el.onmousemove = () => { if (mode !== 'home' || !LOS.mouseRecent() || (pos.r === r && pos.c === c)) return; pos = { r, c }; foc(); };
   }));
-  $('#pname').textContent = LOS.prefs.name;
+  $('#pname').innerHTML = esc(LOS.prefs.name) + (LOS.pro ? '<span class="probadge" title="LaunchOS Pro supporter">PRO</span>' : '');
   $('#av').style.background = LOS.prefs.avatar;
+  $('#av').classList.toggle('pro', LOS.pro);
   paintRun();
   foc();
 }
@@ -455,12 +464,14 @@ function items() {
       row('Time zone', (LOS.prefs.timezone || zone || 'UTC').replace(/^Etc\//, '').replace(/_/g, ' '), 'clock', goSetup('timezone'), { pic: 'time' }),
       row('Name and colors', LOS.prefs.name, 'user', goSetup('name'), { pic: 'user' }),
       row('Apps on Home', 'Pick apps like Discord and Steam', 'grid', goSetup('apps'), { pic: 'games' }),
+      row('Gaming', pro && pro.active ? 'Performance mode and FPS counter' : 'Gaming mode, with LaunchOS Pro', 'pad', () => gamingPanel(), { pic: 'controller' }),
       row('Password', adminSet ? (session && session.ask ? 'Set · asked at sign-in and for sudo' : 'Set · used for sudo') : 'Not set', 'user', () => adminPanel(), { pic: 'password' }),
       row('Saving', storage ? (storage.saving ? 'On' : 'Off · changes reset at shut down') : 'Checking…', 'usb', () => savingPanel(), { pic: 'saving' }),
       row('Drives', 'Open, eject or format drives in Files', 'drive', files, { pic: 'drive' }),
       ...(storage && storage.installed ? [] : [row('Install LaunchOS', 'Put it on a drive in this PC', 'usb', () => installPanel(), { pic: 'install' })]),
       row('System monitor', 'CPU, memory, network and apps', 'chart', monitor, { pic: 'monitor' }),
       row('Updates', 'LaunchOS, your apps and the system', 'refresh', () => updatesPanel(), { pic: 'updates' }),
+      row('LaunchOS Pro', pro && pro.active ? 'On · thanks for supporting LaunchOS' : pro && pro.on_sale ? 'Extras for $5, once' : 'Coming soon', 'info', () => proPanel(), { pic: 'pro' }),
       row('About LaunchOS', info ? 'Version ' + info.version : 'Version', 'info', () => aboutPanel(), { img: '/opt/launcher/img/launchos-icon.png' }),
       row('Power', adminSet ? 'Lock, sign out, shut down or restart' : 'Sign out, shut down or restart', 'power', () => powerPanel(), { pic: 'power' }),
     ];
@@ -482,8 +493,9 @@ function rg() {
   $('#gl').innerHTML = L.map((o, k) => `<div class="it${k === g.i ? ' f' : ''}" data-k="${k}">${rowIcon(o)}<span class="txt"><span>${esc(o.t)}</span><small>${esc(o.s)}</small></span></div>`).join('');
   keepVisible($('#gl'));
 }
-let adminSet = false, session = null;
+let adminSet = false, session = null, pro = null;
 async function refreshAll() {
+  call('pro_state').then(r => { if (r && !r.error) { pro = r; if (mode === 'guide') rg(); } });
   call('admin_set').then(r => { adminSet = !!(r && r.set); if (mode === 'guide') rg(); });
   call('session_state').then(r => { session = r; if (mode === 'guide') rg(); });
   loadApps();
@@ -510,6 +522,7 @@ let P = null;   // { rows:[], i, back }
 function panel(title, text, rows, opts) {
   // a pop-up that replaces another one goes back to where the first one came from
   const from = mode === 'panel' && P ? P.from : mode;
+  LOS.osk.hide();
   P = Object.assign({ rows, i: 0, from }, opts || {});
   mode = 'panel';
   $('#ph').textContent = title; $('#pp').textContent = text || '';
@@ -517,6 +530,14 @@ function panel(title, text, rows, opts) {
   rp();
   $('#dim').classList.add('on'); $('#panel').classList.add('on');
 }
+/* Typing with a controller: the on-screen keyboard goes through the panel's text boxes in order,
+   then does the panel's main thing. Opens by itself when the panel was opened with a controller. */
+function typeAll(ids, finish) {
+  const go = k => { const el = $('#' + ids[k]); if (!el) return; el.focus(); LOS.osk.show(el, { onDone: () => k + 1 < ids.length ? go(k + 1) : finish() }); };
+  go(0);
+}
+function typeRow(label, ids, finish) { return row(label, 'With the on-screen keyboard', 'keyboard', () => typeAll(ids, finish), { pic: 'keyboard' }); }
+function autoType(ids, finish) { if (LOS.padRecent()) setTimeout(() => { if (P) typeAll(ids, finish); }, 120); }
 function dropInput() { const a = document.activeElement; if (a && a.closest && a.closest('#panel')) a.blur(); }
 function rp() {
   $('#pl').innerHTML = P.rows.map((o, k) => o.slider != null
@@ -591,11 +612,13 @@ function wifiNetwork(n) {
   else wifiPassword(n);
 }
 function wifiPassword(n, err) {
-  const body = `<label class="pw"><input id="wpw" type="password" maxlength="63" autocomplete="off" spellcheck="false" placeholder="Password"><button id="wshow" type="button">Show</button></label>`;
-  panel(n.name, err || 'Type the Wi-Fi password, then press Enter.', [row('Connect', '', 'wifi', () => wifiJoin(n, $('#wpw').value)), row('Cancel', '', 'check', () => wifiPanel())], { body });
+  const body = `<label class="pw"><input id="wpw" type="password" maxlength="63" autocomplete="off" spellcheck="false" placeholder="Wi-Fi password" aria-label="Wi-Fi password for ${esc(n.name)}"><button id="wshow" type="button">Show</button></label>`;
+  const join = () => wifiJoin(n, $('#wpw').value);
+  panel(n.name, err || 'Type the Wi-Fi password, then press Enter.', [typeRow('Type the password', ['wpw'], join), row('Connect', '', 'wifi', join), row('Cancel', '', 'check', () => wifiPanel())], { body, enter: join });
   const i = $('#wpw');
   $('#wshow').onclick = () => { i.type = i.type === 'password' ? 'text' : 'password'; i.focus(); };
   setTimeout(() => i.focus(), 50);
+  autoType(['wpw'], join);
 }
 async function wifiJoin(n, pw) {
   panel(n.name, 'Connecting…', []);
@@ -676,31 +699,108 @@ async function runUpdate(what, job, title) {
 /* ---------- admin password (sudo in the Terminal) ---------- */
 async function adminPanel(err) {
   const r = await call('admin_set'); adminSet = !!(r && r.set);
-  const body = (adminSet ? `<label class="pw"><input id="apo" type="password" maxlength="128" autocomplete="off" placeholder="Current password"></label>` : '')
-    + `<label class="pw"><input id="apn" type="password" maxlength="128" autocomplete="off" placeholder="New password"></label>`
-    + `<label class="pw"><input id="apn2" type="password" maxlength="128" autocomplete="off" placeholder="Type it again"></label>`;
+  const body = (adminSet ? `<label class="pw"><input id="apo" type="password" maxlength="128" autocomplete="off" placeholder="Current password" aria-label="Current password"></label>` : '')
+    + `<label class="pw"><input id="apn" type="password" maxlength="128" autocomplete="off" placeholder="New password" aria-label="New password"></label>`
+    + `<label class="pw"><input id="apn2" type="password" maxlength="128" autocomplete="off" placeholder="Type it again" aria-label="New password again"></label>`;
   session = await call('session_state');
   const askRow = adminSet ? [row('Ask for it at sign-in: ' + (session && session.ask ? 'On' : 'Off'), session && session.ask ? 'Turn off to sign in by pressing A' : 'Turn on so only you can sign in', 'user', async () => {
     await call('signin_ask', !(session && session.ask)); adminPanel(); }, { pic: 'lock' })] : [];
+  const ids = adminSet ? ['apo', 'apn', 'apn2'] : ['apn', 'apn2'];
+  const save = async () => {
+    const n = $('#apn').value, n2 = $('#apn2').value, o = adminSet ? $('#apo').value : '';
+    if (n.length < 6) { adminPanel('Use 6 or more characters.'); return; }
+    if (n !== n2) { adminPanel('The two passwords don’t match.'); return; }
+    panel('Password', 'Saving…', [], { busy: true });
+    let res = await call('admin_password', { new: n, old: o });
+    // the first time, LaunchOS asks for a key press, so only someone at the PC can do this
+    for (let i = 0; i < 90 && res && !res.done && !res.error; i++) {
+      $('#pp').textContent = res.step || 'Saving…';
+      await new Promise(r => setTimeout(r, 1000));
+      res = await call('job_status', 'admin');
+    }
+    if (res && res.done && !res.error) { adminSet = true; if (P) P.from = 'guide'; panel('Password', 'Saved. You’ll type it when you sign in. In the Terminal, type sudo before a command and enter this password.', [row('Done', '', 'check', () => closePanel())]); }
+    else adminPanel((res && res.error) || 'Couldn’t save the password.');
+  };
   panel('Password', err || (adminSet ? 'Change your password. It’s asked for when you sign in, and for admin commands (sudo) in the Terminal.' : 'Set a password so only you can sign in, and to run admin commands (sudo) in the Terminal. Keep it somewhere safe.'), [
-    row('Save', 'Or press Enter', 'check', async () => {
-      const n = $('#apn').value, n2 = $('#apn2').value, o = adminSet ? $('#apo').value : '';
-      if (n.length < 6) { adminPanel('Use 6 or more characters.'); return; }
-      if (n !== n2) { adminPanel('The two passwords don’t match.'); return; }
-      panel('Password', 'Saving…', [], { busy: true });
-      let res = await call('admin_password', { new: n, old: o });
-      // the first time, LaunchOS asks for a key press, so only someone at the PC can do this
-      for (let i = 0; i < 90 && res && !res.done && !res.error; i++) {
-        $('#pp').textContent = res.step || 'Saving…';
-        await new Promise(r => setTimeout(r, 1000));
-        res = await call('job_status', 'admin');
-      }
-      if (res && res.done && !res.error) { adminSet = true; if (P) P.from = 'guide'; panel('Password', 'Saved. You’ll type it when you sign in. In the Terminal, type sudo before a command and enter this password.', [row('Done', '', 'check', () => closePanel())]); }
-      else adminPanel((res && res.error) || 'Couldn’t save the password.');
-    }),
+    typeRow('Type the passwords', ids, save),
+    row('Save', 'Or press Enter', 'check', save),
     ...askRow,
-    row('Cancel', '', 'close', () => closePanel())], { body });
+    row('Cancel', '', 'close', () => closePanel())], { body, enter: save });
   setTimeout(() => { const i = $(adminSet ? '#apo' : '#apn'); if (i) i.focus(); }, 60);
+  autoType(ids, save);
+}
+/* ---------- LaunchOS Pro ---------- */
+const PRO_FEATS = ['Live backgrounds that move', 'Five color themes, like Carbon and Pure black', 'Gaming mode: full speed while you play', 'An FPS counter in games', 'Early access to new versions', 'A supporter badge'];
+async function proPanel(msg) {
+  pro = await call('pro_state');
+  if (!pro || pro.error) { panel('LaunchOS Pro', 'LaunchOS Pro works when running as LaunchOS.', [row('Done', '', 'check', () => closePanel())]); return; }
+  const done = row('Done', '', 'check', () => closePanel());
+  const list = `<ul class="feats">${PRO_FEATS.map(f => `<li>${esc(f)}</li>`).join('')}</ul>`;
+  if (pro.active) {
+    const body = `<dl class="kv"><dt>Status</dt><dd>On${pro.since ? ' since ' + esc(pro.since) : ''}</dd><dt>Key</dt><dd>${esc(pro.key_hint || '—')}</dd><dt>Pro extras</dt><dd>Version ${esc(pro.version || '?')}</dd></dl>`;
+    panel('LaunchOS Pro', msg || 'Thanks for supporting LaunchOS!', [
+      row('Gaming', 'Performance mode and FPS counter', 'pad', () => gamingPanel(), { pic: 'controller' }),
+      row('Live backgrounds and themes', 'In Customize your Home', 'palette', goSetup('look'), { pic: 'look' }),
+      row('Check for Pro updates', 'Gets newer Pro extras', 'refresh', () => proJob('install', 'Checking for Pro updates'), { pic: 'updates' }),
+      row('Remove Pro from this PC', 'Frees this PC’s slot for another one', 'close', () => panel('Remove Pro from this PC?', 'Pro turns off here, and this PC’s slot on your key is freed. You can enter the key again later.', [
+        row('Cancel', 'Keep Pro on this PC', 'check', () => proPanel()), row('Remove Pro', '', 'close', () => proJob('remove', 'Removing LaunchOS Pro'))])),
+      done], { body });
+    return;
+  }
+  if (!pro.on_sale) {
+    panel('LaunchOS Pro', 'LaunchOS Pro is coming soon: a $5, one-time unlock that adds extras. Everything LaunchOS does now stays free.', [done], { body: list });
+    return;
+  }
+  const qr = pro.buy ? await call('pro_qr') : null;
+  const buy = pro.buy ? `<div class="buy">${qr && qr.svg ? `<div class="qr">${qr.svg}</div>` : ''}<span>Buy Pro on your phone or another PC: scan the code or go to<br><b>${esc(pro.buy.replace(/^https:\/\//, ''))}</b><br>You get a key by email.</span></div>` : '';
+  const why = pro.status === 'revoked' ? 'This PC’s Pro key was refunded, so Pro is off. ' : '';
+  panel('LaunchOS Pro', msg || why + 'A $5, one-time unlock. One key works on up to 5 PCs.', [
+    row('Enter your key', 'From the email you got', 'check', () => keyPanel(), { pic: 'pro' }),
+    row('Open the Pro page', 'In the Browser', 'globe', () => { closeAll(); call('open_app', { id: 'browser', name: 'Browser', url: pro.buy, navigate: true }).then(refreshTasks); }, { pic: 'browser' }),
+    done], { body: list + buy });
+}
+function keyPanel(err) {
+  const body = `<label class="pw"><input id="pkey" type="text" maxlength="64" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX" aria-label="Your LaunchOS Pro key"></label>`;
+  const go = async () => {
+    const key = $('#pkey').value.replace(/\s+/g, '');
+    if (key.length < 8) { keyPanel('Type the whole key. It’s in the email from your purchase.'); return; }
+    const r = await call('pro_action', { op: 'activate', key });
+    if (!r || !r.ok) { keyPanel((r && r.error) || 'Couldn’t check the key. Try again.'); return; }
+    proProgress('Unlocking LaunchOS Pro');
+  };
+  panel('Enter your Pro key', err || 'Type the key from your email. Letters, numbers and dashes.', [
+    typeRow('Type the key', ['pkey'], go), row('Unlock Pro', 'Needs an internet connection', 'check', go), row('Cancel', '', 'close', () => proPanel())], { body, enter: go });
+  setTimeout(() => { const i = $('#pkey'); if (i) i.focus(); }, 60);
+  autoType(['pkey'], go);
+}
+async function proJob(op, title) {
+  const r = await call('pro_action', { op });
+  if (!r || !r.ok) { toast((r && r.error) || 'Couldn’t start. Try again.', 3600); return; }
+  proProgress(title);
+}
+function proProgress(title) {
+  progressPanel('pro', title, null, [row('Done', '', 'check', async () => { LOS.checkPro(); await refreshAll(); proPanel(); })]);
+  // the look follows Pro being on or off once the job is done
+  const watch = async () => { const st = await call('job_status', 'pro'); if (st && st.done) { LOS.checkPro(); setTimeout(() => renderHome(), 600); } else setTimeout(watch, 1500); };
+  setTimeout(watch, 1500);
+}
+/* ---------- Gaming (LaunchOS Pro) ---------- */
+const FPS_NAMES = { off: 'Off', fps: 'Just the FPS', full: 'Detailed (FPS, CPU, GPU, memory)' };
+async function gamingPanel() {
+  pro = await call('pro_state');
+  if (!pro || !pro.active) {
+    panel('Gaming', 'With LaunchOS Pro, games run in gaming mode: the processor runs at full speed, games get priority over everything else, and an FPS counter can show how smoothly they run.', [
+      row('About LaunchOS Pro', pro && pro.on_sale ? 'Extras for $5, once' : 'Coming soon', 'info', () => proPanel(), { pic: 'pro' }), row('Done', '', 'check', () => closePanel())]);
+    return;
+  }
+  const g = await call('gaming_get');
+  const order = ['off', 'fps', 'full'];
+  panel('Gaming', 'For Steam, Windows programs and apps from the Store. Changes count from the next game you start.', [
+    row('Performance mode: ' + (g.perf ? 'On' : 'Off'), 'Full speed and top priority while a game runs', 'chart', async () => { await call('gaming_set', { perf: !g.perf }); gamingPanel(); }, { pic: 'monitor' }),
+    row('FPS counter: ' + FPS_NAMES[g.fps], pro.fps_ok ? 'In Steam games and Windows programs' : 'Not available on this system', 'chart', async () => {
+      if (!pro.fps_ok) return;
+      await call('gaming_set', { fps: order[(order.indexOf(g.fps) + 1) % order.length] }); gamingPanel(); }, { pic: 'display' }),
+    row('Done', '', 'check', () => closePanel())]);
 }
 function powerPanel() {
   const go = a => async () => {
@@ -740,7 +840,9 @@ function mv(dx, dy) {
 function back() { if (mode === 'panel') closePanel(); else if (mode === 'guide') closeAll(); }
 function menu() { if (mode === 'home') openG(); else closeAll(); }
 function ok() { if (mode === 'home') act(); else if (mode === 'guide') gact(); else if (mode === 'panel') pact(); }
-function nav(a) {
+function nav(a, e) {
+  // Enter in a panel's text box does the panel's main thing
+  if (a === 'ok' && e && e.target && e.target.tagName === 'INPUT' && mode === 'panel' && P && P.enter) { P.enter(); return; }
   if (mode === 'move') { const f = { left: () => moveBy(-1), right: () => moveBy(1), ok: dropMove, back: cancelMove, menu: cancelMove, guide: cancelMove }[a]; if (f) f(); return; }
   const f = { left: () => mv(-1, 0), right: () => mv(1, 0), up: () => mv(0, -1), down: () => mv(0, 1), ok, back, menu,
     guide: menu,                                              // Super key / Xbox button: open or close the side menu

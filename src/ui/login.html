@@ -17,6 +17,8 @@
 #av:after { content: ""; position: absolute; left: 39px; top: 26px; width: 42px; height: 42px; border-radius: 50%; background: #1b3a5a; }
 #av:before { content: ""; position: absolute; left: 24px; bottom: 18px; width: 72px; height: 34px; border-radius: 36px 36px 10px 10px; background: #1b3a5a; }
 #nm { font-size: 30px; font-weight: 600; text-shadow: 0 1px 10px rgba(0, 0, 0, .6); }
+.probadge { display: inline-block; margin-left: 10px; padding: 3px 9px; border-radius: 10px; font-size: 12px; font-weight: 800; letter-spacing: .06em; color: #1a1406; background: linear-gradient(180deg, #ffe08a, #e0a52e); vertical-align: 5px; text-shadow: none; }
+#av.pro { box-shadow: 0 0 0 4px #e6b84a, 0 0 0 10px rgba(230, 184, 74, .12), 0 0 60px 10px rgba(230, 184, 74, .2); }
 .pw { display: flex; width: 100%; gap: 10px; }
 .pw input { flex: 1; font-size: 19px; padding: 13px 16px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel-2); color: var(--ink); outline: none; min-width: 0; }
 .pw input.f { border-color: var(--accent); }
@@ -82,8 +84,9 @@ async function refreshNet() {
 async function draw(msg, bad) {
   state = await call('session_state');
   if (state && state.signed_in && !msg) { location.href = 'index.html'; return; }
-  $('#nm').textContent = LOS.prefs.name;
+  $('#nm').innerHTML = esc(LOS.prefs.name) + (LOS.pro ? '<span class="probadge" title="LaunchOS Pro supporter">PRO</span>' : '');
   $('#av').style.background = LOS.prefs.avatar;
+  $('#av').classList.toggle('pro', LOS.pro);
   if (state && state.password) {
     $('#form').innerHTML = `<label class="pw"><input id="pw" type="password" maxlength="128" autocomplete="off" spellcheck="false" placeholder="Password" data-f aria-label="Password"><button id="show" type="button">Show</button></label><button class="go" data-f data-go>Sign in</button>`;
     $('#show').onclick = () => { const i = $('#pw'); i.type = i.type === 'password' ? 'text' : 'password'; i.focus(); };
@@ -94,7 +97,7 @@ async function draw(msg, bad) {
   $('#msg').textContent = msg || ''; $('#msg').classList.toggle('bad', !!bad);
   const run = state && state.running;
   $('#note').textContent = run ? (run === 1 ? '1 app is still running.' : run + ' apps are still running.')
-    : state && state.password ? 'Type your password with a keyboard, then press Enter.' : '';
+    : state && state.password ? 'Type your password, then press Enter. On a controller, press A to type.' : '';
   $('#pwr').innerHTML = pic('power') + 'Power';
   collect(); fi = 0; paint();
 }

@@ -1,0 +1,10 @@
+[Unit]
+Description=Check the LaunchOS Pro key now and then
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1d
+RandomizedDelaySec=30min
+
+[Install]
+WantedBy=timers.target

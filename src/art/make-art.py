@@ -157,5 +157,69 @@ def main():
     print('done')
 
 
-if __name__ == '__main__':
+if __name__ == '__main__' and len(sys.argv) == 1:
     main()
+
+
+# ---------- the LaunchOS icon: the rocket climbing, on a rounded square ----------
+
+def rounded_mask(n, r):
+    y, x = np.mgrid[0:n, 0:n].astype(np.float32) + 0.5
+    dx = np.maximum(np.maximum(r - x, x - (n - r)), 0)
+    dy = np.maximum(np.maximum(r - y, y - (n - r)), 0)
+    d = np.hypot(dx, dy)
+    return np.clip(r - d + 0.5, 0, 1)
+
+
+def app_icon(n=1024):
+    y, x = np.mgrid[0:n, 0:n].astype(np.float32) / n
+    # navy, lighter towards the top right where the rocket is heading
+    t = np.clip(np.hypot(x - 0.85, y - 0.12) / 1.25, 0, 1)
+    bg = np.array((30, 74, 128), np.float32) * (1 - t[..., None]) + np.array((8, 18, 34), np.float32) * t[..., None]
+    rgba = np.dstack([bg, rounded_mask(n, n * 0.22) * 255]).astype(np.uint8)
+    im = Image.fromarray(rgba, 'RGBA')
+    rng = np.random.default_rng(5)
+    for _ in range(26):   # a few stars
+        sx, sy, sr = rng.random() * n, rng.random() * n, 1 + rng.random() * n * 0.004
+        st = star(int(sr * 8) | 1, sr)
+        im.alpha_composite(st, (int(sx), int(sy)))
+    # the exhaust trail, down to the bottom left
+    trail = np.zeros((n, n, 4), np.float32)
+    u = (x + y - 1.0)                            # across the trail
+    v = -(x - y)                                 # along it: 0 near the rocket, growing towards the bottom left
+    w = 0.03 + 0.12 * np.clip(v / 0.9, 0, 1)
+    a = np.exp(-(u / w) ** 2) * np.clip((v - 0.22) / 0.2, 0, 1) * np.clip((1.05 - v) / 0.6, 0, 1)
+    warm = np.clip(1 - (v - 0.2) / 0.6, 0, 1)
+    trail[..., 0], trail[..., 1], trail[..., 2] = 255, 150 + 70 * (1 - warm), 100 + 130 * (1 - warm)
+    trail[..., 3] = np.clip(a, 0, 1) * 170
+    im.alpha_composite(Image.fromarray(trail.astype(np.uint8), 'RGBA'))
+    # the rocket, turned to fly up and to the right
+    rocket = Image.open(os.path.join(THEME, 'rocket@2x.png'))
+    flame = Image.open(os.path.join(THEME, 'flame3@2x.png'))
+    group = Image.new('RGBA', (rocket.width + 40, rocket.height + flame.height - 40), (0, 0, 0, 0))
+    group.alpha_composite(flame, ((group.width - flame.width) // 2, int(rocket.height * 320 / 350) - 16))
+    group.alpha_composite(rocket, (20, 0))
+    k = n * 0.8 / group.height
+    group = group.resize((int(group.width * k), int(group.height * k)), Image.LANCZOS).rotate(-45, resample=Image.BICUBIC, expand=True)
+    im.alpha_composite(group, (int(n * 0.52 - group.width / 2), int(n * 0.48 - group.height / 2)))
+    # keep everything inside the rounded square
+    mask = Image.fromarray((rounded_mask(n, n * 0.22) * 255).astype(np.uint8), 'L')
+    out = Image.new('RGBA', (n, n), (0, 0, 0, 0))
+    out.paste(im, (0, 0), mask)
+    return out
+
+
+def icons():
+    big = app_icon(1024)
+    root = os.path.dirname(SRC)
+    save(big.resize((256, 256), Image.LANCZOS), os.path.join(UIIMG, 'launchos-icon.png'),
+         os.path.join(root, 'assets', 'launchos-icon.png'), os.path.join(root, 'docs', 'assets', 'launchos-icon.png'))
+    save(big.resize((512, 512), Image.LANCZOS), os.path.join(HERE, 'out', 'launchos-icon-512.png'))
+    # Windows icon for the flasher: every size Windows asks for
+    os.makedirs(os.path.join(SRC, '..', 'flasher', 'LaunchOSFlasher'), exist_ok=True)
+    big.save(os.path.join(SRC, '..', 'flasher', 'LaunchOSFlasher', 'app.ico'), sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+    print('icons done')
+
+
+if __name__ == '__main__' and len(sys.argv) > 1 and sys.argv[1] == 'icons':
+    icons()

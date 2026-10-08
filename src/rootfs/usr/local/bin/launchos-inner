@@ -2,9 +2,7 @@
 # Inside the display server and session bus: sound server for games and apps, then Home.
 export PIPEWIRE_LOG_SYSTEMD=false
 pipewire >/dev/null 2>&1 &
-sleep 0.3
-wireplumber >/dev/null 2>&1 &
-pipewire-pulse >/dev/null 2>&1 &
+( sleep 0.3; wireplumber >/dev/null 2>&1 & pipewire-pulse >/dev/null 2>&1 & ) &   # (Home doesn't wait for sound)
 # first start: speakers at 75% (PipeWire remembers changes after that when saving is on)
 ( [ -e "$HOME/.local/state/wireplumber/default-routes" ] && exit 0
   for i in $(seq 1 30); do sleep 1; wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.75 2>/dev/null && exit 0; done ) &

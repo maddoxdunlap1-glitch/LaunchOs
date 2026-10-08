@@ -43,8 +43,8 @@ find "$R/usr/local" -name __pycache__ -prune -exec rm -rf {} +
 chown -R 0:0 "$R/usr/local" "$R/etc/launchos" "$R/etc/systemd/system" "$R/etc/initramfs-tools"
 chmod 755 "$R/usr/local/bin/launchos-session" "$R/usr/local/bin/launchos-inner" "$R"/usr/local/sbin/launchos-* \
   "$R/usr/local/lib/launchos/steam-shim/zenity" "$R/etc/initramfs-tools/hooks/launchos-saving" \
-  "$R/etc/initramfs-tools/scripts/live-premount/launchos-saving" "$R/etc/initramfs-tools/hooks/launchos-slim"
-chmod 644 "$R/usr/local/sbin/launchos-status" "$R/usr/local/lib/launchos/disks.py" "$R/etc/launchos/update.conf"
+  "$R/etc/initramfs-tools/scripts/live-premount/launchos-saving"
+chmod 644 "$R/usr/local/sbin/launchos-status" "$R/usr/local/lib/launchos/disks.py" "$R/etc/launchos/update.conf" "$R/etc/launchos/pro.conf"
 # /media/player belongs to root: only root makes the drive folders in it
 mkdir -p "$R/media/player"; chown 0:0 "$R/media/player"; chmod 755 "$R/media/player"
 rm -rf "$R/opt/launcher"; mkdir -p "$R/opt/launcher"
@@ -65,7 +65,7 @@ $IN plymouth-set-default-theme launchos
 
 # services: the launcher on tty1 (no login prompt there), a text console on tty2
 $IN systemctl set-default graphical.target
-for u in launcher.service launchos-helper.path launchos-reconcile.service launchos-audio.service \
+for u in launcher.service launchos-helper.path launchos-reconcile.service launchos-audio.service launchos-pro-check.timer \
          iwd.service seatd.service systemd-networkd.service systemd-resolved.service systemd-timesyncd.service getty@tty2.service; do
   $IN systemctl enable "$u" >/dev/null 2>&1 || echo "note: couldn't enable $u"
 done
@@ -83,6 +83,35 @@ $IN fc-cache -s >/dev/null 2>&1 || true
 # start-up image with the live system and the LaunchOS boot screen
 KVER=$(ls "$R/lib/modules" | sort -V | tail -1)
 $IN update-initramfs -u -k "$KVER"
+# A small start-up image loads and unpacks in a fraction of the time: the big AMD and NVIDIA
+# graphics drivers and their firmware (about 140 MB) come out of it. They load from the system a
+# few seconds later; until then the boot animation uses the screen the firmware (or GRUB) set up.
+# Intel graphics, virtual machine graphics and everything that finds the disc or USB stick stay.
+cat > "$R/tmp/slim-initrd" <<'SLIM'
+#!/bin/sh
+set -e
+K=$1; I=/boot/initrd.img-$K; T=/tmp/initrd-slim
+rm -rf "$T"; mkdir -p "$T"
+unmkinitramfs "$I" "$T"
+M=$T/main/usr/lib/modules/$K/kernel/drivers/gpu/drm
+F=$T/main/usr/lib/firmware
+rm -rf "$M/amd" "$M/nouveau" "$M/radeon" "$F/amdgpu" "$F/nvidia" "$F/radeon"
+# network cards aren't needed to start from a disc, USB stick or drive; nor is udev's hardware list
+rm -rf "$T/main/usr/lib/modules/$K/kernel/drivers/net" "$T/main/usr/lib/modules/$K/kernel/drivers/infiniband" "$T/main/usr/lib/udev/hwdb.bin"
+depmod -a -b "$T/main" "$K"
+: > "$I.new"
+for e in "$T"/early*; do
+  [ -d "$e" ] && ( cd "$e" && find . -print0 | LC_ALL=C sort -z | cpio --null -o -H newc --quiet ) >> "$I.new"
+done
+( cd "$T/main" && find . -print0 | LC_ALL=C sort -z | cpio --null -o -H newc --quiet | zstd -q -19 -T0 ) >> "$I.new"
+mv "$I.new" "$I"
+rm -rf "$T"
+SLIM
+chmod 755 "$R/tmp/slim-initrd"
+ls -l "$R/boot/initrd.img-$KVER"
+$IN /tmp/slim-initrd "$KVER"
+rm -f "$R/tmp/slim-initrd"
+ls -l "$R/boot/initrd.img-$KVER"
 cleanup
 trap - EXIT
 
@@ -90,7 +119,8 @@ trap - EXIT
 rm -rf "$IMG"; mkdir -p "$IMG/live" "$IMG/boot/grub" "$IMG/EFI/BOOT"
 cp "$R/boot/vmlinuz-$KVER" "$IMG/live/vmlinuz"
 cp "$R/boot/initrd.img-$KVER" "$IMG/live/initrd.img"
-ARGS="boot=live persistence quiet splash loglevel=0 rd.systemd.show_status=false systemd.show_status=false udev.log_level=3 vt.global_cursor_default=0 nowatchdog"
+# quickusbmodules: live-boot otherwise waits 5 seconds for USB drives that are already there
+ARGS="boot=live persistence quickusbmodules quiet splash loglevel=0 rd.systemd.show_status=false systemd.show_status=false udev.log_level=3 vt.global_cursor_default=0 nowatchdog"
 cat > "$IMG/boot/grub/grub.cfg" <<EOF
 set timeout=0
 set default=0

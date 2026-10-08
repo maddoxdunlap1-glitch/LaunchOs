@@ -899,14 +899,14 @@ def ext_command(app_id, path=None):
 class ExtApp:
     """An outside app in its own process group, so End task stops all of it."""
 
-    def __init__(self, app_id, name, argv, cwd, title):
+    def __init__(self, app_id, name, argv, cwd, title, env=None):
         self.app_id, self.name, self.title = app_id, name, title
         self.started = self.last_used = time.monotonic()
         logdir = os.path.join(HOME, '.cache', 'launchos')
         os.makedirs(logdir, exist_ok=True)
         log = open(os.path.join(logdir, app_id + '.log'), 'ab')
         self.proc = subprocess.Popen(argv, cwd=cwd, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
-                                     start_new_session=True)
+                                     start_new_session=True, env=env)
         log.close()
         self.pgid = self.proc.pid
 
@@ -1887,8 +1887,121 @@ def password_ok(pw):
 
 # ---------- home screen ----------
 
+# ---------- LaunchOS Pro ----------
+
+PRO_STATE = '/var/lib/launchos/pro.json'
+PRO_DIR = '/opt/launchos-pro'
+PRO_CONF = '/etc/launchos/pro.conf'
+PRO_KEY = re.compile(r'[A-Za-z0-9-]{8,64}')
+GAMING_CONF = os.path.join(HOME, '.config', 'launchos', 'gaming.json')
+FPS_MODES = {   # the FPS counter's looks (MangoHud settings)
+    'fps': 'fps_only,position=top-left,font_size=22,background_alpha=0.35',
+    'full': 'fps,frametime,frame_timing=1,cpu_stats,cpu_temp,gpu_stats,gpu_temp,ram,vram,position=top-left,font_size=18,background_alpha=0.4',
+}
+
+
+def kv_file(path):
+    out = {}
+    for line in read(path).splitlines():
+        if '=' in line and not line.lstrip().startswith('#'):
+            k, v = line.split('=', 1)
+            out[k.strip()] = v.strip()
+    return out
+
+
+def pro_info():
+    """Whether LaunchOS Pro is on here (a checked key and the Pro extras installed)."""
+    try:
+        st = json.loads(read(PRO_STATE, '{}') or '{}')
+    except ValueError:
+        st = {}
+    try:
+        man = json.loads(read(os.path.join(PRO_DIR, 'manifest.json'), '{}') or '{}')
+    except ValueError:
+        man = {}
+    conf = kv_file(PRO_CONF)
+    buy = conf.get('buy', '')
+    return {'active': st.get('status') == 'active' and bool(man), 'status': st.get('status', ''),
+            'key_hint': str(st.get('key_hint', ''))[:20], 'since': str(st.get('since', ''))[:10],
+            'version': str(man.get('version', ''))[:20], 'on_sale': bool(conf.get('url')),
+            'buy': buy if re.fullmatch(r'https://[^\s"<>]{4,300}', buy) else '',
+            'job': job_status('pro'), 'fps_ok': os.path.exists('/usr/bin/mangohud')}
+
+
+def pro_action(arg):
+    arg = arg if isinstance(arg, dict) else {}
+    op = str(arg.get('op', ''))
+    if op == 'activate':
+        key = re.sub(r'\s+', '', str(arg.get('key', '')))
+        if not PRO_KEY.fullmatch(key):
+            return {'ok': False, 'error': 'That doesn’t look like a Pro key. It’s in the email from your purchase.'}
+        if job_running('pro', 'launchos-pro'):
+            return {'ok': False, 'error': 'Wait for LaunchOS Pro to finish what it’s doing.'}
+        helper_request({'action': 'pro', 'op': 'activate', 'key': key})
+        return {'ok': True}
+    if op in ('install', 'remove', 'check'):
+        if op != 'check' and job_running('pro', 'launchos-pro'):
+            return {'ok': False, 'error': 'Wait for LaunchOS Pro to finish what it’s doing.'}
+        helper_request({'action': 'pro', 'op': op})
+        return {'ok': True}
+    return {'ok': False, 'error': 'unknown'}
+
+
+_qr_cache = {}
+
+
+def pro_qr():
+    """A QR code (SVG) for the page where Pro is sold, to open it on a phone."""
+    url = pro_info()['buy']
+    if not url:
+        return {'svg': ''}
+    if url not in _qr_cache:
+        try:
+            import qrcode
+            import qrcode.image.svg
+            img = qrcode.make(url, image_factory=qrcode.image.svg.SvgPathFillImage, box_size=10, border=2)
+            _qr_cache[url] = img.to_string(encoding='unicode')
+        except Exception:
+            _qr_cache[url] = ''
+    return {'svg': _qr_cache[url], 'url': url}
+
+
+def gaming_get():
+    try:
+        g = json.loads(read(GAMING_CONF, '{}') or '{}')
+    except ValueError:
+        g = {}
+    return {'perf': bool(g.get('perf', True)), 'fps': g.get('fps') if g.get('fps') in FPS_MODES else 'off'}
+
+
+def gaming_set(arg):
+    g = gaming_get()
+    if isinstance(arg, dict):
+        if 'perf' in arg:
+            g['perf'] = bool(arg['perf'])
+        if arg.get('fps') in ('off', *FPS_MODES):
+            g['fps'] = arg['fps']
+    os.makedirs(os.path.dirname(GAMING_CONF), exist_ok=True)
+    with open(GAMING_CONF, 'w') as f:
+        json.dump(g, f)
+    return g
+
+
+def game_env(app_id, argv):
+    """With Pro: the FPS counter (MangoHud) and a bigger shader cache for games."""
+    if not pro_info()['active']:
+        return argv, None
+    g = gaming_get()
+    env = dict(os.environ, MESA_SHADER_CACHE_MAX_SIZE='10G')
+    if g['fps'] in FPS_MODES and os.path.exists('/usr/bin/mangohud'):
+        env.update(MANGOHUD='1', MANGOHUD_CONFIG=FPS_MODES[g['fps']])
+        if app_id == 'winprog':
+            argv = ['mangohud'] + argv   # (Wine's own OpenGL drawing needs the wrapper)
+    return argv, env
+
+
 # What the sign-in screen may use before anyone has signed in
-SIGNED_OUT_OK = {'session_state', 'sign_in', 'power', 'info', 'network', 'log_error', 'inputs', 'timezone_get'}
+SIGNED_OUT_OK = {'session_state', 'sign_in', 'power', 'info', 'network', 'log_error', 'inputs', 'timezone_get', 'pro_state'}
 
 
 class Launcher(Gtk.Application):
@@ -1915,6 +2028,9 @@ class Launcher(Gtk.Application):
         ucm = WebKit.UserContentManager()
         ucm.connect('script-message-received::launchos', self.on_message)
         ucm.register_script_message_handler('launchos', None)
+        ucm.add_script(WebKit.UserScript.new('window.__losHW = ' + ('true' if HW else 'false') + ';',
+                                             WebKit.UserContentInjectedFrames.TOP_FRAME,
+                                             WebKit.UserScriptInjectionTime.START, None, None))
         self.view = WebKit.WebView(user_content_manager=ucm)
         self.view.set_background_color(NAVY)
         s = self.view.get_settings()
@@ -2003,7 +2119,8 @@ class Launcher(Gtk.Application):
                 # Store: reading Flathub's catalog the first time takes a few seconds
                 'store_info': store_info, 'store_home': store_home_apps, 'admin_password': lambda: admin_password(arg),
                 'store_action': lambda: store_action(arg), 'update_action': lambda: update_action(arg),
-                'get_app': lambda: get_app(arg), 'apps_info': apps_info, 'sign_in': lambda: self.sign_in(arg)}
+                'get_app': lambda: get_app(arg), 'apps_info': apps_info, 'sign_in': lambda: self.sign_in(arg),
+                'pro_qr': pro_qr}
         if action in slow:
             def work():
                 try:
@@ -2058,6 +2175,10 @@ class Launcher(Gtk.Application):
             'lock': lambda: self.sign_out(end_apps=False),
             'sign_out': lambda: self.sign_out(end_apps=True),
             'signin_ask': lambda: set_signin_ask(bool(arg)),
+            'pro_state': pro_info,
+            'pro_action': lambda: pro_action(arg),
+            'gaming_get': gaming_get,
+            'gaming_set': lambda: gaming_set(arg),
         }
         fn = handlers.get(action)
         try:
@@ -2102,6 +2223,7 @@ class Launcher(Gtk.Application):
             if self.ext is not None:
                 self.ext.end()
                 self.ext = None
+                self.game_mode_off()
         for w in self.apps.values():
             if w.get_visible():
                 w.set_visible(False)
@@ -2168,10 +2290,16 @@ class Launcher(Gtk.Application):
         GLib.idle_add(self.push_tasks)
         return {'ok': True, 'resumed': False, 'ended': ended}
 
+    def game_mode_off(self):
+        if getattr(self, 'game_mode', False):
+            self.game_mode = False
+            helper_request({'action': 'game', 'op': 'off'})
+
     def end_app(self, app_id):
         if self.ext is not None and self.ext.app_id == str(app_id):
             self.ext.end()
             self.ext = None
+            self.game_mode_off()
             self.bring_home()
             return {'ok': True}
         win = self.apps.pop(str(app_id), None)
@@ -2221,10 +2349,14 @@ class Launcher(Gtk.Application):
         if not cmd:
             return {'ok': False, 'error': 'not_installed'}
         name, argv, cwd, title = cmd
+        argv, env = game_env(app_id, argv)
         try:
-            self.ext = ExtApp(app_id, name, argv, cwd, title)
+            self.ext = ExtApp(app_id, name, argv, cwd, title, env)
         except OSError as e:
             return {'ok': False, 'error': str(e)}
+        if env is not None and gaming_get()['perf']:   # Pro: gaming mode while it runs
+            helper_request({'action': 'game', 'op': 'on', 'pid': self.ext.proc.pid})
+            self.game_mode = True
         self.ext_waiting = time.monotonic()   # Home steps aside when the app's first window shows
         GLib.idle_add(self.push_tasks)
         return {'ok': True, 'resumed': False}
@@ -2293,6 +2425,7 @@ class Launcher(Gtk.Application):
         if self.ext is not None and not self.ext.alive():
             name, quick = self.ext.name, time.monotonic() - self.ext.started < 30
             self.ext = None
+            self.game_mode_off()
             self.bring_home()
             msg = (f'{name} closed right away. The first time, it needs an internet connection.' if quick and name in ('Steam', 'Roblox', 'FreeTube')
                    else f'{name} closed')

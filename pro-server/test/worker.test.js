@@ -24,7 +24,7 @@ function setup() {
       return reply({ valid: ok, license_key: { status: "active" }, meta: ls.meta });
     }
     if (path === "deactivate") {
-      return reply({ deactivated: ls.instances.delete(f.get("instance_id")) });
+      return reply({ deactivated: ls.instances.delete(f.get("instance_id")), meta: ls.meta });
     }
     return reply({}, 404);
   };
@@ -116,4 +116,24 @@ test("wrong store, bad input, expired and tampered links are refused", async () 
   assert.equal((await worker.fetch(new Request(`https://pro.test/v1/file/pro-package.tar.gz?exp=${exp}&sig=${sig}`), env)).status, 403);
   const exp2 = Math.floor(Date.now() / 1000) + 300;
   assert.equal((await worker.fetch(new Request(`https://pro.test/v1/file/pro-package.tar.gz?exp=${exp2}&sig=abc`), env)).status, 403);
+});
+
+test("a PC can remove Pro itself, freeing its slot", async () => {
+  const { env } = setup();
+  const ids = [];
+  for (let i = 1; i <= 5; i++) ids.push((await call(env, post("/v1/activate", { key: KEY, pc_id: pc(i) }))).body.instance_id);
+  assert.equal((await call(env, post("/v1/activate", { key: KEY, pc_id: pc(6) }))).body.error, "pc_limit");
+  const r = await call(env, post("/v1/deactivate", { key: KEY, instance_id: ids[2] }));
+  assert.equal(r.body.ok, true);
+  assert.equal((await call(env, post("/v1/activate", { key: KEY, pc_id: pc(6) }))).status, 200);
+  assert.equal((await call(env, post("/v1/deactivate", { key: "WRONG-KEY-0000", instance_id: ids[0] }))).status, 403);
+});
+
+test("early-access files can be downloaded, other names can't", async () => {
+  const { env } = setup();
+  const a = await call(env, post("/v1/activate", { key: KEY, pc_id: pc(1) }));
+  for (const file of ["early-update.json", "early-update.tar.gz", "pro-update.json"]) {
+    assert.equal((await call(env, post("/v1/download", { key: KEY, instance_id: a.body.instance_id, file }))).status, 200);
+  }
+  assert.equal((await call(env, post("/v1/download", { key: KEY, instance_id: a.body.instance_id, file: "secrets.txt" }))).status, 400);
 });

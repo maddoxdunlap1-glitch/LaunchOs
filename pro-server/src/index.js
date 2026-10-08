@@ -7,7 +7,8 @@
 const LS = "https://api.lemonsqueezy.com/v1/licenses";
 const LINK_SECONDS = 600;
 const MAX_BODY = 4096;
-const FILES = new Set(["pro-package.tar.gz", "pro-update.json"]);
+// the Pro extras, and early-access LaunchOS updates
+const FILES = new Set(["pro-package.tar.gz", "pro-update.json", "early-update.json", "early-update.tar.gz"]);
 const KEY_RE = /^[A-Za-z0-9-]{8,64}$/;
 const PC_RE = /^[a-f0-9]{32}$/; // random PC id made by LaunchOS (16 random bytes, hex)
 const INSTANCE_RE = /^[A-Za-z0-9-]{8,64}$/;
@@ -161,6 +162,16 @@ async function webhook(request, env) {
   return json({ ok: true });
 }
 
+// "Remove Pro from this PC" in LaunchOS: frees that PC's slot, so the key can be used on another one.
+async function deactivate(request, env) {
+  const b = await readJson(request);
+  if (!b || !KEY_RE.test(b.key || "") || !INSTANCE_RE.test(b.instance_id || "")) return fail(400, "bad_request");
+  const r = await lemon("deactivate", { license_key: b.key, instance_id: b.instance_id });
+  if (r.status >= 500) return fail(503, "unavailable");
+  if (!r.body.deactivated || !ours(env, r.body.meta)) return fail(403, "invalid_key");
+  return json({ ok: true });
+}
+
 // You use this one by hand (see README) to free a PC slot when a buyer emails you.
 async function adminDeactivate(request, env) {
   const auth = request.headers.get("authorization") || "";
@@ -181,6 +192,7 @@ export default {
       if (pathname === "/v1/activate") return await activate(request, env);
       if (pathname === "/v1/check") return await check(request, env);
       if (pathname === "/v1/download") return await download(request, env);
+      if (pathname === "/v1/deactivate") return await deactivate(request, env);
       if (pathname === "/webhook/lemonsqueezy") return await webhook(request, env);
       if (pathname === "/admin/deactivate") return await adminDeactivate(request, env);
       return fail(404, "not_found");

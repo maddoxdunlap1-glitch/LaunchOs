@@ -88,3 +88,16 @@ body.wall-plain #wall::after { display: none; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
 body.panelopen #stage::after { content: ""; position: absolute; inset: 0; background: rgba(5, 10, 18, .55); z-index: 60; }
+
+/* on-screen keyboard (controller typing) */
+#osk { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); width: 1000px; padding: 14px 16px 16px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line2); box-shadow: 0 18px 60px rgba(0, 0, 0, .55); z-index: 80; }
+.oskhead { display: flex; align-items: center; justify-content: space-between; font-size: 15px; color: var(--ink-2); margin: 0 4px 10px; }
+.oskhelp { font-size: 13px; color: var(--mute); display: flex; align-items: center; gap: 6px; }
+.oskhelp u { text-decoration: none; display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--chip); color: var(--ink); font-size: 11px; font-weight: 700; margin-left: 8px; }
+.oskrow { display: flex; gap: 8px; margin-top: 8px; justify-content: center; }
+.oskk { flex: 1; height: 52px; border-radius: 10px; background: var(--panel-2); border: 2px solid transparent; font-size: 20px; color: var(--ink); transition: transform .1s ease, background .1s; }
+.oskk.k-bksp, .oskk.k-shift, .oskk.k-sym, .oskk.k-abc, .oskk.k-left, .oskk.k-right, .oskk.k-hide { background: var(--chip); font-size: 17px; }
+.oskk.k-done { flex: 1.6; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 17px; }
+.oskk.k-space { flex: 5; font-size: 16px; }
+.oskk.k-shift.on { background: var(--ink-2); color: var(--bg); }
+.oskk.f { border-color: var(--accent); transform: scale(1.08); box-shadow: 0 0 0 5px rgba(var(--accent-glow), .18); z-index: 2; }

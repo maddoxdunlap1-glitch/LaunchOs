@@ -477,15 +477,19 @@ function deletePanel(t) {
     })]);
 }
 function inputPanel(title, text, value, action, label, onDone) {
-  const body = `<label class="pw"><input id="nin" type="text" maxlength="200" autocomplete="off" spellcheck="false"></label>`;
-  panel(title, text, [row(label, 'Or press Enter', 'check', async () => {
+  const body = `<label class="pw"><input id="nin" type="text" maxlength="200" autocomplete="off" spellcheck="false" aria-label="${esc(title)}"></label>`;
+  const go = async () => {
     const v = $('#nin').value;
     const r = await action(v);
     if (r && r.ok) { closePanel(); onDone(r); }
     else { $('#pp').textContent = (r && r.error) || 'That didn’t work.'; $('#pp').style.display = ''; $('#nin').focus(); }
-  }), row('Cancel', '', 'close', () => closePanel())], { body });
+  };
+  const type = () => LOS.osk.show($('#nin'), { onDone: go });   // typing with a controller
+  panel(title, text, [row('Type with the controller', 'The on-screen keyboard', 'edit', type), row(label, 'Or press Enter', 'check', go), row('Cancel', '', 'close', () => closePanel())], { body });
+  P.i = 1;
+  rp();
   const i = $('#nin'); i.value = value;
-  setTimeout(() => { i.focus(); const dot = value.lastIndexOf('.'); i.setSelectionRange(0, dot > 0 ? dot : value.length); }, 60);
+  setTimeout(() => { i.focus(); const dot = value.lastIndexOf('.'); i.setSelectionRange(0, dot > 0 ? dot : value.length); if (LOS.padRecent()) type(); }, 60);
 }
 function renamePanel(e) {
   const base = cur.path;

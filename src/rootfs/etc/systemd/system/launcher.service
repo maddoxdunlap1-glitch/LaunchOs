@@ -1,6 +1,8 @@
 [Unit]
 Description=Launcher session
-After=systemd-user-sessions.service seatd.service plymouth-start.service plymouth-quit.service
+# (not after the network or user sessions: Home starts as soon as the seat is ready)
+Wants=seatd.service
+After=seatd.service plymouth-start.service plymouth-quit.service launchos-reconcile.service
 Conflicts=plymouth-quit.service
 StartLimitIntervalSec=0
 [Service]

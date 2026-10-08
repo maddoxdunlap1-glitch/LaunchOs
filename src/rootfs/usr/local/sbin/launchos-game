@@ -1,0 +1,136 @@
+#!/usr/bin/python3
+"""Gaming mode (LaunchOS Pro), run as root by launchos-helper.
+
+  launchos-game on PID    a game or game app (PID) is starting: full speed
+  launchos-game off 0     it ended: everything back to how it was
+
+While a game runs: the processor runs at full speed (performance governor and energy setting),
+split-lock slowdowns are off (some Windows games hit them all the time), and the game and the
+apps it starts get a higher priority than everything else. The previous settings are kept in
+/run/launchos-status/.game-saved and put back afterwards (and after a restart nothing stays).
+"""
+import glob
+import json
+import os
+import sys
+
+SAVED = '/run/launchos-status/.game-saved'
+
+
+def pro_on():
+    try:
+        return json.load(open('/var/lib/launchos/pro.json')).get('status') == 'active' and os.path.isdir('/opt/launchos-pro')
+    except (OSError, ValueError):
+        return False
+
+
+def read(p):
+    try:
+        with open(p) as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def write(p, v):
+    try:
+        with open(p, 'w') as f:
+            f.write(v)
+        return True
+    except OSError:
+        return False
+
+
+def tree(pid):
+    """pid and everything it started."""
+    kids = {}
+    for st in glob.glob('/proc/[0-9]*/stat'):
+        try:
+            data = open(st).read()
+            ppid = int(data.rsplit(')', 1)[1].split()[1])
+            kids.setdefault(ppid, []).append(int(st.split('/')[2]))
+        except (OSError, ValueError, IndexError):
+            pass
+    out, todo = [], [pid]
+    while todo and len(out) < 4096:
+        p = todo.pop()
+        if player_owns(p):   # only the player's own programs
+            out.append(p)
+        todo.extend(kids.get(p, []))
+    return out
+
+
+def player_owns(pid):
+    try:
+        for line in open(f'/proc/{pid}/status'):
+            if line.startswith('Uid:'):
+                return line.split()[1] == '1000'
+    except OSError:
+        pass
+    return False
+
+
+def on(pid):
+    saved = {}
+    try:
+        saved = json.load(open(SAVED))
+    except (OSError, ValueError):
+        for f in glob.glob('/sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_governor'):
+            saved[f] = read(f)
+        for f in glob.glob('/sys/devices/system/cpu/cpu[0-9]*/cpufreq/energy_performance_preference'):
+            saved[f] = read(f)
+        saved['/proc/sys/kernel/split_lock_mitigate'] = read('/proc/sys/kernel/split_lock_mitigate')
+        os.makedirs(os.path.dirname(SAVED), exist_ok=True)
+        with open(SAVED, 'w') as f:
+            json.dump({k: v for k, v in saved.items() if v is not None}, f)
+    for f in glob.glob('/sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_governor'):
+        avail = read(os.path.join(os.path.dirname(f), 'scaling_available_governors')) or ''
+        if 'performance' in avail.split():
+            write(f, 'performance')
+    for f in glob.glob('/sys/devices/system/cpu/cpu[0-9]*/cpufreq/energy_performance_preference'):
+        avail = read(os.path.join(os.path.dirname(f), 'energy_performance_available_preferences')) or ''
+        if 'performance' in avail.split():
+            write(f, 'performance')
+    if os.path.exists('/proc/sys/kernel/split_lock_mitigate'):
+        write('/proc/sys/kernel/split_lock_mitigate', '0')
+    if pid > 1:
+        for p in tree(pid):
+            try:
+                os.setpriority(os.PRIO_PROCESS, p, -4)   # (children started later inherit it)
+            except OSError:
+                pass
+
+
+def off():
+    try:
+        saved = json.load(open(SAVED))
+    except (OSError, ValueError):
+        return
+    for path, value in saved.items():
+        if path.startswith(('/sys/devices/system/cpu/', '/proc/sys/kernel/split_lock_mitigate')) and isinstance(value, str):
+            write(path, value)
+    try:
+        os.unlink(SAVED)
+    except OSError:
+        pass
+    # the player's programs that were given a higher priority go back to normal
+    for st in glob.glob('/proc/[0-9]*'):
+        try:
+            pid = int(st.split('/')[2])
+            if player_owns(pid) and os.getpriority(os.PRIO_PROCESS, pid) < 0:
+                os.setpriority(os.PRIO_PROCESS, pid, 0)
+        except (OSError, ValueError):
+            pass
+
+
+def main():
+    op = sys.argv[1] if len(sys.argv) > 1 else ''
+    pid = int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2].isdigit() else 0
+    if op == 'off':
+        off()   # (always allowed: putting things back)
+    elif op == 'on' and pro_on():
+        on(pid)
+
+
+if __name__ == '__main__':
+    main()
