@@ -1,0 +1,20 @@
+name = "launchos-pro"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# Fill these in after you create the store and product (they are IDs, not secrets).
+[vars]
+LS_STORE_ID = ""
+LS_PRODUCT_ID = ""
+
+# Private bucket holding pro-package.tar.gz and pro-update.json. Never make it public.
+[[r2_buckets]]
+binding = "PRO_FILES"
+bucket_name = "launchos-pro-files"
+
+# Remembers refunded orders.
+[[kv_namespaces]]
+binding = "REVOKED"
+id = "REPLACE_WITH_KV_ID"
+
+# Secrets are NOT set here. Run: wrangler secret put LS_WEBHOOK_SECRET / LINK_SECRET / ADMIN_TOKEN

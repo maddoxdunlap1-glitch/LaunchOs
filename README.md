@@ -2,7 +2,7 @@
 
 ![LaunchOS boot screen](assets/boot-preview.gif)
 
-A console-style Linux system with an Xbox-like home screen. It boots to a spinning ferris wheel, then Home. Run it in VirtualBox, from a USB stick, or install it on a PC.
+A console-style Linux system, based on Debian, with a controller-friendly Home screen. It boots to a spinning ferris wheel, then Home. Run it in VirtualBox, from a USB stick, or install it on a PC.
 
 **What's in it**
 
@@ -13,10 +13,10 @@ A console-style Linux system with an Xbox-like home screen. It boots to a spinni
 - **Files**: your Downloads, Documents, Pictures, Videos and Music, plus USB drives and disks. Copy, move, rename and delete, with progress you can stop. Look at pictures, play videos and music, read text files, and run Windows programs straight from a folder. Open drives inside the PC, eject USB drives safely, and format a drive as exFAT, FAT32, NTFS or ext4.
 - **Store**: thousands of free apps and games from Flathub (Discord, Spotify, VLC, OBS, Heroic, Prism Launcher for Minecraft, emulators and more). Installed apps show up on Home.
 - **Terminal**: a full Linux terminal. Set an **admin password** in Settings to use `sudo`.
-- **Updates** (Settings → Updates): update LaunchOS straight from its GitHub releases, update your Store apps, and install Ubuntu's security fixes.
+- **Updates** (Settings → Updates): update LaunchOS straight from its GitHub releases, update your Store apps, and install Debian's security fixes.
 - **System monitor**: live CPU, memory, network and storage, one-minute charts, the busiest processes and per-core load.
 - **Setup**: your name and color, time zone, network, sound, screen size, controller test, look, and which apps show on Home.
-- **Side menu** (`M`, Super, or the Menu or Xbox button): running apps, Discord as a portrait panel, devices, notifications, and Settings (screen size, sound, network, Wi-Fi, time zone, saving, install, power).
+- **Side menu** (`M`, Super, or the controller's Menu or Home button): running apps, Discord as a portrait panel, devices, notifications, and Settings (screen size, sound, network, Wi-Fi, time zone, saving, install, power).
 - **Apps keep running** when you go Home. **Ctrl+click** (or right-click) an app for Resume, Restart, End task and Move.
 
 ## Download
@@ -38,7 +38,7 @@ Check which version you're running in **Settings → About LaunchOS**.
 
 The machine uses 4 GB RAM, 4 CPUs and VMSVGA graphics, and keeps your stuff on its save disk. VirtualBox has no real graphics acceleration here, so games will be slow; for games, use a USB stick.
 
-Making your own VM instead? Set **Type: Linux, Version: Ubuntu (64-bit)** and at least **2048 MB** of memory. LaunchOS is 64-bit and won't start on a 32-bit ("Other") VM.
+Making your own VM instead? Set **Type: Linux, Version: Debian (64-bit)** and at least **2048 MB** of memory. LaunchOS is 64-bit and won't start on a 32-bit ("Other") VM.
 
 ## Run it from a USB stick
 
@@ -63,8 +63,8 @@ Open **Files** from Home. USB drives show up by themselves when you plug them in
 | Move | Arrow keys, or point with the mouse | D-pad or left stick |
 | Select | Enter or click | A |
 | Back | Esc | B |
-| Side menu | M or Super (Windows key) | Menu or Xbox button |
-| Back to Home from an app or game | Super | Xbox button |
+| Side menu | M or Super (Windows key) | Menu or Home button |
+| Back to Home from an app or game | Super | Home button |
 | App options | Ctrl+click, right-click, Menu key | X |
 
 Shut down or restart from **Side menu → Settings → Power**.
@@ -76,3 +76,11 @@ Shut down or restart from **Side menu → Settings → Power**.
 - Admin commands: set an admin password in **Settings → Admin password** (it asks you to press Enter or A to confirm), then use `sudo` in the Terminal. There's no default root password.
 - Text console: press Ctrl+Alt+F2 and log in as `player` with your admin password.
 - Updates and Store apps are kept only when saving is on (or LaunchOS is installed).
+
+## LaunchOS Pro
+
+LaunchOS is free, and everything above stays free. **LaunchOS Pro** is an optional $5 one-time unlock that adds extra themes and animated Home backgrounds, a Pro app pack (Heroic, Prism Launcher, Discord, OBS and Lutris), game tweaks (performance mode, FPS overlay switch), early access to new versions and a supporter badge. One key works on up to 5 PCs and covers every future version. Buy it from Settings → LaunchOS Pro, or from the [LaunchOS site](docs/index.html). Just want to help? Use **Support LaunchOS** in Settings → About.
+
+## Credits and trademarks
+
+LaunchOS is built on Debian and many open-source projects (Linux, sway, GTK, WebKitGTK, Wine, Flatpak and others); see Settings → About → Open-source credits. LaunchOS is an independent project and is not made by or endorsed by Debian, Valve or any other company named here. Steam is a trademark of Valve Corporation.

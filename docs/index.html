@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LaunchOS: a console-style Linux system</title>
+<meta name="description" content="LaunchOS boots to a controller-friendly Home screen with Steam, Windows programs, Files, a Store and a Terminal. Free, with an optional $5 Pro.">
+<link rel="icon" href="assets/launchos-icon.png">
+<style>
+:root{--bg:#0d1117;--panel:#161b22;--line:#2a313c;--text:#e6edf3;--dim:#9aa7b4;--accent:#3ddc97;--accent-ink:#06281a}
+@media (prefers-color-scheme:light){:root{--bg:#f6f8fa;--panel:#fff;--line:#d8dee4;--text:#1f2328;--dim:#59636e;--accent:#12a06b;--accent-ink:#fff}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+a{color:var(--accent)}
+.wrap{max-width:960px;margin:0 auto;padding:0 20px}
+header{border-bottom:1px solid var(--line)}
+nav{display:flex;align-items:center;gap:20px;padding:14px 0;flex-wrap:wrap}
+nav .brand{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--text);text-decoration:none;margin-right:auto}
+nav .brand img{width:28px;height:28px}
+nav a{color:var(--dim);text-decoration:none}
+nav a:hover{color:var(--text)}
+.hero{padding:56px 0 40px;text-align:center}
+h1{font-size:clamp(2rem,6vw,3.2rem);line-height:1.15;margin:0 0 14px}
+.lead{color:var(--dim);font-size:1.15rem;max-width:620px;margin:0 auto 26px}
+.btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn{display:inline-block;padding:12px 22px;border-radius:10px;font-weight:600;text-decoration:none;border:1px solid var(--line);color:var(--text);background:var(--panel)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn[aria-disabled=true]{opacity:.55;pointer-events:none}
+.shot{margin:40px auto 0;max-width:720px;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.shot img{display:block;width:100%;height:auto}
+section{padding:44px 0;border-top:1px solid var(--line)}
+h2{margin:0 0 18px;font-size:1.6rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.card h3{margin:0 0 4px;font-size:1.05rem}
+.card p{margin:0;color:var(--dim);font-size:.95rem}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
+.plan{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}
+.plan.pro{border-color:var(--accent)}
+.plan h3{margin:0}
+.price{font-size:2rem;font-weight:700;margin:4px 0 12px}
+.price small{font-size:1rem;color:var(--dim);font-weight:400}
+.plan ul{padding-left:20px;margin:0 0 18px}
+.plan li{margin:4px 0}
+ol.steps{padding-left:22px}
+ol.steps li{margin:8px 0}
+details{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin:10px 0}
+summary{cursor:pointer;font-weight:600}
+details p{margin:10px 0 0;color:var(--dim)}
+footer{border-top:1px solid var(--line);padding:28px 0 40px;color:var(--dim);font-size:.9rem}
+footer p{margin:6px 0}
+code{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:.92em}
+</style>
+</head>
+<body>
+<header><div class="wrap"><nav>
+  <a class="brand" href="#"><img src="assets/launchos-icon.png" alt="">LaunchOS</a>
+  <a href="#features">Features</a>
+  <a href="#pro">Pro</a>
+  <a href="#get">Get it</a>
+  <a href="#faq">FAQ</a>
+  <a href="#" data-link="repo">GitHub</a>
+</nav></div></header>
+
+<main>
+<div class="wrap">
+<div class="hero">
+  <h1>Your PC, like a console.</h1>
+  <p class="lead">LaunchOS boots to a spinning ferris wheel, then a Home screen built for a controller. Steam, Windows programs, Files, a Store and a Terminal. Run it from a USB stick, in VirtualBox, or install it.</p>
+  <div class="btns">
+    <a class="btn primary" href="#get" data-link="download">Download free</a>
+    <a class="btn" href="#pro">See LaunchOS Pro</a>
+  </div>
+  <div class="shot"><img src="assets/boot-preview.gif" alt="The LaunchOS boot screen, a spinning ferris wheel"></div>
+</div>
+</div>
+
+<section id="features"><div class="wrap">
+  <h2>Everything is free</h2>
+  <div class="grid">
+    <div class="card"><h3>Steam</h3><p>With Proton for Windows games. Steam downloads itself from Valve the first time you open it.</p></div>
+    <div class="card"><h3>Windows programs</h3><p>Run .exe and .msi files with Wine, straight from a folder or USB drive.</p></div>
+    <div class="card"><h3>Store</h3><p>Thousands of free apps from Flathub: Discord, VLC, OBS, Heroic, Prism Launcher and more.</p></div>
+    <div class="card"><h3>Files</h3><p>Copy, move and format drives, eject USB safely, look at pictures and play videos.</p></div>
+    <div class="card"><h3>Terminal</h3><p>A full Linux terminal. Set an admin password in Settings to use sudo.</p></div>
+    <div class="card"><h3>Updates</h3><p>Small updates for LaunchOS, your apps and the system, from Settings.</p></div>
+    <div class="card"><h3>Saves your stuff</h3><p>Settings, sign-ins and games are kept on your USB stick or installed drive.</p></div>
+    <div class="card"><h3>Built on Debian</h3><p>A stable base with security updates, for BIOS and UEFI PCs.</p></div>
+  </div>
+</div></section>
+
+<section id="pro"><div class="wrap">
+  <h2>LaunchOS Pro</h2>
+  <p style="color:var(--dim);margin-top:-8px">Pay once. Covers every future version and up to 5 of your PCs. Nothing in the free edition is taken away.</p>
+  <div class="cols">
+    <div class="plan">
+      <h3>LaunchOS</h3>
+      <div class="price">Free</div>
+      <ul>
+        <li>Home, Files, Store, Terminal, Browser</li>
+        <li>Steam and Windows programs</li>
+        <li>Saving, USB boot, install, updates</li>
+      </ul>
+      <a class="btn" href="#get" data-link="download">Download</a>
+    </div>
+    <div class="plan pro">
+      <h3>LaunchOS Pro</h3>
+      <div class="price">$5 <small>one time</small></div>
+      <ul>
+        <li>Everything in free</li>
+        <li>Extra themes and animated Home backgrounds</li>
+        <li>Pro app pack: Heroic, Prism Launcher, Discord, OBS and Lutris</li>
+        <li>Game tweaks: performance mode and an FPS overlay switch</li>
+        <li>Early access to new versions</li>
+        <li>Priority help by email</li>
+        <li>Supporter badge in Settings</li>
+      </ul>
+      <a class="btn primary" href="#" data-link="buy" aria-disabled="true">Get Pro</a>
+      <p style="color:var(--dim);font-size:.85rem;margin:10px 0 0" id="buy-note">Pro goes on sale soon.</p>
+    </div>
+  </div>
+  <p style="color:var(--dim);margin-top:18px">Just want to help? <a href="#" data-link="support">Support LaunchOS</a> with any amount. No Pro needed.</p>
+</div></section>
+
+<section id="get"><div class="wrap">
+  <h2>Get it</h2>
+  <ol class="steps">
+    <li>Download <strong>LaunchOS.zip</strong> and unzip it.</li>
+    <li><strong>VirtualBox:</strong> Machine &rarr; Add&hellip; and pick <code>LaunchOS.vbox</code>.</li>
+    <li><strong>USB stick (8 GB or more):</strong> write <code>LaunchOS.iso</code> with <a href="https://etcher.balena.io">balenaEtcher</a>, or <a href="https://rufus.ie">Rufus</a> in <strong>DD mode</strong>. This erases the stick. Turn off Secure Boot, then start the PC from the stick.</li>
+    <li><strong>Install:</strong> from the USB stick, open Settings &rarr; Install LaunchOS and pick a drive (16 GB or more). This erases that drive.</li>
+  </ol>
+  <div class="btns" style="justify-content:flex-start;margin-top:16px"><a class="btn primary" href="#" data-link="download">Download LaunchOS (free)</a></div>
+  <h3 style="margin-top:34px">Unlock Pro</h3>
+  <ol class="steps">
+    <li>Buy Pro. You get a license key by email.</li>
+    <li>In LaunchOS, open Settings &rarr; LaunchOS Pro &rarr; Enter key.</li>
+    <li>LaunchOS checks the key and installs the Pro extras. On a new PC, enter the same key again.</li>
+  </ol>
+</div></section>
+
+<section id="faq"><div class="wrap">
+  <h2>Questions</h2>
+  <details><summary>Is the free edition complete?</summary><p>Yes. Pro only adds extras on top.</p></details>
+  <details><summary>How many PCs can I use Pro on?</summary><p>One key works on up to 5 PCs. To free a slot from a PC you no longer use, email us.</p></details>
+  <details><summary>Does Pro need internet?</summary><p>Only to unlock and to get Pro updates. Once unlocked, Pro stays unlocked offline. LaunchOS rechecks the key about once a month when online, and never locks anything because you are offline.</p></details>
+  <details><summary>What do you collect?</summary><p>Only the license key and a random PC id when you unlock. Never your name, email or hardware serial. Payments are handled by the store; LaunchOS never sees card details.</p></details>
+  <details><summary>What is your refund policy?</summary><p>All Pro sales are final. If something is wrong with your purchase, email us and we will sort it out. Your legal rights where you live are not affected.</p></details>
+  <details><summary>Is it open source?</summary><p>LaunchOS is built from open-source parts (Linux, Debian, sway, GTK, Wine, Flatpak) and lists them under Settings &rarr; About &rarr; Open-source credits. Source code for the GPL parts is available on request and through Debian's source packages.</p></details>
+</div></section>
+</main>
+
+<footer><div class="wrap">
+  <p>LaunchOS is an independent project, based on Debian. It is not made by or endorsed by Debian, Valve, Microsoft or any game or app maker. All product names belong to their owners.</p>
+  <p>Steam is a trademark of Valve Corporation. Steam downloads from Valve when you first open it.</p>
+  <p><a href="#" data-link="repo">GitHub</a> &middot; <a href="#" data-link="support">Support LaunchOS</a> &middot; <a href="#" data-link="email">Contact</a></p>
+</div></footer>
+
+<script>
+// Fill these in when each thing exists. A link with an empty value stays inactive.
+var LINKS = {
+  buy: "",        // Lemon Squeezy checkout URL for LaunchOS Pro
+  support: "",    // Lemon Squeezy pay-what-you-want URL
+  download: "",   // public releases URL, e.g. https://github.com/<you>/LaunchOs-releases/releases/latest
+  repo: "https://github.com/maddoxdunlap1-glitch/LaunchOs",
+  email: ""       // mailto:you@example.com
+};
+document.querySelectorAll("[data-link]").forEach(function (a) {
+  var u = LINKS[a.getAttribute("data-link")];
+  if (u) {
+    a.href = u; a.removeAttribute("aria-disabled");
+    if (a.getAttribute("data-link") === "buy") { var n = document.getElementById("buy-note"); if (n) n.textContent = "One time. Covers up to 5 PCs."; }
+  } else if (a.getAttribute("data-link") !== "download") {
+    a.setAttribute("aria-disabled", "true"); a.removeAttribute("href");
+  }
+});
+</script>
+</body>
+</html>
