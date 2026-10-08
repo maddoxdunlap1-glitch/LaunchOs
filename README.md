@@ -11,6 +11,9 @@ A console-style Linux system with an Xbox-like home screen. It boots to a spinni
 - **Roblox** (through Sober) and **FreeTube**: they download from Flathub the first time you open them.
 - **Browser**: a lightweight web browser with a start page, shortcuts and downloads. `Ctrl+L` address bar, `Alt+Left` back, `F5` reload, `Ctrl+W` close.
 - **Files**: your Downloads, Documents, Pictures, Videos and Music, plus USB drives and disks. Copy, move, rename and delete, with progress you can stop. Look at pictures, play videos and music, read text files, and run Windows programs straight from a folder. Open drives inside the PC, eject USB drives safely, and format a drive as exFAT, FAT32, NTFS or ext4.
+- **Store**: thousands of free apps and games from Flathub (Discord, Spotify, VLC, OBS, Heroic, Prism Launcher for Minecraft, emulators and more). Installed apps show up on Home.
+- **Terminal**: a full Linux terminal. Set an **admin password** in Settings to use `sudo`.
+- **Updates** (Settings → Updates): update LaunchOS straight from its GitHub releases, update your Store apps, and install Ubuntu's security fixes.
 - **System monitor**: live CPU, memory, network and storage, one-minute charts, the busiest processes and per-core load.
 - **Setup**: your name and color, time zone, network, sound, screen size, controller test, look, and which apps show on Home.
 - **Side menu** (`M`, Super, or the Menu or Xbox button): running apps, Discord as a portrait panel, devices, notifications, and Settings (screen size, sound, network, Wi-Fi, time zone, saving, install, power).
@@ -70,4 +73,6 @@ Shut down or restart from **Side menu → Settings → Power**.
 
 - Only one game or app (Steam, Roblox, a Windows program…) runs at a time, like on a console. Web apps (YouTube, Discord, Twitch) can run alongside.
 - Wi-Fi passwords are typed with a keyboard for now.
-- Debug console: press Ctrl+Alt+F2 and log in as `root`, password `launchos`.
+- Admin commands: set an admin password in **Settings → Admin password** (it asks you to press Enter or A to confirm), then use `sudo` in the Terminal. There's no default root password.
+- Text console: press Ctrl+Alt+F2 and log in as `player` with your admin password.
+- Updates and Store apps are kept only when saving is on (or LaunchOS is installed).

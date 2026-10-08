@@ -1,22 +1,21 @@
-LaunchOS v0.7: **Files**, for your downloads, USB drives and disks, plus stress testing and a round of fixes.
+LaunchOS v0.8: **Store, Terminal and Updates**.
 
-**Files** (new tile on Home, also in the top bar and side menu)
-- Browse Downloads, Documents, Pictures, Videos and Music, and every USB drive or disk.
-- **Copy, move, rename and delete**, one item or many (Select, or Ctrl/Shift+click). Progress shows files, size and speed, keeps going if you go Home, and can be stopped.
-- Safe copying: nothing is half-written if you stop or the drive is pulled out, a move removes the originals only once the copy is written, and you get a plain warning when a drive is full or a file is too big for FAT32.
-- **Drives**: USB drives open by themselves when plugged in. Drives inside the PC open when you select them (a Windows drive that wasn't shut down cleanly opens read-only). **Eject** makes a USB drive safe to unplug.
-- **Format** a drive as exFAT, FAT32, NTFS or ext4. LaunchOS asks twice first, and never lets you format the drive it runs from or saves to.
-- Look at pictures (left and right for the next one), play videos and music, read text files, open PDFs, and run Windows programs straight from a folder.
-- Works with a controller: A opens, B goes back, X (or the Menu key, or right-click) shows options.
+**Store** (new tile on Home and in the top bar)
+- Thousands of free apps and games from Flathub: Discord, Spotify, VLC, OBS Studio, Heroic Games Launcher, Prism Launcher (Minecraft), Lutris, RetroArch, Dolphin, Firefox, LibreOffice, GIMP and more.
+- Featured picks, shelves (Games, Internet & chat, Music & video, Creative, Work & school, Tools), search, and an Installed list.
+- Install, open and uninstall with progress. Apps you install show up on Home with their icons, and run like any other game or app (Super or the Xbox button comes back Home).
 
-**VirtualBox**: LaunchOS.vbox now has a spare empty 64 GB drive (LaunchOS-storage.vdi) to try Files on. Open it in Files and format it.
+**Terminal**
+- A full Linux terminal (bash). Copy and paste buttons, bigger and smaller text. It keeps running when you go Home.
+- **Admin password** (Settings): set one to use `sudo`. Setting it the first time asks you to press Enter or A, so only someone at the PC can do it. LaunchOS no longer has a fixed root password.
 
-**Fixes from stress testing**
-- After typing in a pop-up (like a Wi-Fi password), the left and right keys could stop working on Home.
-- A faded message could stay faintly on screen.
+**Updates** (Settings → Updates)
+- **LaunchOS updates** straight from its GitHub releases: checks for a newer version, downloads a small update package, checks it, and installs it. From now on you won't need to download the whole zip for most updates.
+- **Update your apps** from the Store, and **update the system** (Ubuntu's security fixes).
+- Updates need saving to be on (or LaunchOS installed), otherwise they'd be gone at the next start.
+
+**Fixes**
+- Install couldn't see a drive that was open in Files. It now closes the drive by itself.
 - Install could list a drive with files on it as empty.
-- Requests to the system helper sent close together could be lost; they're now queued.
-- Opening, ejecting and formatting drives are checked again as the system user, so a hostile request or link can't touch the system or save drive.
-- Script errors on LaunchOS's own pages are now logged (~/.cache/launchos/ui-errors.log).
 
 Download **LaunchOS.zip**, unzip it, then in VirtualBox choose **Machine > Add** and pick **LaunchOS.vbox**. If you added an older LaunchOS before, remove it first (Machine > Remove > Remove only). Check the version in Settings > About LaunchOS.
