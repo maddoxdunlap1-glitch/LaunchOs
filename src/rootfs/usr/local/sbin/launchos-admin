@@ -1,0 +1,136 @@
+#!/usr/bin/python3
+"""Sets the admin password (the player's own password, used by sudo in the Terminal).
+
+Changing it needs the current password. Setting it the first time needs someone at the PC:
+a key press on a real keyboard or controller (programs can't fake one), so nothing running
+in the background can make itself an administrator."""
+import json, os, select, struct, subprocess, sys, time, warnings
+sys.path.insert(0, "/usr/local/lib/launchos")
+import disks as D
+
+REQ = "/run/launchos-status/.admin-request"
+FAILS = "/run/launchos-status/.admin-fails"
+SUDOERS = "/etc/sudoers.d/launchos-player"
+MARK = "/etc/launchos/admin-set"
+EVENT = struct.Struct("llHHi")
+CONFIRM = {28, 96, 304}   # Enter, keypad Enter, A on a controller
+
+
+def say(step, pct, done=False, err=""):
+    D.status("admin", step, pct, done, err)
+
+
+def player_hash():
+    with open("/etc/shadow") as f:
+        for line in f:
+            p = line.split(":")
+            if p[0] == "player":
+                return p[1]
+    return ""
+
+
+def real_inputs():
+    """Keyboards and controllers that are physical devices (not made up by software)."""
+    fds = []
+    for name in sorted(os.listdir("/dev/input")):
+        if not name.startswith("event"):
+            continue
+        sys_path = os.path.realpath(f"/sys/class/input/{name}/device")
+        if "/virtual/" in sys_path:
+            continue
+        try:
+            fds.append(os.open("/dev/input/" + name, os.O_RDONLY | os.O_NONBLOCK))
+        except OSError:
+            pass
+    return fds
+
+
+def wait_for_press(seconds):
+    fds = real_inputs()
+    end = time.monotonic() + seconds
+    try:
+        while time.monotonic() < end:
+            ready, _, _ = select.select(fds, [], [], 0.5)
+            for fd in ready:
+                try:
+                    data = os.read(fd, EVENT.size * 64)
+                except OSError:
+                    continue
+                for off in range(0, len(data) - EVENT.size + 1, EVENT.size):
+                    _, _, typ, code, value = EVENT.unpack_from(data, off)
+                    if typ == 1 and value == 1 and code in CONFIRM:
+                        return True
+        return False
+    finally:
+        for fd in fds:
+            os.close(fd)
+
+
+def main():
+    try:
+        with open(REQ) as f:
+            req = json.load(f)
+    except (OSError, ValueError):
+        return
+    finally:
+        try:
+            os.unlink(REQ)
+        except OSError:
+            pass
+    new, old = str(req.get("new", "")), str(req.get("old", ""))
+    if not (6 <= len(new) <= 128) or any(ord(c) < 32 for c in new):
+        say("", 100, True, "Use 6 or more characters.")
+        return
+    try:
+        fails = json.load(open(FAILS))
+    except (OSError, ValueError):
+        fails = {"n": 0, "t": 0}
+    if fails["n"] >= 5 and time.time() - fails["t"] < 300:
+        say("", 100, True, "Too many wrong tries. Wait 5 minutes, then try again.")
+        return
+    current = player_hash()
+    if current and current[0] not in "!*":   # changing it: the current password must match
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            import crypt
+        if crypt.crypt(old, current) != current:
+            fails = {"n": fails["n"] + 1, "t": time.time()}
+            with open(FAILS, "w") as f:
+                json.dump(fails, f)
+            say("", 100, True, "The current password isn’t right.")
+            return
+    else:   # setting it the first time: someone has to be at the PC
+        say("Press Enter on your keyboard or A on your controller to confirm", 50)
+        if not wait_for_press(60):
+            say("", 100, True, "Not confirmed. Try again, and press Enter or A when asked.")
+            return
+    say("Saving", 80)
+    r = subprocess.run(["chpasswd"], input="player:" + new + "\n", text=True, capture_output=True)
+    if r.returncode != 0:
+        say("", 100, True, "Couldn’t save the password.")
+        return
+    # sudo for the player by name, so it works at once (group changes need a new login)
+    tmp = SUDOERS + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o440)
+    with os.fdopen(fd, "w") as f:
+        f.write("# LaunchOS: the player is an administrator (asks for the admin password)\nplayer ALL=(ALL:ALL) ALL\n")
+    if subprocess.run(["visudo", "-cf", tmp], capture_output=True).returncode != 0:
+        os.unlink(tmp)
+        say("", 100, True, "Couldn’t turn on admin commands.")
+        return
+    os.replace(tmp, SUDOERS)
+    os.makedirs(os.path.dirname(MARK), exist_ok=True)
+    open(MARK, "w").close()
+    os.chmod(MARK, 0o644)
+    try:
+        os.unlink(FAILS)
+    except OSError:
+        pass
+    say("Saved", 100, True)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        say("", 100, True, "Something went wrong: " + str(e)[:200])

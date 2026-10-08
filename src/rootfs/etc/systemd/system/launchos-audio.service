@@ -1,0 +1,9 @@
+[Unit]
+Description=Turn on sound at a comfortable volume
+After=sound.target alsa-restore.service
+Wants=sound.target
+[Service]
+Type=oneshot
+ExecStart=-/bin/sh -c 'for c in Master PCM Front Speaker Headphone; do amixer -q -M sset "$c" 75%% unmute 2>/dev/null; done; true'
+[Install]
+WantedBy=multi-user.target

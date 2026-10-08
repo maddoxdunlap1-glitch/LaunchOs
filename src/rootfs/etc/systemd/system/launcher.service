@@ -1,0 +1,21 @@
+[Unit]
+Description=Launcher session
+After=systemd-user-sessions.service seatd.service plymouth-start.service plymouth-quit.service
+Conflicts=plymouth-quit.service
+StartLimitIntervalSec=0
+[Service]
+User=player
+RuntimeDirectory=player
+RuntimeDirectoryMode=0700
+TTYPath=/dev/tty1
+StandardInput=tty-force
+StandardOutput=journal
+TTYReset=yes
+TTYVHangup=yes
+ExecStartPre=+-/usr/bin/plymouth quit --retain-splash
+ExecStart=/usr/local/bin/launchos-session
+KillMode=control-group
+Restart=always
+RestartSec=2
+[Install]
+WantedBy=graphical.target

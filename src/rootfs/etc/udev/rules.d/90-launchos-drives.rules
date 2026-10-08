@@ -1,0 +1,2 @@
+# Open USB drives for LaunchOS when they're plugged in, and let go of them when they're pulled out.
+ACTION=="add|remove", SUBSYSTEM=="block", KERNEL!="loop*|ram*|zram*|sr*|dm-*|md*", RUN+="/usr/bin/systemctl --no-block start launchos-drives.service"

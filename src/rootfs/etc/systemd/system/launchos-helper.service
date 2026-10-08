@@ -1,0 +1,5 @@
+[Unit]
+Description=Carry out a request from the LaunchOS launcher
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/launchos-helper

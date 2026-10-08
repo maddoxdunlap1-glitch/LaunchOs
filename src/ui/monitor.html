@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>System monitor</title>
+<link rel="stylesheet" href="los.css">
+<style>
+:root { --down: #3987e5; --up: #d95926; --grid: #22344a; }
+#head { position: absolute; left: 56px; right: 56px; top: 30px; display: flex; align-items: baseline; gap: 18px; }
+#head h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -.01em; }
+#live { font-size: 14px; color: var(--ink-2); display: flex; align-items: center; gap: 8px; }
+#live i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(var(--accent-glow), .18); }
+#live.paused i { background: var(--mute); box-shadow: none; }
+#up { margin-left: auto; font-size: 15px; color: var(--ink-2); }
+.kpis { position: absolute; left: 56px; right: 56px; top: 88px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.kpi { background: var(--panel-2); border-radius: 12px; padding: 12px 18px 14px; height: 106px; }
+.kpi .lab { font-size: 14px; color: var(--ink-2); }
+.kpi .val { font-size: 30px; font-weight: 700; margin: 4px 0 2px; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.kpi .val small { font-size: 15px; font-weight: 500; color: var(--ink-2); margin-left: 4px; }
+.kpi .sub { font-size: 13px; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meter { height: 6px; border-radius: 3px; background: var(--chip); margin-top: 8px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; border-radius: 3px; background: var(--accent); }
+.meter i.warn { background: #e6c75a; } .meter i.crit { background: #e66767; }
+.kpi .val.netvals { display: flex; gap: 12px; align-items: baseline; font-size: 22px; white-space: nowrap; margin: 9px 0 6px; }
+.netvals span { display: inline-flex; align-items: baseline; gap: 6px; }
+.key { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; position: relative; top: -4px; }
+.charts { position: absolute; left: 56px; right: 56px; top: 208px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.card { background: var(--panel-2); border-radius: 12px; padding: 12px 16px 8px; position: relative; }
+.card h2 { margin: 0; font-size: 15px; font-weight: 600; display: flex; justify-content: space-between; align-items: baseline; }
+.card h2 span { font-size: 13px; color: var(--ink-2); font-weight: 500; font-variant-numeric: tabular-nums; }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--ink-2); margin-top: 4px; height: 15px; }
+.plot { display: block; width: 100%; height: 132px; margin-top: 2px; }
+.plot text { fill: var(--mute); font-size: 11px; font-family: var(--font); }
+.tip { position: absolute; pointer-events: none; background: #0b1726; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 12px; color: var(--ink); white-space: nowrap; display: none; z-index: 3; }
+.tip b { font-weight: 600; }
+.bottom { position: absolute; left: 56px; right: 56px; top: 414px; height: 244px; display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+.bottom .card { overflow: hidden; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+table { margin-top: 6px; }
+th { text-align: left; font-weight: 600; color: var(--ink-2); font-size: 12px; padding: 0 8px 6px; border-bottom: 1px solid var(--grid); }
+td { height: 27px; padding: 0 8px; border-bottom: 1px solid rgba(34, 52, 74, .5); white-space: nowrap; }
+td.n, th.n { text-align: right; width: 90px; }
+td.name { max-width: 380px; overflow: hidden; text-overflow: ellipsis; }
+.cores { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; margin-top: 8px; }
+.core { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.core .meter { margin-top: 4px; }
+dl.facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; margin: 12px 0 0; }
+dl.facts dt { color: var(--mute); } dl.facts dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+#hints { position: absolute; right: 56px; bottom: 22px; }
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+<div id="head"><h1>System monitor</h1><span id="live"><i></i><span id="livetxt">Live, every second</span></span><span id="up"></span></div>
+
+<div class="kpis">
+  <div class="kpi"><div class="lab">CPU</div><div class="val" id="kcpu">&ndash;</div><div class="sub" id="kcpus"></div><div class="meter"><i id="mcpu"></i></div></div>
+  <div class="kpi"><div class="lab">Memory</div><div class="val" id="kmem">&ndash;</div><div class="sub" id="kmems"></div><div class="meter"><i id="mmem"></i></div></div>
+  <div class="kpi"><div class="lab">Network</div><div class="val netvals" id="knet">&ndash;</div><div class="sub" id="knets">Download and upload speed</div></div>
+  <div class="kpi"><div class="lab">Live storage</div><div class="val" id="kdisk">&ndash;</div><div class="sub">Kept in memory, cleared at shut down</div><div class="meter"><i id="mdisk"></i></div></div>
+</div>
+
+<div class="charts">
+  <div class="card" id="ccpu"><h2>CPU over the last minute <span id="tcpu"></span></h2><div class="legend"></div><svg class="plot" viewBox="0 0 344 132" aria-label="CPU use over the last minute"></svg><div class="tip"></div></div>
+  <div class="card" id="cmem"><h2>Memory over the last minute <span id="tmem"></span></h2><div class="legend"></div><svg class="plot" viewBox="0 0 344 132" aria-label="Memory use over the last minute"></svg><div class="tip"></div></div>
+  <div class="card" id="cnet"><h2>Network over the last minute <span id="tnet"></span></h2><div class="legend"><span><i class="key" style="background:var(--down)"></i> Download</span><span><i class="key" style="background:var(--up)"></i> Upload</span></div><svg class="plot" viewBox="0 0 344 132" aria-label="Network speed over the last minute"></svg><div class="tip"></div></div>
+</div>
+
+<div class="bottom">
+  <div class="card"><h2>Busiest right now <span id="tproc"></span></h2>
+    <table><thead><tr><th>App or process</th><th class="n">CPU</th><th class="n">Memory</th></tr></thead><tbody id="procs"></tbody></table>
+  </div>
+  <div class="card"><h2>Processor cores <span id="tcores"></span></h2><div class="cores" id="cores"></div><dl class="facts" id="facts"></dl></div>
+</div>
+
+<div id="hints" class="hints"><button id="ha"><u style="background:#3ddc6b">A</u><span id="hat">Pause</span></button><button id="hb"><u style="background:#e0443e">B</u>Back</button></div>
+<div id="toast"></div>
+</div></div>
+<script src="los.js"></script>
+<script>
+const { $, call, esc } = LOS;
+const N = 60;                                 // one minute of samples, one per second
+const hist = { cpu: [], mem: [], down: [], up: [] };
+let last = null, paused = false, timer = null;
+
+function bytes(n, perSec) {
+  if (n == null) return '–';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return (n >= 100 || i === 0 ? Math.round(n) : n.toFixed(1).replace(/\.0$/, '')) + ' ' + u[i] + (perSec ? '/s' : '');
+}
+const pct = v => v == null ? '–' : Math.round(v) + '%';
+const level = v => v >= 90 ? 'crit' : v >= 75 ? 'warn' : '';
+/* Write to the page only when something changed: every repaint costs CPU on software rendering. */
+const cache = {};
+function put(id, html) { if (cache[id] !== html) { cache[id] = html; $(id).innerHTML = html; } }
+function txt(id, t) { t = String(t); if (cache[id] !== t) { cache[id] = t; $(id).textContent = t; } }
+function meter(id, v) { const w = Math.round(Math.max(0, Math.min(100, v || 0))) + '%|' + level(v); if (cache[id] === w) return; cache[id] = w; const m = $(id); m.style.width = w.split('|')[0]; m.className = level(v); }
+function upTime(s) { const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return 'Running for ' + (h ? h + ' h ' : '') + m + ' min'; }
+function push(a, v) { a.push(v); if (a.length > N) a.shift(); }
+
+/* ---------- line charts (SVG, drawn by hand: 2px lines, 10% area wash, hairline grid) ---------- */
+const W = 344, H = 132, PL = 48, PR = 6, PT = 8, PB = 18;
+function niceMax(v) { if (v <= 0) return 1024; const p = Math.pow(1024, Math.floor(Math.log(v) / Math.log(1024))); const m = v / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : m <= 10 ? 10 : m <= 20 ? 20 : m <= 50 ? 50 : m <= 100 ? 100 : m <= 200 ? 200 : m <= 500 ? 500 : 1024) * p; }
+function draw(card, series, max, fmtTick) {
+  const svg = card.querySelector('svg');
+  const x = i => PL + (W - PL - PR) * (i + (N - series[0].data.length)) / (N - 1);
+  const y = v => PT + (H - PT - PB) * (1 - Math.min(v, max) / max);
+  let g = '';
+  [0, .5, 1].forEach(f => { const yy = y(max * f); g += `<line x1="${PL}" x2="${W - PR}" y1="${yy}" y2="${yy}" stroke="var(--grid)" stroke-width="1" vector-effect="non-scaling-stroke"/><text x="${PL - 6}" y="${yy + 4}" text-anchor="end">${fmtTick(max * f)}</text>`; });
+  g += `<text x="${PL}" y="${H - 3}">60 s ago</text><text x="${W - PR}" y="${H - 3}" text-anchor="end">now</text>`;
+  series.forEach(sr => {
+    const pts = sr.data.map((v, i) => [x(i), y(v || 0)]);
+    if (pts.length < 2) return;
+    const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('');
+    if (series.length === 1) g += `<path d="${line}L${pts[pts.length - 1][0].toFixed(1)} ${y(0)}L${pts[0][0].toFixed(1)} ${y(0)}Z" fill="${sr.color}" opacity=".1"/>`;
+    g += `<path d="${line}" fill="none" stroke="${sr.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
+  });
+  g += '<line class="xh" x1="0" x2="0" y1="' + PT + '" y2="' + (H - PB) + '" stroke="var(--ink-2)" stroke-width="1" vector-effect="non-scaling-stroke" opacity="0"/>';
+  svg.innerHTML = g;
+  card._chart = { series, x, fmt: card._fmt };
+  if (card._mouse) showTip(card);
+}
+/* Crosshair and tooltip follow the mouse over a chart, and stay put (with fresh values) as the chart redraws. */
+function showTip(card) {
+  const c = card._chart, m = card._mouse, svg = card.querySelector('svg'), tip = card.querySelector('.tip');
+  if (!c || !m) return;
+  const r = svg.getBoundingClientRect(), vx = (m.x - r.left) / r.width * W;
+  const n = c.series[0].data.length; if (!n) return;
+  const i = Math.max(0, Math.min(n - 1, Math.round((vx - PL) / (W - PL - PR) * (N - 1)) - (N - n)));
+  const xh = svg.querySelector('.xh'); xh.setAttribute('x1', c.x(i)); xh.setAttribute('x2', c.x(i)); xh.setAttribute('opacity', '.6');
+  const ago = n - 1 - i;
+  tip.innerHTML = `<div>${ago ? ago + ' s ago' : 'Now'}</div>` + c.series.map(s => `<div>${s.series ? `<i class="key" style="background:${s.color}"></i> ` : ''}${esc(s.label)} <b>${c.fmt(s.data[i])}</b></div>`).join('');
+  tip.style.display = 'block';
+  const cr = card.getBoundingClientRect(), scale = cr.width / card.offsetWidth;
+  const left = (m.x - cr.left) / scale, top = (m.y - cr.top) / scale;
+  tip.style.left = Math.min(left + 12, card.offsetWidth - tip.offsetWidth - 6) + 'px';
+  tip.style.top = Math.max(4, top - tip.offsetHeight - 8) + 'px';
+}
+function hover(card) {
+  const svg = card.querySelector('svg'), tip = card.querySelector('.tip');
+  svg.addEventListener('mousemove', e => { card._mouse = { x: e.clientX, y: e.clientY }; showTip(card); });
+  svg.addEventListener('mouseleave', () => { card._mouse = null; tip.style.display = 'none'; const xh = svg.querySelector('.xh'); if (xh) xh.setAttribute('opacity', '0'); });
+}
+['#ccpu', '#cmem', '#cnet'].forEach(id => hover($(id)));
+$('#ccpu')._fmt = pct; $('#cmem')._fmt = pct; $('#cnet')._fmt = v => bytes(v, true);
+
+/* ---------- update ---------- */
+async function tick() {
+  const s = await call('stats');
+  if (!s || s.error) return;
+  last = s;
+  const memPct = s.mem_total ? 100 * s.mem_used / s.mem_total : 0;
+  if (s.cpu != null) { push(hist.cpu, s.cpu); push(hist.mem, memPct); push(hist.down, s.net_down || 0); push(hist.up, s.net_up || 0); }
+
+  txt('#kcpu', pct(s.cpu)); meter('#mcpu', s.cpu);
+  txt('#kcpus', s.ncores + (s.ncores === 1 ? ' core' : ' cores') + ', load ' + s.load[0]);
+  put('#kmem', esc(bytes(s.mem_used)) + `<small>of ${esc(bytes(s.mem_total))}</small>`); meter('#mmem', memPct);
+  txt('#kmems', Math.round(memPct) + '% in use');
+  put('#knet', `<span><i class="key" style="background:var(--down)"></i>${esc(bytes(s.net_down, true))}</span><span><i class="key" style="background:var(--up)"></i>${esc(bytes(s.net_up, true))}</span>`);
+  const diskPct = s.disk_total ? 100 * s.disk_used / s.disk_total : 0;
+  put('#kdisk', esc(bytes(s.disk_used)) + `<small>of ${esc(bytes(s.disk_total))}</small>`); meter('#mdisk', diskPct);
+  txt('#up', upTime(s.uptime_s));
+
+  txt('#tcpu', pct(s.cpu)); txt('#tmem', Math.round(memPct) + '%');
+  txt('#tnet', '');
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  draw($('#ccpu'), [{ data: hist.cpu, color: accent, label: 'CPU' }], 100, v => Math.round(v) + '%');
+  draw($('#cmem'), [{ data: hist.mem, color: accent, label: 'Memory' }], 100, v => Math.round(v) + '%');
+  const netMax = niceMax(Math.max(1024, ...hist.down, ...hist.up));   // never below 1 KB/s, so an idle network still has a readable axis
+  draw($('#cnet'), [{ data: hist.down, color: '#3987e5', label: 'Download', series: true }, { data: hist.up, color: '#d95926', label: 'Upload', series: true }], netMax, v => v ? bytes(v, true).replace('/s', '') : '0');
+
+  txt('#tproc', s.nprocs + ' running');
+  put('#procs', s.procs.slice(0, 6).map(p => `<tr><td class="name">${esc(p.name)}</td><td class="n">${p.cpu.toFixed(1)}%</td><td class="n">${esc(bytes(p.mem))}</td></tr>`).join(''));
+  txt('#tcores', s.ncores + ' total');
+  put('#cores', s.cores.slice(0, 8).map((c, i) => `<div class="core">Core ${i + 1} <span style="float:right">${pct(c)}</span><div class="meter"><i class="${level(c)}" style="width:${c}%"></i></div></div>`).join('') || '<div class="core">Measuring…</div>');
+  const facts = [['Load (1, 5, 15 min)', s.load.join(', ')], ['Processes', s.nprocs]];
+  if (s.temps.length) facts.push(['Temperature', Math.max(...s.temps) + ' °C']);
+  put('#facts', facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join(''));
+}
+function loop() { if (!paused) tick(); timer = setTimeout(loop, 1000); }
+function togglePause() { paused = !paused; $('#live').classList.toggle('paused', paused); txt('#livetxt', paused ? 'Paused' : 'Live, every second'); txt('#hat', paused ? 'Resume' : 'Pause'); }
+const home = () => { location.href = 'index.html'; };
+LOS.onNav(a => { if (a === 'ok') togglePause(); else if (a === 'back' || a === 'menu') home(); return true; });
+$('#ha').onclick = togglePause; $('#hb').onclick = home;
+tick().then(() => setTimeout(loop, 1000));
+</script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+# LaunchOS boot screen: a slowly spinning ferris wheel whose cabins stay upright.
+# Everything is re-laid out whenever the screen size changes (the display driver
+# can switch resolution partway through boot), and a full-screen background layer
+# is nudged periodically to force a full repaint so no part of the screen is left black.
+Window.SetBackgroundTopColor(0.043, 0.090, 0.149);
+Window.SetBackgroundBottomColor(0.043, 0.090, 0.149);
+
+bg_src = Image("bg.png");
+glow_src = Image("glow.png");
+stand_src = Image("stand.png");
+wheel_src = Image("wheel.png");
+for (i = 0; i < 8; i++) gsrc[i] = Image("gondola" + i + ".png");
+
+bg = Sprite(); bg.SetZ(-100);
+glow = Sprite(); glow.SetZ(1);
+stand = Sprite(); stand.SetZ(2);
+wheel = Sprite(); wheel.SetZ(3);
+for (i = 0; i < 8; i++) { gond[i] = Sprite(); gond[i].SetZ(4); }
+
+period = Math.Pi / 8;
+NF = 36;
+lastw = -1;
+lasth = -1;
+
+fun layout ()
+{
+  global.sw = Window.GetWidth();
+  global.sh = Window.GetHeight();
+  s = sh / 1080 * 1.6;
+  if (s > 2) s = 2;
+  global.s = s;
+  global.cx = Window.GetX() + sw / 2;
+  global.cy = Window.GetY() + sh / 2 - 30 * s;
+  global.R = 150 * s;
+  bg.SetImage(bg_src.Scale(sw + 4, sh + 4));
+  bg.SetPosition(Window.GetX() - 2, Window.GetY() - 2, -100);
+  g = glow_src.Scale(glow_src.GetWidth() * s, glow_src.GetHeight() * s);
+  glow.SetImage(g);
+  glow.SetPosition(cx - g.GetWidth() / 2, cy - g.GetHeight() / 2, 1);
+  st = stand_src.Scale(stand_src.GetWidth() * s, stand_src.GetHeight() * s);
+  stand.SetImage(st);
+  stand.SetPosition(cx - st.GetWidth() / 2, cy - 18 * s, 2);
+  w = wheel_src.Scale(wheel_src.GetWidth() * s, wheel_src.GetHeight() * s);
+  for (k = 0; k < NF; k++) global.frames[k] = w.Rotate(k * period / NF);
+  global.ww = w.GetWidth();
+  wheel.SetImage(frames[0]);
+  wheel.SetPosition(cx - ww / 2, cy - ww / 2, 3);
+  for (i = 0; i < 8; i++)
+  {
+    global.gimg[i] = gsrc[i].Scale(gsrc[i].GetWidth() * s, gsrc[i].GetHeight() * s);
+    gond[i].SetImage(gimg[i]);
+  }
+}
+
+angle = 0;
+tick = 0;
+fun refresh_callback ()
+{
+  if (Window.GetWidth() != lastw || Window.GetHeight() != lasth)
+  {
+    lastw = Window.GetWidth();
+    lasth = Window.GetHeight();
+    layout();
+  }
+  tick++;
+  # Nudge the background by one pixel twice a second. Moving it marks the whole
+  # screen for repaint, which covers a display that appeared mid-boot.
+  if (tick % 25 == 0)
+  {
+    if (tick % 50 == 0) bg.SetX(Window.GetX() - 2); else bg.SetX(Window.GetX() - 1);
+  }
+  angle = angle + 0.008;
+  if (angle > Math.Pi * 2) angle = angle - Math.Pi * 2;
+  phase = angle - Math.Int(angle / period) * period;
+  f = Math.Int(phase / period * NF);
+  if (f >= NF) f = NF - 1;
+  wheel.SetImage(frames[f]);
+  for (i = 0; i < 8; i++)
+  {
+    a = angle + i * Math.Pi / 4;
+    gond[i].SetPosition(cx + Math.Cos(a) * R - gimg[i].GetWidth() / 2, cy + Math.Sin(a) * R, 4);
+  }
+}
+Plymouth.SetRefreshFunction(refresh_callback);

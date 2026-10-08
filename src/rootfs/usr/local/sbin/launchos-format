@@ -1,0 +1,93 @@
+#!/usr/bin/python3
+"""Formats a whole drive: ERASES EVERYTHING ON IT, then makes one partition that fills it.
+Usage: launchos-format /dev/sdX exfat|fat32|ntfs|ext4 LABEL   (run by launchos-helper after
+the player confirmed twice). Never touches the drive LaunchOS runs from or saves to."""
+import os, re, subprocess, sys, time
+sys.path.insert(0, "/usr/local/lib/launchos")
+import disks as D
+
+NAMES = {"exfat": "exFAT", "fat32": "FAT32", "ntfs": "NTFS", "ext4": "ext4"}
+PTYPE = {"exfat": "ntfs", "fat32": "fat32", "ntfs": "ntfs", "ext4": "ext4"}   # parted's partition type hint
+
+
+def walk(nodes):
+    for n in nodes:
+        yield n
+        yield from walk(n.get("children") or [])
+
+
+def fail(msg):
+    D.status("format", "", 100, True, msg)
+    sys.exit(1)
+
+
+def main():
+    disk, fs, label = (sys.argv[1:4] + ["", "", ""])[:3]
+    D.status("format", "Getting the drive ready", 3)
+    if fs not in NAMES or not re.fullmatch(r"[A-Za-z0-9 _-]{0,11}", label):
+        fail("Pick a format and a name of up to 11 letters or numbers.")
+    if not D.DISK.fullmatch(disk) or not os.path.exists(disk):
+        fail("That drive isn’t there any more.")
+    fd = D.lock()
+    try:
+        info = (D.lsblk(disk) or [{}])[0]
+        if info.get("type") != "disk":
+            fail("That isn’t a whole drive.")
+        if info.get("ro"):
+            fail("That drive is locked (read-only). Check for a lock switch on it.")
+        nodes = list(walk([info]))
+        devs = {n.get("name") for n in nodes}
+        if devs & D.system_disks():
+            fail("That drive is used by LaunchOS itself.")
+        points, held = D.in_use(nodes)
+        if held or any(not p.startswith(D.MEDIA + "/") for p in points):
+            fail("That drive is in use by the system.")
+        os.sync()
+        for p in sorted(points, key=len, reverse=True):
+            if D.sh("umount", p).returncode != 0:
+                fail("Something is still using this drive. Close any program or game running from it, then try again.")
+            try:
+                os.rmdir(p)
+            except OSError:
+                pass
+
+        D.status("format", "Erasing the drive", 15)
+        for n in reversed(nodes):   # old file system signatures first, so nothing stale reappears
+            D.sh("wipefs", "-a", n["name"])
+        size = int(info.get("size") or 0)
+        table = "gpt" if size > 2 * 1024 ** 4 else "msdos"
+        r = D.sh("parted", "-s", "-a", "optimal", disk, "mklabel", table, "mkpart", "primary", PTYPE[fs], "1MiB", "100%")
+        if r.returncode != 0:
+            fail("Couldn’t set up the drive. It may be damaged or locked.")
+        D.sh("partprobe", disk)
+        D.sh("udevadm", "settle", "--timeout=10")
+        part = disk + ("p1" if disk[-1].isdigit() else "1")
+        if not D.wait_for(part, 15):
+            fail("Couldn’t set up the drive. Try unplugging it and plugging it back in.")
+        D.sh("wipefs", "-a", part)
+
+        D.status("format", "Formatting as " + NAMES[fs], 40)
+        if fs == "fat32":
+            cmd = ["mkfs.vfat", "-F", "32", "-n", (label or "DRIVE").upper(), part]
+        elif fs == "exfat":
+            cmd = ["mkfs.exfat", "-L", label or "DRIVE", part]
+        elif fs == "ntfs":
+            cmd = ["mkntfs", "-Q", "-F", "-L", label or "DRIVE", part]
+        else:
+            cmd = ["mkfs.ext4", "-F", "-q", "-L", label or "DRIVE", "-E", "root_owner=1000:1000", part]
+        r = D.sh(*cmd, timeout=3600)
+        if r.returncode != 0:
+            fail("Formatting didn’t finish. The drive may be damaged.")
+        os.sync()
+        D.sh("udevadm", "settle", "--timeout=10")
+    finally:
+        os.close(fd)
+
+    D.status("format", "Opening the drive", 90)
+    subprocess.run(["/usr/local/sbin/launchos-drives", part], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(0.5)
+    D.status("format", "Formatted as " + NAMES[fs] + ". It’s ready to use.", 100, True)
+
+
+if __name__ == "__main__":
+    main()

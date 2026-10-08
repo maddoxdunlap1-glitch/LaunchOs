@@ -1,0 +1,182 @@
+#!/usr/bin/python3
+"""Runs as root. Carries out requests the launcher drops in /run/launchos/requests/.
+
+Only a fixed set of actions is accepted, and every value is validated before use.
+The request folder belongs to the player user, so the folder and each file are
+opened without following links, and a request must be a small regular file.
+Each request is its own file, so requests sent close together never overwrite each other.
+"""
+import json, os, re, stat, subprocess
+
+REQDIR = "/run/launchos/requests"
+ZONEINFO = "/usr/share/zoneinfo"
+MAX = 65536
+
+
+def run(*cmd):
+    subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def parse(raw):
+    text = raw.decode("utf-8", "replace").strip()
+    try:
+        req = json.loads(text)
+    except ValueError:
+        return None
+    return req if isinstance(req, dict) else None
+
+
+def read_requests():
+    """The waiting requests, oldest first (each file is removed as it's read)."""
+    try:
+        dfd = os.open(REQDIR, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError:
+        return []
+    out = []
+    try:
+        for name in sorted(os.listdir(dfd))[:50]:
+            if name.startswith("."):
+                continue
+            raw = b""
+            try:
+                fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+                try:
+                    st = os.fstat(fd)
+                    if stat.S_ISREG(st.st_mode) and st.st_size <= MAX:
+                        raw = os.read(fd, MAX)
+                finally:
+                    os.close(fd)
+            except OSError:
+                pass
+            try:   # a folder or anything else that isn't a request: clear it so the queue moves on
+                os.unlink(name, dir_fd=dfd)
+            except IsADirectoryError:
+                try:
+                    os.rmdir(name, dir_fd=dfd)
+                except OSError:
+                    pass
+            except OSError:
+                pass
+            req = parse(raw)
+            if req:
+                out.append(req)
+    finally:
+        os.close(dfd)
+    return out
+
+
+def iwd_name(ssid):
+    """File name iwd uses for a saved network."""
+    if re.fullmatch(r"[A-Za-z0-9_ \-]+", ssid):
+        return ssid
+    return "=" + ssid.encode("utf-8").hex()
+
+
+def background(unit, *cmd):
+    """Long jobs run as their own unit so this helper returns at once."""
+    run("systemctl", "reset-failed", unit + ".service")
+    run("systemd-run", "--unit=" + unit, "--collect", "--quiet", *cmd)
+
+
+DISK = re.compile(r"/dev/(sd[a-z]{1,2}|vd[a-z]{1,2}|nvme\d+n\d+|mmcblk\d+)")
+PART = re.compile(r"/dev/(sd[a-z]{1,2}\d{1,3}|vd[a-z]{1,2}\d{1,3}|nvme\d+n\d+p\d{1,3}|mmcblk\d+p\d{1,3})")
+
+
+def main():
+    for req in read_requests():
+        try:
+            handle(req)
+        except Exception:   # one bad request never blocks the ones after it
+            pass
+
+
+def handle(req):
+    action = req.get("action")
+    if action == "poweroff":
+        run("systemctl", "poweroff")
+    elif action == "reboot":
+        run("systemctl", "reboot")
+    elif action == "timezone":
+        zone = str(req.get("value", ""))
+        path = os.path.realpath(os.path.join(ZONEINFO, zone))
+        if re.fullmatch(r"[A-Za-z0-9_+\-]+(/[A-Za-z0-9_+\-]+){0,2}", zone) \
+                and path.startswith(ZONEINFO + "/") and os.path.isfile(path):
+            run("timedatectl", "set-timezone", zone)
+    elif action == "wifi_save":
+        # Save the password for a network so iwd can connect to it.
+        ssid, pw = str(req.get("ssid", "")), str(req.get("passphrase", ""))
+        if 0 < len(ssid.encode()) <= 32 and "\n" not in ssid and 8 <= len(pw) <= 63 \
+                and all(32 <= ord(c) < 127 for c in pw):
+            os.makedirs("/var/lib/iwd", mode=0o700, exist_ok=True)
+            path = os.path.join("/var/lib/iwd", iwd_name(ssid) + ".psk")
+            # written under a temporary name and renamed: iwd reads new files the moment they appear
+            tmp = os.path.join("/var/lib/iwd", ".launchos-new")
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+            with os.fdopen(fd, "w") as f:
+                f.write("[Security]\nPassphrase=" + pw + "\n")
+            os.replace(tmp, path)
+    elif action == "mount_drives":
+        background("launchos-drives-scan", "/usr/local/sbin/launchos-drives")
+    elif action == "get_app":
+        app = str(req.get("app", ""))
+        if app in ("org.vinegarhq.Sober", "io.freetubeapp.FreeTube"):
+            background("launchos-get-" + app.split(".")[-1].lower(), "/usr/local/sbin/launchos-getapp", app)
+    elif action == "usb_saving":
+        background("launchos-usb-saving", "/usr/local/sbin/launchos-usb-saving")
+    elif action == "install_system":
+        disk = str(req.get("disk", ""))
+        if DISK.fullmatch(disk) and req.get("confirm") == "ERASE " + disk:
+            background("launchos-install", "/usr/local/sbin/launchos-install", disk)
+    # Files: open a drive, close it so it's safe to unplug, format it.
+    # The scripts check again that the drive isn't the one LaunchOS runs from or saves to.
+    elif action == "mount_part":
+        dev = str(req.get("dev", ""))
+        if PART.fullmatch(dev) or DISK.fullmatch(dev):
+            background("launchos-drive-open", "/usr/local/sbin/launchos-drives", dev)
+    elif action == "eject":
+        disk = str(req.get("disk", ""))
+        if DISK.fullmatch(disk):
+            background("launchos-drive-eject", "/usr/local/sbin/launchos-eject", disk)
+    elif action == "format":
+        disk, fs, label = str(req.get("disk", "")), str(req.get("fs", "")), str(req.get("label", ""))
+        if DISK.fullmatch(disk) and fs in ("exfat", "fat32", "ntfs", "ext4") and re.fullmatch(r"[A-Za-z0-9 _-]{0,11}", label) \
+                and req.get("confirm") == "FORMAT " + disk:
+            background("launchos-format", "/usr/local/sbin/launchos-format", disk, fs, label)
+    # Store: install or remove an app from Flathub, or refresh the app list
+    elif action == "store":
+        op, app = str(req.get("op", "")), str(req.get("app", ""))
+        name = str(req.get("name", ""))
+        if not re.fullmatch(r"[\w .,:+&()'-]{0,60}", name):
+            name = ""
+        if op == "refresh" or (op in ("install", "remove") and APP_ID.fullmatch(app) and len(app) <= 255):
+            background("launchos-store", "/usr/local/sbin/launchos-store", op, app or "-", name or app or "-")
+    # Updates: LaunchOS itself (from its GitHub releases), Store apps, and Ubuntu's own updates
+    elif action == "update":
+        what = str(req.get("what", ""))
+        if what in ("check", "apply", "apps"):
+            background("launchos-update", "/usr/local/sbin/launchos-update", what)
+        elif what == "system":
+            background("launchos-sysupdate", "/usr/local/sbin/launchos-update", "system")
+    elif action == "admin_password":
+        admin_password(str(req.get("new", "")), str(req.get("old", "")))
+
+
+APP_ID = re.compile(r"[A-Za-z][A-Za-z0-9_-]*(\.[A-Za-z0-9_-]+){2,}")
+
+
+def admin_password(new, old):
+    """Hands the new admin password to launchos-admin (run as its own job, so this helper
+    stays free) through a file only root can read."""
+    if not (6 <= len(new) <= 128) or any(ord(c) < 32 for c in new) or len(old) > 128:
+        return
+    path = "/run/launchos-status/.admin-request"
+    os.makedirs("/run/launchos-status", exist_ok=True)
+    fd = os.open(path + ".tmp", os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump({"new": new, "old": old}, f)
+    os.replace(path + ".tmp", path)
+    background("launchos-admin", "/usr/local/sbin/launchos-admin")
+
+
+if __name__ == "__main__":
+    main()

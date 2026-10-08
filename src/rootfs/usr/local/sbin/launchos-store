@@ -1,0 +1,116 @@
+#!/usr/bin/python3
+"""Store jobs, run as root by launchos-helper: installs or removes a Flathub app for
+everyone on this PC, or refreshes the list of apps.
+Usage: launchos-store install|remove|refresh APP-ID NAME"""
+import os, re, subprocess, sys
+sys.path.insert(0, "/usr/local/lib/launchos")
+import disks as D
+
+FLATHUB = "https://dl.flathub.org/repo/flathub.flatpakrepo"
+APP_ID = re.compile(r"[A-Za-z][A-Za-z0-9_-]*(\.[A-Za-z0-9_-]+){2,}")
+
+
+def st(step, pct, done=False, err=""):
+    D.status("store", step, pct, done, err, op=OP, app=APP, name=NAME)
+
+
+def flathub():
+    r = subprocess.run(["flatpak", "remote-add", "--system", "--if-not-exists", "flathub", FLATHUB],
+                       capture_output=True, text=True, timeout=120)
+    return r.returncode == 0
+
+
+def follow(cmd, step, lo, hi):
+    """Run flatpak on a pretend terminal (so it shows its progress) and turn the percentages
+    it prints into progress between lo and hi. Returns (exit code, last lines)."""
+    import fcntl, pty, struct, termios
+    master, slave = pty.openpty()
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 160, 0, 0))
+    p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=slave, stderr=slave, close_fds=True)
+    os.close(slave)
+    last, tail, buf = -1, [], b""
+    while True:
+        try:
+            data = os.read(master, 4096)
+        except OSError:   # the program finished and closed its terminal
+            break
+        if not data:
+            break
+        buf += data
+        parts = re.split(rb"[\r\n]", buf)
+        buf = parts.pop()
+        for raw in parts:
+            line = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", raw.decode("utf-8", "replace")).strip()
+            if not line:
+                continue
+            tail = (tail + [line])[-5:]
+            m = re.findall(r"(\d{1,3})%", line)
+            if m:
+                pct = lo + (hi - lo) * min(100, int(m[-1])) // 100
+                if pct != last:
+                    last = pct
+                    st(step, pct)
+    os.close(master)
+    return p.wait(), " ".join(tail)
+
+
+def friendly(out):
+    low = out.lower()
+    if "no space" in low or "not enough" in low and "space" in low:
+        return "There isn’t enough space for that app."
+    if "could not resolve" in low or "unable to connect" in low or "network" in low or "timeout" in low:
+        return "Couldn’t reach Flathub. Check your internet connection and try again."
+    if "nothing matches" in low or "no remote refs" in low or "not found" in low:
+        return "Flathub doesn’t have that app any more."
+    return "That didn’t finish. Check your internet connection and try again."
+
+
+def main():
+    global OP, APP, NAME
+    OP, APP, NAME = (sys.argv[1:4] + ["", "", ""])[:3]
+    if OP not in ("install", "remove", "refresh") or (OP != "refresh" and not APP_ID.fullmatch(APP)):
+        return 1
+    if OP == "refresh":
+        st("Getting the app list from Flathub", 5)
+        if not flathub():
+            st("", 0, True, "Couldn’t reach Flathub. Check your internet connection and try again.")
+            return 1
+        code, out = follow(["flatpak", "update", "--system", "--appstream", "flathub"], "Getting the app list from Flathub", 10, 95)
+        if code != 0:
+            st("", 0, True, friendly(out))
+            return 1
+        st("Done", 100, True)
+        return 0
+    if OP == "install":
+        st("Connecting to Flathub", 1)
+        if not flathub():
+            st("", 0, True, "Couldn’t reach Flathub. Check your internet connection and try again.")
+            return 1
+        st("Downloading " + NAME, 3)
+        # (no --noninteractive: in that mode flatpak doesn't show its progress)
+        code, out = follow(["flatpak", "install", "--system", "-y", "flathub", APP],
+                           "Downloading " + NAME, 3, 99)
+        if subprocess.run(["flatpak", "info", "--system", APP], capture_output=True).returncode == 0:
+            st("Installed", 100, True)
+            return 0
+        st("", 0, True, friendly(out))
+        return 1
+    # remove, then the shared parts no other app needs any more
+    st("Removing " + NAME, 20)
+    code, out = follow(["flatpak", "uninstall", "--system", "-y", "--app", APP], "Removing " + NAME, 20, 80)
+    if subprocess.run(["flatpak", "info", "--system", APP], capture_output=True).returncode == 0:
+        st("", 0, True, "Couldn’t remove " + NAME + ". Close it first if it’s running.")
+        return 1
+    st("Cleaning up", 85)
+    subprocess.run(["flatpak", "uninstall", "--system", "-y", "--noninteractive", "--unused"], capture_output=True, timeout=600)
+    st("Removed", 100, True)
+    return 0
+
+
+OP = APP = NAME = ""
+if __name__ == "__main__":
+    try:
+        sys.exit(main() or 0)
+    except Exception as e:   # never leave the Store waiting on a job that died
+        st("", 0, True, "That didn’t finish. Check your internet connection and try again.")
+        sys.exit(1)

@@ -1,0 +1,103 @@
+#!/bin/bash
+# Installs LaunchOS onto a whole drive: ERASES EVERYTHING ON IT.
+# Layout: BIOS boot (1 MB) + EFI system (512 MB) + LaunchOS (ext4, rest).
+# Boots on both BIOS and UEFI PCs. Called by launchos-helper after the user confirmed.
+. /usr/local/sbin/launchos-status
+DISK="$1"
+T=/mnt/launchos-target
+SRC=/mnt/launchos-source
+fail() { status install "" 0 true "$1"; cleanup; exit 1; }
+cleanup() {
+  for m in $T/boot/efi $T/dev/pts $T/dev $T/proc $T/sys $T/run $T $SRC; do umount -l "$m" 2>/dev/null; done
+}
+step() { status install "$1" "$2" false ""; }
+
+# one drive job at a time: automatic USB mounting waits until this is done
+mkdir -p /run/launchos-status
+exec 9>/run/launchos-status/.drives.lock
+flock 9
+step "Checking the drive" 1
+[ -b "$DISK" ] || fail "That drive isn't there any more."
+[ "$(lsblk -dno TYPE "$DISK")" = disk ] || fail "That isn't a whole drive."
+boot=$(findmnt -no SOURCE /cdrom 2>/dev/null)
+bootdisk=$( [ -b "$boot" ] && echo /dev/$(lsblk -no PKNAME "$boot" | head -1) )
+[ "$DISK" = "$bootdisk" ] && fail "That's the drive LaunchOS is running from."
+for cowdev in $(lsblk -rnpo NAME,LABEL | awk '$2 == "casper-rw" || $2 == "writable" {print $1}'); do
+  lsblk -nsrpo NAME "$cowdev" | grep -qx "$DISK" && fail "That drive holds your LaunchOS saves."
+done
+[ -n "$boot" ] && lsblk -nsrpo NAME "$boot" 2>/dev/null | grep -qx "$DISK" && fail "That's the drive LaunchOS is running from."
+for h in /sys/class/block/$(basename "$DISK")/holders /sys/class/block/$(basename "$DISK")/*/holders; do
+  [ -d "$h" ] && [ -n "$(ls -A "$h")" ] && fail "Something on that drive is in use."
+done
+# a drive that's open in Files is closed first; anything else using it stops the install
+lsblk -rno MOUNTPOINT "$DISK" | grep '^/media/player/' | sort -r | while read -r m; do
+  umount "$m" 2>/dev/null && rmdir "$m" 2>/dev/null
+done
+lsblk -rno MOUNTPOINT "$DISK" | grep -q . && fail "Something on that drive is in use. If a program or game is running from it, close it and try again."
+size=$(lsblk -bdno SIZE "$DISK")
+[ "$size" -ge 16000000000 ] || fail "That drive is too small. LaunchOS needs at least 16 GB."
+case "$DISK" in *nvme*|*mmcblk*) P="${DISK}p" ;; *) P="$DISK" ;; esac
+KVER=$(ls /lib/modules | sort -V | tail -1)
+[ -f /cdrom/casper/filesystem.squashfs ] || fail "Can't find the LaunchOS system files."
+
+step "Erasing the drive" 4
+wipefs -af "$DISK" >/dev/null 2>&1
+sgdisk --zap-all "$DISK" >/dev/null 2>&1
+sgdisk -n1:0:+1M -t1:ef02 -c1:BIOS -n2:0:+512M -t2:ef00 -c2:EFI -n3:0:0 -t3:8304 -c3:LaunchOS "$DISK" >/dev/null || fail "Couldn't set up the drive."
+partprobe "$DISK" 2>/dev/null; udevadm settle; sleep 1
+[ -b "${P}3" ] || fail "Couldn't set up the drive."
+mkfs.vfat -F 32 -n EFI "${P}2" >/dev/null || fail "Couldn't prepare the drive."
+mkfs.ext4 -F -q -L LaunchOS "${P}3" || fail "Couldn't prepare the drive."
+
+step "Copying LaunchOS" 8
+mkdir -p $T
+mount "${P}3" $T || fail "Couldn't open the new drive."
+# One pass through the system image (each compressed block unpacked once, on every core),
+# much faster than copying file by file.
+last=-1
+unsquashfs -f -d $T -percentage /cdrom/casper/filesystem.squashfs 2>/dev/null | while read -r p; do
+  case "$p" in ''|*[!0-9]*) continue ;; esac
+  # only when the number changes
+  [ "$p" != "$last" ] && { last=$p; status install "Copying LaunchOS" $((8 + p * 70 / 100)) false ""; }
+done
+[ -x $T/usr/bin/python3 ] || fail "Copying didn't finish. The drive may be failing."
+# keep what you set up in this session (name, colors, apps you signed in to)
+rsync -aHAX /home/player/ $T/home/player/ 2>/dev/null
+cp /cdrom/casper/vmlinuz $T/boot/vmlinuz-$KVER
+
+step "Setting up the drive" 80
+ROOT_UUID=$(blkid -s UUID -o value "${P}3")
+EFI_UUID=$(blkid -s UUID -o value "${P}2")
+cat > $T/etc/fstab <<EOF
+UUID=$ROOT_UUID / ext4 defaults,noatime 0 1
+UUID=$EFI_UUID /boot/efi vfat umask=0077 0 2
+EOF
+mkdir -p $T/boot/efi $T/etc/launchos
+mount "${P}2" $T/boot/efi
+for m in dev dev/pts proc sys run; do mount --bind /$m $T/$m; done
+echo launchos > $T/etc/hostname
+date -u +%F > $T/etc/launchos/installed
+chroot $T dpkg --purge casper >/dev/null 2>&1
+rm -f $T/etc/casper.conf
+step "Setting up startup" 86
+chroot $T update-initramfs -c -k "$KVER" >/dev/null 2>&1 || fail "Couldn't set up startup files."
+step "Installing the boot loader" 92
+chroot $T grub-install --target=i386-pc --boot-directory=/boot "$DISK" >/dev/null 2>&1 || fail "Couldn't install the boot loader."
+chroot $T grub-install --target=x86_64-efi --efi-directory=/boot/efi --boot-directory=/boot --removable --no-nvram >/dev/null 2>&1 || fail "Couldn't install the UEFI boot loader."
+if [ -d /sys/firmware/efi ]; then   # also add a "LaunchOS" entry to the PC's boot menu
+  chroot $T grub-install --target=x86_64-efi --efi-directory=/boot/efi --boot-directory=/boot --bootloader-id=LaunchOS >/dev/null 2>&1
+fi
+cat > $T/boot/grub/grub.cfg <<EOF
+set timeout=0
+set default=0
+insmod part_gpt
+insmod ext2
+search --no-floppy --fs-uuid --set=root $ROOT_UUID
+menuentry "LaunchOS" {
+  linux /boot/vmlinuz-$KVER root=UUID=$ROOT_UUID ro quiet splash loglevel=0 rd.systemd.show_status=false systemd.show_status=false udev.log_level=3 vt.global_cursor_default=0 nowatchdog
+  initrd /boot/initrd.img-$KVER
+}
+EOF
+sync
+cleanup
+status install "Done. Remove the LaunchOS USB stick or disc, then restart." 100 true ""

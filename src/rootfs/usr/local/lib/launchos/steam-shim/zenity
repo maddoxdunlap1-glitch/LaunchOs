@@ -1,0 +1,8 @@
+#!/bin/sh
+# Used only when LaunchOS starts Steam: the player already chose to install Steam by
+# opening it, so Ubuntu's "Steam installer" question is answered yes. Everything else
+# goes to the real zenity.
+case "$*" in
+  *--question*"--title=Steam installer"*) exit 0 ;;
+esac
+exec /usr/bin/zenity "$@"

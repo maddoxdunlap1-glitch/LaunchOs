@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Files</title>
+<link rel="stylesheet" href="los.css">
+<style>
+#head { position: absolute; left: 56px; right: 48px; top: 26px; height: 40px; display: flex; align-items: center; gap: 18px; }
+#head h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -.01em; }
+#note { font-size: 14px; color: var(--ink-2); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#jobchip { display: none; align-items: center; gap: 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 18px; padding: 6px 14px; font-size: 14px; }
+#jobchip.on { display: flex; }
+#jobchip .meter { width: 90px; height: 6px; border-radius: 3px; background: var(--chip); overflow: hidden; }
+#jobchip .meter i { display: block; height: 100%; background: var(--accent); }
+
+#side { position: absolute; left: 40px; top: 84px; width: 304px; bottom: 64px; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; padding: 6px 8px; }
+#side::-webkit-scrollbar { display: none; }
+#side h3 { margin: 10px 4px 8px; font-size: 13px; font-weight: 600; color: var(--mute); text-transform: uppercase; letter-spacing: .06em; }
+#side .it { padding: 9px 12px; margin-bottom: 6px; gap: 12px; }
+#side .it .glyph { width: 34px; height: 34px; }
+#side .it .txt span { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#side .it.cur:not(.f) { border-color: rgba(var(--accent-glow), .45); }
+.dm { height: 4px; border-radius: 2px; background: var(--chip); margin-top: 6px; overflow: hidden; }
+.dm i { display: block; height: 100%; background: var(--b); }
+.dm i.warn { background: #e6c75a; } .dm i.crit { background: #e66767; }
+
+#main { position: absolute; left: 364px; right: 40px; top: 84px; bottom: 64px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; display: flex; flex-direction: column; overflow: hidden; }
+#crumb { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-bottom: 1px solid var(--line); font-size: 15px; min-height: 50px; }
+#crumb .c { color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; cursor: pointer; }
+#crumb .c:last-of-type { color: var(--ink); font-weight: 600; }
+#crumb .sep { color: var(--mute); }
+#crumb .free { margin-left: auto; color: var(--mute); font-size: 13px; white-space: nowrap; }
+#cols { display: grid; grid-template-columns: 1fr 110px 150px; gap: 12px; padding: 8px 26px 6px 74px; font-size: 12px; color: var(--mute); font-weight: 600; }
+#cols span:not(:first-child) { text-align: right; }
+#list { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 4px 10px 10px; position: relative; scrollbar-width: thin; scrollbar-color: #2a4260 transparent; }
+.fr { display: grid; grid-template-columns: 38px 1fr 110px 150px; gap: 12px; align-items: center; height: 46px; padding: 0 14px 0 10px; border-radius: 8px; border: 2px solid transparent; cursor: pointer; font-size: 15px; }
+.fr:hover { background: rgba(255, 255, 255, .03); }
+.fr .ico { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: #1f3550; color: #cfe6ff; position: relative; }
+.fr .ico .ic { width: 18px; height: 18px; }
+.fr .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fr .sz, .fr .dt { text-align: right; color: var(--ink-2); font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fr.f { border-color: var(--accent); background: rgba(var(--accent-glow), .07); box-shadow: 0 0 0 4px rgba(var(--accent-glow), .08); }
+.fr.sel { background: rgba(95, 184, 255, .13); }
+.fr.sel .ico::after { content: "✓"; position: absolute; right: -5px; bottom: -5px; width: 16px; height: 16px; border-radius: 50%; background: var(--b); color: #0b1726; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+.fr.cutting { opacity: .5; }
+.k-folder { background: #3a5a2a !important; color: #e6f5c8 !important; }
+.k-image { background: #2c4c74 !important; } .k-video { background: #5a2f6e !important; } .k-audio { background: #6e4a1f !important; }
+.k-program { background: #2b5797 !important; } .k-archive { background: #5c4a33 !important; } .k-doc { background: #7a2e2e !important; }
+#empty { position: absolute; inset: 150px 20px auto; text-align: center; color: var(--mute); font-size: 16px; line-height: 1.6; display: none; }
+#empty b { display: block; color: var(--ink-2); font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+#main.focus { border-color: #2f4a68; }
+
+#clip { position: absolute; left: 56px; bottom: 18px; font-size: 14px; color: var(--ink-2); display: none; align-items: center; gap: 10px; max-width: 640px; }
+#clip.on { display: flex; }
+#clip b { color: var(--ink); font-weight: 600; }
+#clip button { background: var(--chip); border-radius: 14px; padding: 4px 12px; font-size: 13px; }
+#hints { position: absolute; right: 44px; bottom: 16px; }
+#hints button[hidden] { display: none; }
+
+label.pw { display: flex; gap: 8px; margin-bottom: 14px; }
+label.pw input { flex: 1; font-size: 17px; padding: 11px 14px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel-2); color: var(--ink); outline: none; }
+label.pw input:focus { border-color: var(--accent); }
+.meterbar { height: 10px; border-radius: 5px; background: var(--chip); overflow: hidden; margin: 6px 0 10px; }
+.meterbar i { display: block; height: 100%; background: var(--accent); border-radius: 5px; transition: width .4s; }
+.pnote { font-size: 14px !important; color: var(--ink-2); margin: 0 0 14px !important; overflow-wrap: anywhere; }
+#pl { position: relative; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; padding: 6px 8px; margin: -6px -8px; flex: 1; min-height: 0; }
+#pl::-webkit-scrollbar { display: none; }
+.panel { width: 500px; max-height: 650px; display: flex; flex-direction: column; }
+.panel h2, .panel p, #pbody { flex: none; }
+.warnbox { background: rgba(224, 68, 62, .12); border: 1px solid rgba(224, 68, 62, .45); border-radius: 10px; padding: 10px 14px; font-size: 14px; color: #ffd7d5; margin-bottom: 14px; line-height: 1.45; }
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+<div id="head"><h1>Files</h1><span id="note"></span><button id="jobchip"><span id="jobtxt"></span><span class="meter"><i id="jobbar"></i></span></button></div>
+<nav id="side" aria-label="Places and drives"></nav>
+<section id="main" aria-label="Folder">
+  <div id="crumb"></div>
+  <div id="cols"><span>Name</span><span>Size</span><span>Changed</span></div>
+  <div id="list" role="listbox" aria-multiselectable="true"></div>
+  <div id="empty"></div>
+</section>
+<div id="clip"><span id="cliptxt"></span><button id="clippaste">Paste here</button><button id="clipclear">Clear</button></div>
+<div id="hints" class="hints">
+  <button id="ha"><u style="background:#3ddc6b">A</u><span id="hat">Open</span></button>
+  <button id="hb"><u style="background:#e0443e">B</u><span id="hbt">Back</span></button>
+  <button id="hx"><u style="background:#5fb8ff">X</u>Options</button>
+  <button id="hm"><u style="background:#cfe6ff">&#8801;</u>Home</button>
+</div>
+<div class="dim" id="dim"></div>
+<section class="panel" id="panel" aria-live="polite"><h2 id="ph"></h2><p id="pp"></p><div id="pbody"></div><div id="pl"></div></section>
+<div id="toast"></div>
+</div></div>
+<script src="los.js"></script>
+<script>
+const { $, call, toast, icon, esc } = LOS;
+
+/* ---------- state ---------- */
+let places = [], drives = [], sideRows = [], si = 0;      // left column
+let cur = null, entries = [], li = 0;                     // the open folder
+let focus = 'side', mode = 'browse';                      // focus: side | list; mode: browse | select | panel
+const sel = new Set();                                    // selected names in the open folder
+let clip = null;                                          // { op: 'copy'|'move', paths: [], from }
+let rootOf = '';                                          // the place or drive the open folder is in
+let saving = true, lastPlaces = null;
+const memory = {};                                        // folder -> focused name, to come back to the same spot
+
+const ICONS = { folder: 'folder', image: 'image', video: 'film', audio: 'music', program: 'grid', archive: 'archive', doc: 'doc', text: 'text', web: 'globe', other: 'file' };
+const KIND_NAMES = { folder: 'Folder', image: 'Picture', video: 'Video', audio: 'Music or sound', program: 'Windows program', archive: 'Archive', doc: 'PDF document', text: 'Text', web: 'Web page', other: 'File' };
+function size(n) {
+  if (n == null) return '';
+  const u = ['bytes', 'KB', 'MB', 'GB', 'TB']; let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return (i === 0 ? n : n >= 100 ? Math.round(n) : n.toFixed(1).replace(/\.0$/, '')) + ' ' + u[i];
+}
+const gb = n => size(n);
+function when(t) {
+  const d = new Date(t * 1000), now = new Date();
+  const same = d.toDateString() === now.toDateString();
+  const y = new Date(now); y.setDate(now.getDate() - 1);
+  const tm = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  if (same) return 'Today ' + tm;
+  if (d.toDateString() === y.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' });
+}
+const pjoin = (a, b) => a.replace(/\/$/, '') + '/' + b;
+const baseName = p => p.slice(p.lastIndexOf('/') + 1);
+const dirName = p => p.slice(0, p.lastIndexOf('/')) || '/';
+const fileUrl = p => 'file://' + p.split('/').map(encodeURIComponent).join('/');
+const level = v => v >= 90 ? 'crit' : v >= 75 ? 'warn' : '';
+
+/* ---------- remembered between visits (Home, the viewer) ---------- */
+function saveState() {
+  try { sessionStorage.setItem('launchos.files', JSON.stringify({ path: cur && cur.path, root: rootOf, focus, name: (entries[li] || {}).name, clip })); } catch (e) { /* no storage */ }
+}
+function loadState() { try { return JSON.parse(sessionStorage.getItem('launchos.files') || 'null'); } catch (e) { return null; } }
+
+/* ---------- left column: places and drives ---------- */
+async function loadPlaces() {
+  const r = await call('fs_places');
+  if (!r || r.error || !r.places) return false;
+  const sig = JSON.stringify([r.places, r.drives.map(d => [d.id, d.mount, d.name, d.empty, Math.round((d.free || 0) / 1e7)])]);
+  places = r.places; drives = r.drives; saving = r.saving;
+  if (r.job && r.job.op && !r.job.done) watchJob(false);
+  if (sig !== lastPlaces) { lastPlaces = sig; renderSide(); }
+  return true;
+}
+function driveSub(d) {
+  if (d.empty) return 'Empty · format it to use it';
+  if (!d.dev) return 'Can’t be read · format it to use it';
+  if (d.mount) return gb(d.free) + ' free of ' + gb(d.total) + (d.readonly ? ' · read-only' : '');
+  if (d.ejected) return 'Safe to unplug · select to open again';
+  return (d.removable ? 'USB drive' : 'Inside this PC') + ' · ' + gb(d.size);
+}
+function renderSide() {
+  sideRows = [];
+  let h = '<h3>Your folders</h3>';
+  const glyph = { downloads: 'download', documents: 'doc', pictures: 'image', videos: 'film', music: 'music' };
+  places.forEach(p => { sideRows.push({ kind: 'place', p }); h += sideRow(sideRows.length - 1, glyph[p.id] || 'folder', p.name, p.id === 'downloads' ? 'Browser downloads go here' : ''); });
+  h += '<h3>Drives</h3>';
+  drives.forEach(d => {
+    sideRows.push({ kind: 'drive', d });
+    const pct = d.total ? 100 * (1 - d.free / d.total) : 0;
+    h += sideRow(sideRows.length - 1, d.removable ? 'usb' : 'drive', d.name, driveSub(d), d.mount ? `<div class="dm"><i class="${level(pct)}" style="width:${pct.toFixed(1)}%"></i></div>` : '');
+  });
+  if (!drives.length) h += '<div style="color:var(--mute);font-size:14px;padding:4px 6px 0">Plug in a USB drive and it shows up here.</div>';
+  $('#side').innerHTML = h;
+  si = Math.max(0, Math.min(si, sideRows.length - 1));
+  paintSide();
+}
+const sideRow = (k, g, t, s, extra) => `<div class="it" data-k="${k}"><span class="glyph">${icon(g)}</span><span class="txt"><span>${esc(t)}</span>${s ? `<small>${esc(s)}</small>` : ''}${extra || ''}</span></div>`;
+function sideRoot(row) { return row.kind === 'place' ? row.p.path : row.d.mount; }
+function paintSide() {
+  document.querySelectorAll('#side .it').forEach(el => {
+    const k = +el.dataset.k, row = sideRows[k];
+    el.classList.toggle('f', focus === 'side' && mode !== 'panel' && k === si);
+    el.classList.toggle('cur', !!row && !!rootOf && sideRoot(row) === rootOf);
+  });
+  keepVisible($('#side'), $('#side .it.f'));
+  hints();
+}
+async function openSide(k, toList) {
+  const row = sideRows[k]; if (!row) return;
+  si = k;
+  if (row.kind === 'place') { await openFolder(row.p.path, row.p.path); if (toList) setFocus('list'); return; }
+  const d = row.d;
+  if (d.mount) { await openFolder(d.mount, d.mount); if (toList) setFocus('list'); return; }
+  if (!d.dev) { driveOptions(d); return; }
+  toast('Opening ' + d.name + '…');
+  const r = await call('fs_mount', d.dev);
+  if (r && r.ok) { await loadPlaces(); await openFolder(r.mount, r.mount); si = sideRows.findIndex(x => x.kind === 'drive' && x.d.dev === d.dev); if (si < 0) si = 0; setFocus('list'); }
+  else { toast((r && r.error) || 'Couldn’t open the drive', 4200); }
+}
+
+/* ---------- the open folder ---------- */
+let listSeq = 0;
+async function openFolder(path, root, keepName, quiet) {
+  const my = ++listSeq;
+  const r = await call('fs_list', path);
+  if (my !== listSeq) return false;   // a newer folder was asked for meanwhile
+  if (!r || r.error) {
+    if (!quiet) toast((r && r.error) || 'Couldn’t open that folder', 4000);
+    if (cur && path === cur.path) { await loadPlaces(); goPlace(0); }   // the folder (or its drive) went away
+    return false;
+  }
+  const changed = !cur || cur.path !== r.path;
+  if (cur && changed) memory[cur.path] = (entries[li] || {}).name;
+  cur = r; entries = r.entries; rootOf = root || rootOf;
+  if (changed) { sel.clear(); if (mode === 'select') mode = 'browse'; $('#list').scrollTop = 0; }
+  const want = keepName != null ? keepName : changed ? memory[r.path] : (entries[li] || {}).name;
+  li = Math.max(0, entries.findIndex(e => e.name === want));
+  for (const n of [...sel]) if (!entries.some(e => e.name === n)) sel.delete(n);
+  renderList(); renderCrumb(); paintSide(); saveState();
+  if (focus === 'list') showRow();
+  return true;
+}
+function goPlace(k) { si = k; const row = sideRows[k]; if (row) openFolder(sideRoot(row) || places[0].path, sideRoot(row) || places[0].path); }
+const refresh = () => cur ? openFolder(cur.path, rootOf) : null;
+function renderCrumb() {
+  if (!cur) return;
+  const rel = cur.path.slice(rootOf.length).split('/').filter(Boolean);
+  const top = sideRows.find(r => sideRoot(r) === rootOf);
+  const label = top ? (top.kind === 'place' ? top.p.name : top.d.name) : 'Folder';
+  const parts = [[label, rootOf]];
+  rel.forEach((p, i) => parts.push([p, rootOf + '/' + rel.slice(0, i + 1).join('/')]));
+  const shown = parts.length > 4 ? [parts[0], ['…', null], ...parts.slice(-2)] : parts;
+  $('#crumb').innerHTML = shown.map((p, i) => (i ? '<span class="sep">›</span>' : '') + `<span class="c" data-p="${p[1] == null ? '' : esc(p[1])}">${esc(p[0])}</span>`).join('')
+    + `<span class="free">${cur.readonly ? 'Read-only · ' : ''}${gb(cur.free)} free</span>`;
+  const n = entries.length;
+  $('#note').textContent = !saving && cur.path.startsWith('/home/') ? 'Saving is off: your folders are cleared at shut down. Copy files to a drive to keep them.'
+    : n + (n === 1 ? ' item' : ' items') + (cur.truncated ? ' (showing the first 5,000)' : '');
+}
+/* The list is drawn in slices, so a folder with thousands of files stays quick. */
+const ROW = 46, BUF = 20;
+function renderList() {
+  const L = $('#list');
+  $('#empty').style.display = entries.length ? 'none' : 'block';
+  $('#empty').innerHTML = cur && cur.writable ? '<b>This folder is empty</b>' + (clip ? 'Press X for Paste here.' : 'Copy files here from another folder or drive.') : '<b>Nothing here</b>';
+  L.innerHTML = `<div id="spacer" style="height:${entries.length * ROW}px;position:relative"></div>`;
+  L._from = -1;
+  drawRows(true);
+}
+function drawRows(force) {
+  const L = $('#list'), sp = $('#spacer'); if (!sp) return;
+  const from = Math.max(0, Math.floor(L.scrollTop / ROW) - BUF), to = Math.min(entries.length, Math.ceil((L.scrollTop + L.clientHeight) / ROW) + BUF);
+  if (!force && from === L._from && to === L._to) { paintList(); return; }
+  L._from = from; L._to = to;
+  const cutting = clip && clip.op === 'move' ? new Set(clip.paths) : null;
+  let h = '';
+  for (let k = from; k < to; k++) {
+    const e = entries[k];
+    const cls = ['fr', e.dir ? 'dir' : '', sel.has(e.name) ? 'sel' : '', cutting && cutting.has(pjoin(cur.path, e.name)) ? 'cutting' : ''].join(' ');
+    h += `<div class="${cls}" data-k="${k}" role="option" style="position:absolute;left:0;right:0;top:${k * ROW}px"><span class="ico k-${e.kind}">${icon(ICONS[e.kind] || 'file')}</span><span class="nm">${esc(e.name)}</span><span class="sz">${e.dir ? '' : size(e.size)}</span><span class="dt">${when(e.mtime)}</span></div>`;
+  }
+  sp.innerHTML = h;
+  paintList();
+}
+function paintList() {
+  document.querySelectorAll('#list .fr').forEach(el => {
+    const k = +el.dataset.k, e = entries[k];
+    el.classList.toggle('f', focus === 'list' && mode !== 'panel' && k === li);
+    el.classList.toggle('sel', !!e && sel.has(e.name));
+  });
+  $('#main').classList.toggle('focus', focus === 'list');
+  hints();
+}
+function showRow() {
+  const L = $('#list'), top = li * ROW, pad = 8;
+  if (top - pad < L.scrollTop) L.scrollTop = Math.max(0, top - pad);
+  else if (top + ROW + pad > L.scrollTop + L.clientHeight) L.scrollTop = top + ROW + pad - L.clientHeight;
+  drawRows();
+}
+$('#list').addEventListener('scroll', () => drawRows());
+function setFocus(f) { focus = f; if (f === 'list' && !entries.length) focus = cur ? 'list' : 'side'; paintSide(); paintList(); if (focus === 'list') showRow(); saveState(); }
+function keepVisible(box, el) {
+  if (!el) return;
+  const pad = 8;
+  if (el.offsetTop - pad < box.scrollTop) box.scrollTop = el.offsetTop - pad;
+  else if (el.offsetTop + el.offsetHeight + pad > box.scrollTop + box.clientHeight) box.scrollTop = el.offsetTop + el.offsetHeight + pad - box.clientHeight;
+}
+function hints() {
+  const sel0 = mode === 'select';
+  $('#hat').textContent = sel0 ? 'Select' : 'Open';
+  $('#hbt').textContent = sel0 ? 'Done selecting' : focus === 'side' ? 'Home' : (cur && cur.path !== rootOf ? 'Up' : 'Back');
+  $('#hx').hidden = false;
+  const c = $('#clip');
+  c.classList.toggle('on', !!clip || sel.size > 0);
+  $('#cliptxt').innerHTML = clip ? `<b>${clip.paths.length} item${clip.paths.length === 1 ? '' : 's'}</b> ready to ${clip.op === 'copy' ? 'copy' : 'move'}. Go to a folder, then Paste here.`
+    : sel.size ? `<b>${sel.size} selected</b>` + (mode === 'select' ? ' · A to select more, X for options' : '') : '';
+  $('#clippaste').style.display = clip ? '' : 'none';
+  $('#clipclear').textContent = clip ? 'Clear' : 'Unselect';
+}
+
+/* ---------- what's selected ---------- */
+function targets() {
+  if (sel.size) return entries.filter(e => sel.has(e.name));
+  return entries[li] ? [entries[li]] : [];
+}
+function toggleSel(k) {
+  const e = entries[k]; if (!e) return;
+  if (sel.has(e.name)) sel.delete(e.name); else sel.add(e.name);
+  paintList();
+}
+function setClip(op) {
+  const t = targets(); if (!t.length) return;
+  clip = { op, paths: t.map(e => pjoin(cur.path, e.name)), from: cur.path };
+  sel.clear(); if (mode === 'select') mode = 'browse';
+  drawRows(true); saveState();
+  toast((op === 'copy' ? 'Copy ' : 'Move ') + (t.length === 1 ? t[0].name : t.length + ' items') + ': go to a folder or drive, then Paste here', 3600);
+}
+
+/* ---------- opening things ---------- */
+async function openEntry(k) {
+  const e = entries[k]; if (!e) return;
+  const path = pjoin(cur.path, e.name);
+  if (e.dir) { memory[cur.path] = e.name; await openFolder(path, rootOf, ''); if (focus !== 'list') setFocus('list'); return; }
+  if (e.kind === 'image' || e.kind === 'video' || e.kind === 'audio' || (e.kind === 'text' && e.size <= 2 << 20)) {
+    const same = entries.filter(x => !x.dir && x.kind === e.kind && (e.kind !== 'text' || x.size <= 2 << 20));
+    try { sessionStorage.setItem('launchos.view', JSON.stringify({ kind: e.kind, list: same.map(x => ({ name: x.name, path: pjoin(cur.path, x.name), size: x.size })), i: same.indexOf(e) })); } catch (err) { /* no storage */ }
+    saveState();
+    location.href = 'view.html';
+    return;
+  }
+  if (e.kind === 'doc' || e.kind === 'web' || e.kind === 'text') {
+    toast('Opening ' + e.name);
+    await call('open_app', { id: 'viewer', name: 'Viewer', url: fileUrl(path), navigate: true });
+    return;
+  }
+  if (e.kind === 'program') { runProgram(e.name, path); return; }
+  if (e.kind === 'archive') { toast('LaunchOS can’t open ' + e.name.split('.').pop().toUpperCase() + ' files yet. You can still copy or move it.', 4200); return; }
+  toast('LaunchOS can’t open this kind of file. You can still copy or move it.', 4000);
+}
+async function runProgram(name, path, again) {
+  const nice = name.replace(/\.(exe|msi)$/i, '');
+  toast('Opening ' + nice + '… The first Windows program takes a minute', 4000);
+  const r = await call('open_ext', { id: 'winprog', path });
+  if (r && r.busy && !again) {
+    panel('Close ' + r.busy + '?', 'One game or app like this runs at a time, like on a console.', [
+      row('Close ' + r.busy + ' and open ' + nice, 'Unsaved progress in ' + r.busy + ' may be lost', 'close', async () => { closePanel(); await call('end_app', r.busy_id); setTimeout(() => runProgram(name, path, true), 800); }),
+      row('Cancel', '', 'check', () => closePanel())]);
+  } else if (r && r.error) toast(nice + ' couldn’t start' + (r.error === 'not_installed' ? ': Wine isn’t available' : ''), 4000);
+}
+
+/* ---------- pop-ups ---------- */
+let P = null;
+const row = (t, s, glyph, a) => ({ t, s, glyph, a });
+function panel(title, text, rows, opts) {
+  const from = mode === 'panel' && P ? P.from : mode;
+  P = Object.assign({ rows, i: 0, from }, opts || {});
+  mode = 'panel';
+  $('#ph').textContent = title; $('#pp').textContent = text || '';
+  $('#pp').style.display = text ? '' : 'none';
+  $('#pbody').innerHTML = P.body || '';
+  rp(); paintSide(); paintList();
+  $('#dim').classList.add('on'); $('#panel').classList.add('on');
+}
+function dropInput() { const a = document.activeElement; if (a && a.closest && a.closest('#panel')) a.blur(); }
+function rp() {
+  $('#pl').innerHTML = P.rows.map((o, k) => `<div class="it${k === P.i ? ' f' : ''}" data-k="${k}"><span class="glyph">${icon(o.glyph || 'check')}</span><span class="txt"><span>${esc(o.t)}</span>${o.s ? `<small>${esc(o.s)}</small>` : ''}</span></div>`).join('');
+  keepVisible($('#pl'), $('#pl .it.f'));
+}
+function closePanel() {
+  $('#panel').classList.remove('on'); $('#dim').classList.remove('on');
+  dropInput();
+  if (!P) return;
+  mode = P.from === 'select' && sel.size ? 'select' : 'browse'; P = null;
+  paintSide(); paintList();
+}
+function pact() { const o = P && P.rows[P.i]; if (o && o.a) o.a(); }
+
+function itemOptions() {
+  if (focus === 'side') { const r = sideRows[si]; if (r && r.kind === 'drive') driveOptions(r.d); else placeOptions(r); return; }
+  if (!cur) return;
+  const t = targets(), one = t.length === 1 ? t[0] : null, rows = [];
+  const canWrite = cur.writable;
+  if (one) rows.push(row('Open', '', ICONS[one.kind] || 'file', () => { closePanel(); openEntry(entries.indexOf(one)); }));
+  if (clip && canWrite) rows.push(row('Paste here', clip.paths.length + ' item' + (clip.paths.length === 1 ? '' : 's') + ' · ' + (clip.op === 'copy' ? 'copy' : 'move') + ' into ' + (cur.path === rootOf ? cur.place : baseName(cur.path)), 'paste', () => { closePanel(); paste(); }));
+  if (t.length) {
+    rows.push(row('Copy', 'Then Paste in another folder or drive', 'copy', () => { closePanel(); setClip('copy'); }));
+    if (canWrite) rows.push(row('Move', 'Then Paste where it should go', 'cut', () => { closePanel(); setClip('move'); }));
+    if (mode !== 'select' && entries[li]) rows.push(row(sel.size ? 'Select more' : 'Select', 'Pick several items with A', 'select', () => { closePanel(); mode = 'select'; if (!sel.has(entries[li].name)) toggleSel(li); paintList(); }));
+    if (one && canWrite) rows.push(row('Rename', 'Needs a keyboard', 'edit', () => renamePanel(one)));
+    if (canWrite) rows.push(row('Delete', t.length === 1 ? '' : t.length + ' items', 'trash', () => deletePanel(t)));
+  }
+  if (canWrite) rows.push(row('New folder', '', 'plus', () => newFolderPanel()));
+  if (entries.length) rows.push(row(sel.size === entries.length ? 'Unselect all' : 'Select all', '', 'select', () => { closePanel(); if (sel.size === entries.length) sel.clear(); else entries.forEach(e => sel.add(e.name)); paintList(); }));
+  if (sel.size) rows.push(row('Unselect', '', 'close', () => { closePanel(); sel.clear(); mode = 'browse'; paintList(); }));
+  rows.push(row('Cancel', '', 'check', () => closePanel()));
+  let body = '';
+  if (one) body = `<dl class="kv"><dt>Type</dt><dd>${KIND_NAMES[one.kind] || 'File'}</dd>${one.dir ? '' : `<dt>Size</dt><dd>${size(one.size)}</dd>`}<dt>Changed</dt><dd>${esc(new Date(one.mtime * 1000).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }))}</dd><dt>In</dt><dd>${esc(cur.place)}</dd></dl>`;
+  else if (t.length) body = `<dl class="kv"><dt>Selected</dt><dd>${t.length} items</dd><dt>Size</dt><dd>${size(t.reduce((a, e) => a + (e.size || 0), 0))}${t.some(e => e.dir) ? ' plus folders' : ''}</dd></dl>`;
+  panel(one ? one.name : t.length ? t.length + ' selected' : (cur.path === rootOf ? cur.place : baseName(cur.path)), cur.readonly ? 'This drive is read-only, so files can be copied from it but not changed.' : '', rows, { body });
+}
+function placeOptions(r) {
+  if (!r) return;
+  const rows = [row('Open', '', 'folder', () => { closePanel(); openSide(si, true); })];
+  if (clip) rows.push(row('Paste here', 'Into ' + r.p.name, 'paste', async () => { closePanel(); await openFolder(r.p.path, r.p.path); paste(); }));
+  rows.push(row('Cancel', '', 'check', () => closePanel()));
+  panel(r.p.name, '', rows);
+}
+
+/* ---------- copy, move, delete (run by the system; shown here) ---------- */
+async function paste() {
+  if (!clip || !cur) return;
+  if (!cur.writable) { toast(cur.readonly ? 'This drive is read-only' : 'Files can’t go here. Open a folder or drive first.', 3600); return; }
+  const c = clip;
+  const r = await call(c.op === 'copy' ? 'fs_copy' : 'fs_move', { paths: c.paths, dest: cur.path });
+  if (!r || !r.ok) { toast((r && r.error) || 'Couldn’t start', 4000); return; }
+  if (c.op === 'move') clip = null;   // moved things are gone from where they were; copies can be pasted again
+  saveState();
+  watchJob(true);
+}
+let jobTimer = null, jobShown = false;
+function watchJob(show) {
+  if (show) jobShown = true;
+  if (jobTimer) { if (show) paintJob(null); return; }
+  const tick = async () => {
+    const j = await call('fs_job');
+    if (!j || !j.op) { jobTimer = null; $('#jobchip').classList.remove('on'); return; }
+    if (j.done) { jobTimer = null; finishJob(j); return; }
+    paintJob(j);
+    jobTimer = setTimeout(tick, 1000);
+  };
+  jobTimer = setTimeout(tick, 150);
+}
+let lastJob = null;
+function jobText(j) {
+  // many small files take time per file, big ones per byte: count both
+  const fb = j.total_bytes ? j.bytes / j.total_bytes : 1, ff = j.total_files ? j.files / j.total_files : 1;
+  const pct = Math.min(100, Math.round(100 * (j.op === 'delete' ? ff : j.total_files > 20 ? (fb + ff) / 2 : fb)));
+  const n = x => x.toLocaleString('en-US');
+  const amount = j.op === 'delete' ? `${n(j.files)} of ${n(j.total_files)} files`
+    : (j.total_files > 1 ? `${n(j.files)} of ${n(j.total_files)} files · ` : '') + `${size(j.bytes)} of ${size(j.total_bytes)}` + (j.speed && j.speed > 1024 ? ` · ${size(j.speed)}/s` : '');
+  return { pct, amount };
+}
+function paintJob(j) {
+  j = j || lastJob; if (!j) return;
+  lastJob = j;
+  const { pct, amount } = jobText(j);
+  $('#jobchip').classList.add('on');
+  $('#jobtxt').textContent = (j.op === 'copy' ? 'Copying' : j.op === 'move' ? 'Moving' : 'Deleting') + ' ' + pct + '%';
+  $('#jobbar').style.width = pct + '%';
+  if (!jobShown) return;
+  const body = `<div class="meterbar"><i style="width:${pct}%"></i></div><p class="pnote">${esc(amount)}${j.current ? '<br>' + esc(j.current) : ''}</p>`;
+  if (mode === 'panel' && P && P.job) { $('#pbody').innerHTML = body; $('#ph').textContent = j.step || 'Working'; return; }
+  if (mode === 'panel') return;   // another pop-up is open: the chip at the top shows progress
+  panel(j.step || 'Working', 'It keeps going if you go back to Home.', [
+    row('Hide', 'Keep going in the background', 'check', () => { jobShown = false; closePanel(); }),
+    row('Stop', j.op === 'delete' ? 'What’s deleted already stays deleted' : 'What’s done already is kept', 'close', async () => { await call('fs_cancel'); toast('Stopping…'); })], { body, job: true });
+}
+async function finishJob(j) {
+  $('#jobchip').classList.remove('on');
+  const wasShown = mode === 'panel' && P && P.job;
+  if (wasShown) closePanel();
+  jobShown = false; lastJob = null;
+  await loadPlaces();
+  if (cur) await openFolder(cur.path, rootOf);
+  if (j.error) panel('That didn’t finish', j.error + (j.files ? ` (${j.files} file${j.files === 1 ? ' was' : 's were'} done before that.)` : ''), [row('OK', '', 'check', () => closePanel())]);
+  else toast(j.result || 'Done', 4000);
+}
+function deletePanel(t) {
+  const base = cur.path;
+  const what = t.length === 1 ? t[0].name : t.length + ' items';
+  panel('Delete ' + what + '?', (t.some(e => e.dir) ? 'Everything inside is deleted too. ' : '') + 'There’s no recycle bin, so this can’t be undone.', [
+    row('Cancel', 'Keep ' + (t.length === 1 ? 'it' : 'them'), 'check', () => closePanel()),
+    row('Delete', '', 'trash', async () => {
+      closePanel();
+      const r = await call('fs_delete', { paths: t.map(e => pjoin(base, e.name)) });
+      if (!r || !r.ok) { toast((r && r.error) || 'Couldn’t delete', 4000); return; }
+      sel.clear(); if (mode === 'select') mode = 'browse';
+      watchJob(t.length > 3 || t.some(e => e.dir));
+    })]);
+}
+function inputPanel(title, text, value, action, label, onDone) {
+  const body = `<label class="pw"><input id="nin" type="text" maxlength="200" autocomplete="off" spellcheck="false"></label>`;
+  panel(title, text, [row(label, 'Or press Enter', 'check', async () => {
+    const v = $('#nin').value;
+    const r = await action(v);
+    if (r && r.ok) { closePanel(); onDone(r); }
+    else { $('#pp').textContent = (r && r.error) || 'That didn’t work.'; $('#pp').style.display = ''; $('#nin').focus(); }
+  }), row('Cancel', '', 'close', () => closePanel())], { body });
+  const i = $('#nin'); i.value = value;
+  setTimeout(() => { i.focus(); const dot = value.lastIndexOf('.'); i.setSelectionRange(0, dot > 0 ? dot : value.length); }, 60);
+}
+function renamePanel(e) {
+  const base = cur.path;
+  inputPanel('Rename', 'Type a new name, then press Enter.', e.name, v => call('fs_rename', { path: pjoin(base, e.name), name: v }), 'Rename',
+    async r => { sel.clear(); await openFolder(base, rootOf, r.name); toast('Renamed to ' + r.name); });
+}
+function newFolderPanel() {
+  const base = cur.path;
+  inputPanel('New folder', 'Type a name, then press Enter.', 'New folder', v => call('fs_mkdir', { path: base, name: v }), 'Make folder',
+    async r => { await openFolder(base, rootOf, r.name); setFocus('list'); toast('Made ' + r.name); });
+}
+
+/* ---------- drives: open, eject, format ---------- */
+function driveOptions(d) {
+  const rows = [];
+  if (d.mount) rows.push(row('Open', '', 'folder', () => { closePanel(); openSide(si, true); }));
+  else if (d.dev) rows.push(row('Open', d.ejected ? 'Opens it again' : '', 'folder', () => { closePanel(); openSide(si, true); }));
+  if (d.mount && clip) rows.push(row('Paste here', 'Into ' + d.name, 'paste', async () => { closePanel(); await openFolder(d.mount, d.mount); paste(); }));
+  if (d.mount) rows.push(row(d.removable ? 'Eject' : 'Close', d.removable ? 'So it’s safe to unplug' : 'Stop using it until you open it again', 'eject', () => eject(d)));
+  rows.push(row('Format…', 'Erase it and set it up fresh', 'trash', () => formatPick(d)));
+  rows.push(row('Cancel', '', 'check', () => closePanel()));
+  const body = `<dl class="kv"><dt>Drive</dt><dd>${esc(d.model)} · ${gb(d.disk_size)}</dd><dt>Format</dt><dd>${esc(d.fs || 'Not set up')}</dd>${d.mount ? `<dt>Free</dt><dd>${gb(d.free)} of ${gb(d.total)}</dd>` : ''}<dt>Kind</dt><dd>${d.removable ? 'USB or removable drive' : 'Inside this PC'}</dd></dl>`;
+  panel(d.name, d.empty ? 'This drive is empty. Format it to start using it.' : !d.dev ? 'LaunchOS can’t read this drive. Format it to use it with LaunchOS (this erases it).' : '', rows, { body });
+}
+async function eject(d) {
+  panel(d.removable ? 'Ejecting ' + d.name : 'Closing ' + d.name, 'Finishing writing to the drive…', [], { busy: true });
+  const r = await call('fs_eject', d.disk);
+  if (r && r.ok) {
+    closePanel();
+    if (cur && rootOf && rootOf.startsWith('/media/') && drives.some(x => x.disk === d.disk && x.mount === rootOf)) { cur = null; rootOf = ''; }
+    await loadPlaces();
+    if (!cur) goPlace(0);
+    toast(d.removable ? d.name + ' is safe to unplug' : 'Closed ' + d.name, 4000);
+  } else panel('Couldn’t eject', (r && r.error) || 'Try again.', [row('OK', '', 'check', () => closePanel())]);
+}
+const FORMATS = [
+  ['exfat', 'exFAT', 'Best for USB drives. Works on Windows, Mac, consoles and TVs, and fits big files'],
+  ['fat32', 'FAT32', 'For older devices. Files must be under 4 GB'],
+  ['ntfs', 'NTFS', 'For Windows PCs'],
+  ['ext4', 'ext4', 'For Linux and LaunchOS only'],
+];
+function formatPick(d) {
+  panel('Format ' + d.model, 'Pick a format. exFAT works almost everywhere.', FORMATS.map(f => row(f[1] + (f[0] === 'exfat' ? ' (recommended)' : ''), f[2], 'drive', () => formatName(d, f))).concat([row('Cancel', '', 'check', () => closePanel())]));
+}
+function formatName(d, f) {
+  const def = ((d.dev && !d.empty ? d.name : '') || 'DRIVE').replace(/[^A-Za-z0-9 _-]/g, '').slice(0, 11) || 'DRIVE';
+  inputPanel('Name the drive', 'Up to 11 letters or numbers. Press Enter to keep this one.', f[0] === 'fat32' ? def.toUpperCase() : def,
+    v => { v = v.trim(); return /^[A-Za-z0-9 _-]{0,11}$/.test(v) ? { ok: true, label: v || 'DRIVE' } : { ok: false, error: 'Use up to 11 letters, numbers, spaces, - or _.' }; },
+    'Next', r => confirmFormat(d, f, r.label));
+}
+function confirmFormat(d, f, label, second) {
+  const name = d.model + ' (' + gb(d.disk_size) + ')';
+  const parts = drives.filter(x => x.disk === d.disk && x.dev).length;
+  const warn = `<div class="warnbox">${d.removable ? '' : '<b>This drive is inside your PC.</b> If Windows or your files are on it, they will be gone. '}Everything on ${esc(name)}${parts > 1 ? ', in all ' + parts + ' of its parts,' : ''} will be erased.</div>`;
+  panel(second ? 'Last chance' : 'Erase ' + name + '?', second ? 'Formatting erases everything on the drive and sets it up as ' + f[1] + ' named ' + label + '. This can’t be undone.' : 'Back up anything you want to keep first.', [
+    row('Cancel', 'Keep everything on this drive', 'check', () => closePanel()),
+    row(second ? 'Erase and format' : 'Continue', '', 'trash', async () => {
+      if (!second) { confirmFormat(d, f, label, true); return; }
+      panel('Formatting', 'Starting…', [], { busy: true });
+      const r = await call('fs_format', { disk: d.disk, fs: f[0], label, confirm: 'FORMAT ' + d.disk });
+      if (!r || !r.ok) { panel('Couldn’t format', (r && r.error) || 'Try again.', [row('OK', '', 'check', () => closePanel())]); return; }
+      formatProgress(d, f, label);
+    })], { body: second ? '' : warn });
+}
+function formatProgress(d, f, label) {
+  panel('Formatting ' + d.model, 'Don’t unplug the drive.', [], { busy: true, body: '<div class="meterbar"><i style="width:3%"></i></div><p class="pnote">Starting…</p>' });
+  const myP = P;
+  const tick = async () => {
+    if (P !== myP) return;
+    const st = await call('job_status', 'format');
+    if (P !== myP) return;
+    if (st && st.done) {
+      if (st.error) { panel('Couldn’t format', st.error, [row('OK', '', 'check', () => closePanel())]); return; }
+      closePanel(); toast(st.step || 'Formatted', 4000);
+      await loadPlaces();
+      const k = sideRows.findIndex(r => r.kind === 'drive' && r.d.disk === d.disk && r.d.mount);
+      if (k >= 0) { si = k; await openSide(k, true); }
+      return;
+    }
+    const pct = Math.max(0, Math.min(100, (st && st.percent) || 0));
+    $('#pbody').innerHTML = `<div class="meterbar"><i style="width:${pct}%"></i></div><p class="pnote">${esc((st && st.step) || 'Working…')} · ${pct}%</p>`;
+    setTimeout(tick, 700);
+  };
+  setTimeout(tick, 500);
+}
+
+/* ---------- moving around ---------- */
+function up() {
+  if (!cur) return;
+  if (cur.path === rootOf || !cur.path.startsWith(rootOf + '/')) { setFocus('side'); return; }
+  const from = baseName(cur.path);
+  openFolder(dirName(cur.path), rootOf, from);
+}
+const home = () => { saveState(); location.href = 'index.html'; };
+function mv(d) {
+  if (mode === 'panel') { if (P.rows.length) { P.i = Math.max(0, Math.min(P.rows.length - 1, P.i + d)); rp(); } return; }
+  if (focus === 'side') { si = Math.max(0, Math.min(sideRows.length - 1, si + d)); paintSide(); return; }
+  if (!entries.length) return;
+  li = Math.max(0, Math.min(entries.length - 1, li + d)); showRow(); saveState();
+}
+function nav(a, e) {
+  if (mode === 'panel') {
+    if (a === 'up') mv(-1); else if (a === 'down') mv(1);
+    else if (a === 'ok') { if (e && e.target && e.target.id === 'nin') P.i = 0; pact(); }   // Enter in a name box does the first choice
+    else if ((a === 'back' || a === 'menu' || a === 'opts') && !P.busy) { if (P.job) { jobShown = false; } closePanel(); }
+    return true;
+  }
+  switch (a) {
+    case 'up': mv(-1); break;
+    case 'down': mv(1); break;
+    case 'left': if (focus === 'list') setFocus('side'); break;
+    case 'right': if (focus === 'side') { if (cur && sideRoot(sideRows[si] || {}) === rootOf) setFocus('list'); else openSide(si, true); } break;
+    case 'ok':
+      if (focus === 'side') openSide(si, true);
+      else if (mode === 'select') toggleSel(li);
+      else openEntry(li);
+      break;
+    case 'back':
+      if (mode === 'select' || sel.size) { mode = 'browse'; sel.clear(); paintList(); }
+      else if (focus === 'list') up();
+      else home();
+      break;
+    case 'opts': itemOptions(); break;
+    case 'menu': home(); break;
+  }
+  return true;
+}
+LOS.onNav(nav);
+
+/* keyboard shortcuts like on a PC (before the shared handler, which would treat Space as Select) */
+addEventListener('keydown', e => {
+  const typing = e.target && e.target.tagName === 'INPUT';
+  if (typing || mode === 'panel') return;
+  const k = e.key, ctrl = e.ctrlKey || e.metaKey;
+  let done = true;
+  if (ctrl && (k === 'c' || k === 'C')) { if (focus === 'list') setClip('copy'); }
+  else if (ctrl && (k === 'x' || k === 'X')) { if (focus === 'list' && cur && cur.writable) setClip('move'); }
+  else if (ctrl && (k === 'v' || k === 'V')) paste();
+  else if (ctrl && (k === 'a' || k === 'A')) { if (focus === 'list') { entries.forEach(x => sel.add(x.name)); paintList(); } }
+  else if (ctrl && e.shiftKey && (k === 'n' || k === 'N')) { if (cur && cur.writable) newFolderPanel(); }
+  else if (k === 'Delete') { if (focus === 'list' && cur && cur.writable && targets().length) deletePanel(targets()); }
+  else if (k === 'F2') { if (focus === 'list' && cur && cur.writable && targets().length === 1) renamePanel(targets()[0]); }
+  else if (k === 'F5') { loadPlaces(); refresh(); }
+  else if (k === ' ' && focus === 'list') toggleSel(li);
+  else if (k === 'Home' && focus === 'list') { li = 0; showRow(); }
+  else if (k === 'End' && focus === 'list') { li = Math.max(0, entries.length - 1); showRow(); }
+  else if (k === 'PageDown' && focus === 'list') mv(10);
+  else if (k === 'PageUp' && focus === 'list') mv(-10);
+  else if (k === 'Backspace' && focus === 'list') up();
+  else if (/^[a-z0-9]$/i.test(k) && !ctrl && !e.altKey && focus === 'list' && k !== 'b' && k !== 'm' && k !== 'g') {   // jump to the next name starting with that letter
+    const n = entries.length, low = k.toLowerCase();
+    for (let s = 1; s <= n; s++) { const j = (li + s) % n; if (entries[j].name.toLowerCase().startsWith(low)) { li = j; showRow(); break; } }
+  }
+  else done = false;
+  if (done) { e.preventDefault(); e.stopImmediatePropagation(); }
+}, true);
+
+/* ---------- mouse ---------- */
+let lastClick = { k: -1, t: 0 }, anchor = 0;
+$('#list').addEventListener('click', e => {
+  if (mode === 'panel') return;
+  const el = e.target.closest('.fr'); if (!el) return;
+  const k = +el.dataset.k;
+  focus = 'list';
+  if (e.ctrlKey || e.metaKey) { li = k; toggleSel(k); anchor = k; paintSide(); return; }
+  if (e.shiftKey) { const [a, b] = [Math.min(anchor, k), Math.max(anchor, k)]; for (let j = a; j <= b; j++) sel.add(entries[j].name); li = k; paintList(); paintSide(); return; }
+  const dbl = lastClick.k === k && performance.now() - lastClick.t < 450;
+  lastClick = { k, t: performance.now() }; anchor = k;
+  li = k;
+  if (mode === 'select') { toggleSel(k); return; }
+  if (sel.size) { sel.clear(); }
+  paintList(); paintSide(); saveState();
+  if (dbl) { lastClick.k = -1; openEntry(k); }
+});
+$('#list').addEventListener('contextmenu', e => {
+  e.preventDefault();
+  if (mode === 'panel') return;
+  const el = e.target.closest('.fr');
+  focus = 'list';
+  if (el) { const k = +el.dataset.k; if (!sel.has(entries[k].name)) { sel.clear(); } li = k; }
+  else sel.clear();
+  paintList(); paintSide(); itemOptions();
+});
+$('#side').addEventListener('click', e => {
+  if (mode === 'panel') return;
+  const el = e.target.closest('.it'); if (!el) return;
+  focus = 'side'; si = +el.dataset.k; paintSide(); openSide(si, false);
+});
+$('#side').addEventListener('contextmenu', e => {
+  e.preventDefault(); if (mode === 'panel') return;
+  const el = e.target.closest('.it'); if (!el) return;
+  focus = 'side'; si = +el.dataset.k; paintSide(); itemOptions();
+});
+$('#side').addEventListener('mousemove', e => {
+  if (mode === 'panel' || !LOS.mouseRecent()) return;
+  const el = e.target.closest('.it'); if (!el) return;
+  const k = +el.dataset.k; if (focus === 'side' && k === si) return;
+  if (focus === 'side') { si = k; paintSide(); }
+});
+$('#crumb').addEventListener('click', e => { const c = e.target.closest('.c'); if (c && c.dataset.p && mode !== 'panel') openFolder(c.dataset.p, rootOf); });
+$('#pl').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (!b || !P) return; P.i = +b.dataset.k; rp(); pact(); });
+$('#pl').addEventListener('mousemove', e => { const b = e.target.closest('[data-k]'); if (!b || !P || !LOS.mouseRecent() || +b.dataset.k === P.i) return; P.i = +b.dataset.k; rp(); });
+$('#dim').onclick = () => { if (mode === 'panel') nav('back'); };
+$('#ha').onclick = () => nav('ok'); $('#hb').onclick = () => nav('back'); $('#hx').onclick = () => nav('opts'); $('#hm').onclick = home;
+$('#jobchip').onclick = () => { if (mode !== 'panel') { jobShown = true; paintJob(null); } };
+$('#clippaste').onclick = () => { if (mode !== 'panel') paste(); };
+$('#clipclear').onclick = () => { if (clip) { clip = null; drawRows(true); saveState(); } else { sel.clear(); mode = 'browse'; paintList(); } };
+
+/* ---------- start ---------- */
+(async function start() {
+  const st = loadState();
+  if (st && st.clip) clip = st.clip;
+  for (let i = 0; i < 20 && !(await loadPlaces()); i++) await new Promise(r => setTimeout(r, 1000));
+  if (!places.length) { $('#empty').style.display = 'block'; $('#empty').innerHTML = '<b>Files couldn’t start</b>Go back to Home and try again.'; return; }
+  let ok = false;
+  if (st && st.path && st.root) {
+    si = Math.max(0, sideRows.findIndex(r => sideRoot(r) === st.root));
+    ok = await openFolder(st.path, st.root, st.name, true);
+    if (ok && st.focus === 'list') setFocus('list');
+  }
+  if (!ok) { si = 0; await openFolder(places[0].path, places[0].path); setFocus('side'); }
+  paintSide();
+  // drives come and go: check every few seconds while Files is on screen
+  let slowTick = 0;
+  setInterval(async () => {
+    if (document.hidden || (mode === 'panel' && P && P.busy)) return;   // ejecting or formatting: that pop-up handles it
+    if (jobTimer && ++slowTick % 4) return;   // while copying, check less often: the copy gets the time
+    const before = rootOf;
+    await loadPlaces();
+    if (before.startsWith('/media/') && !drives.some(d => d.mount === before)) {
+      toast('The drive was removed', 3600);
+      cur = null; rootOf = ''; goPlace(0); setFocus('side');   // a message about it (a copy that failed) stays up
+    }
+  }, 3000);
+})();
+</script>
+</body>
+</html>

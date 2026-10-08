@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LaunchOS Setup</title>
+<link rel="stylesheet" href="los.css">
+<style>
+#head { position: absolute; left: 80px; right: 80px; top: 44px; display: flex; align-items: center; gap: 18px; }
+#head h1 { font-size: 20px; font-weight: 600; margin: 0; color: var(--ink-2); flex: 1; }
+#dots { display: flex; gap: 8px; }
+#dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--chip); }
+#dots i.done { background: rgba(var(--accent-glow), .5); }
+#dots i.on { background: var(--accent); box-shadow: 0 0 0 4px rgba(var(--accent-glow), .2); }
+#card { position: absolute; left: 50%; top: 104px; width: 780px; transform: translateX(-50%); }
+#card h2 { font-size: 34px; font-weight: 700; margin: 0 0 8px; letter-spacing: -.01em; }
+#card .lead { font-size: 17px; color: var(--ink-2); margin: 0 0 24px; line-height: 1.5; max-width: 640px; }
+#content { min-height: 380px; }
+#nav { position: absolute; left: 50%; bottom: 52px; width: 780px; transform: translateX(-50%); display: flex; gap: 14px; justify-content: flex-end; }
+.btn { padding: 12px 26px; border-radius: 24px; background: var(--chip); font-size: 16px; font-weight: 600; border: 2px solid transparent; transition: transform .16s ease, box-shadow .16s; }
+.btn.f, .sw.f { transform: scale(1.08); }
+.opt.f, .zrow.f, .chk.f { transform: scale(1.02); }
+.sw, .opt, .zrow, .chk { transition: transform .16s ease, box-shadow .16s, border-color .16s; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); }
+.btn.f, .sw.f, .opt.f, .zrow.f, .field.f, .chk.f { border-color: var(--accent); box-shadow: 0 0 0 6px rgba(var(--accent-glow), .14), 0 0 26px 6px rgba(var(--accent-glow), .12); }
+#hints { position: absolute; right: 44px; bottom: 12px; }
+.field { display: block; width: 100%; padding: 14px 18px; border-radius: 12px; background: var(--panel-2); border: 2px solid var(--line); color: var(--ink); font-size: 20px; outline: none; }
+.swatches { display: flex; gap: 14px; margin: 22px 0; }
+.sw { width: 54px; height: 54px; border-radius: 50%; border: 3px solid transparent; position: relative; }
+.sw.sel:after { content: ""; position: absolute; inset: 15px; border-radius: 50%; background: rgba(255, 255, 255, .92); }
+.preview { display: flex; align-items: center; gap: 14px; font-size: 18px; color: var(--ink-2); }
+.preview .av { width: 46px; height: 46px; border-radius: 50%; position: relative; }
+.preview .av:after { content: ""; position: absolute; left: 15px; top: 10px; width: 16px; height: 16px; border-radius: 50%; background: #1b3a5a; }
+.opt, .zrow, .chk { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-radius: 10px; background: var(--panel-2); border: 2px solid transparent; margin-bottom: 8px; font-size: 17px; cursor: pointer; }
+.opt small, .chk small { color: var(--mute); font-size: 13px; display: block; margin-top: 2px; }
+.opt .mark, .chk .mark { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--mute); flex: none; display: grid; place-items: center; }
+.chk .mark { border-radius: 6px; }
+.opt.sel .mark, .chk.sel .mark { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.opt.sel .mark .ic, .chk.sel .mark .ic { width: 15px; height: 15px; }
+.zlist { max-height: 300px; overflow: hidden; margin-top: 12px; }
+.zrow.sel { background: #17324a; }
+.zrow .when { margin-left: auto; color: var(--mute); font-size: 15px; }
+.status { display: flex; align-items: center; gap: 16px; padding: 18px; border-radius: 12px; background: var(--panel-2); margin-bottom: 16px; font-size: 18px; }
+.status .ic { width: 30px; height: 30px; }
+.ok { color: var(--accent); } .bad { color: #ff7a74; }
+.note { color: var(--mute); font-size: 14px; line-height: 1.5; margin-top: 14px; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.dev { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 10px; background: var(--panel-2); margin-bottom: 8px; font-size: 15px; }
+.dev .ic { color: #cfe6ff; }
+#pad { position: relative; width: 362px; height: 250px; border-radius: 16px; background: var(--panel-2); }
+#pad .b { position: absolute; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; background: #1f3550; color: #cfe6ff; transition: background .08s, transform .08s; }
+#pad .b.on { background: var(--accent); color: var(--accent-ink); transform: scale(1.12); }
+#pad .sh { width: 60px; height: 26px; border-radius: 10px; font-size: 12px; }
+#pad .stick { position: absolute; width: 70px; height: 70px; border-radius: 50%; border: 2px solid #2a4260; }
+#pad .stick i { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px; border-radius: 50%; background: #cfe6ff; }
+#pad .msg { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; color: var(--mute); font-size: 14px; }
+.ctl { display: grid; grid-template-columns: 170px 1fr; gap: 12px 18px; font-size: 17px; align-items: center; }
+.key { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-2); }
+.key u { min-width: 26px; height: 26px; padding: 0 7px; border-radius: 13px; display: inline-grid; place-items: center; text-decoration: none; font-size: 12px; font-weight: 700; color: #0b1726; }
+.hero { display: flex; gap: 40px; align-items: center; }
+.hero img { width: 230px; height: 230px; border-radius: 40px; }
+.time { font-size: 15px; color: var(--ink-2); margin-top: 6px; }
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+<svg class="bgsvg" viewBox="0 0 1280 720" aria-hidden="true"><defs><path id="c" d="M-210 30 C-150 -110 120 -130 220 -10 C300 95 85 165 -50 130 C-170 100 -250 95 -210 30 Z" fill="none" stroke="#cfe6ff"/></defs><g transform="translate(1120 620)"><use href="#c" transform="scale(.6)" opacity=".12" stroke-width="2"/><use href="#c" transform="scale(1)" opacity=".1" stroke-width="1.2"/><use href="#c" transform="scale(1.5)" opacity=".08" stroke-width=".9"/></g></svg>
+<div id="head"><h1>Setup</h1><div id="dots"></div></div>
+<div id="card"><h2 id="title"></h2><p class="lead" id="lead"></p><div id="content"></div></div>
+<div id="nav"></div>
+<div id="hints" class="hints"><button id="ha"><u style="background:#3ddc6b">A</u>Select</button><button id="hb"><u style="background:#e0443e">B</u>Back</button><button id="hm"><u style="background:#cfe6ff">&#8801;</u>Leave setup</button></div>
+<div id="toast"></div>
+</div></div>
+<script src="los.js"></script>
+<script>
+const { $, call, toast, icon, esc } = LOS;
+const content = $('#content');
+const COMMON_ZONES = ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Phoenix', 'America/Los_Angeles', 'America/Anchorage', 'Pacific/Honolulu', 'Europe/London', 'Europe/Berlin', 'Asia/Tokyo', 'Australia/Sydney'];
+const AVATARS = ['#e0793a', '#3ddc6b', '#5fb8ff', '#9d8cff', '#ff6fae', '#e6c75a'];
+const APPS = [['steam', 'Steam', 'PC games, with Proton for Windows games'], ['roblox', 'Roblox', 'Through Sober. Downloads the first time you open it'], ['freetube', 'FreeTube', 'YouTube without ads. Downloads the first time'], ['winprog', 'Windows programs', 'Run .exe files with Wine'], ['youtube', 'YouTube', 'In a web app'], ['discord', 'Discord', 'Chat and voice'], ['twitch', 'Twitch', 'Live streams']];
+
+let zones = [], zq = '', zsel = '', vol = null, padTimer = null;
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const tzNow = z => { try { return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: z }).format(new Date()).toLowerCase(); } catch (e) { return ''; } };
+const prettyZone = z => z.includes('/') ? z.split('/').slice(1).join(', ').replace(/_/g, ' ') + '  (' + z.split('/')[0].replace('_', ' ') + ')' : z;
+
+/* Each step: id, title, lead, render() fills #content; optional enter/leave. */
+const STEPS = [
+  { id: 'welcome', title: 'Welcome to LaunchOS', lead: 'Let’s get your console ready. It takes about two minutes, and you can change everything later in Settings.',
+    render() { content.innerHTML = `<div class="hero"><img src="img/launchos-icon.png" alt=""><div><p class="lead" style="margin:0 0 18px">You can use a controller, a keyboard or a mouse.</p><div class="key"><u style="background:#3ddc6b">A</u> or Enter to select</div><br><br><div class="key"><u style="background:#e0443e">B</u> or Esc to go back</div></div></div>`; } },
+  { id: 'name', title: 'What should we call you?', lead: 'This name shows on your home screen.',
+    render() {
+      const p = LOS.prefs;
+      content.innerHTML = `<input class="field" data-f id="nm" maxlength="20" value="${esc(p.name)}" aria-label="Your name" autocomplete="off"><div class="swatches">${AVATARS.map(c => `<button class="sw${c === p.avatar ? ' sel' : ''}" data-f data-c="${c}" style="background:${c}" aria-label="Avatar color"></button>`).join('')}</div><div class="preview"><span class="av" id="pav" style="background:${p.avatar}"></span><span id="pnm">${esc(p.name)}</span></div>`;
+      $('#nm').oninput = e => { $('#pnm').textContent = e.target.value || 'Player 1'; };
+      content.querySelectorAll('.sw').forEach(b => b.onclick = () => { LOS.save({ avatar: b.dataset.c }); content.querySelectorAll('.sw').forEach(x => x.classList.toggle('sel', x === b)); $('#pav').style.background = b.dataset.c; });
+    },
+    leave() { const nm = $('#nm'); if (!nm) return; const v = (nm.value || '').trim(); LOS.save({ name: v || 'Player 1' }); } },
+  { id: 'timezone', title: 'Where are you?', lead: 'Pick your time zone so the clock is right. Type a city to search.',
+    async enter() { if (!zones.length) zones = await call('timezones'); const z = await call('timezone_get'); zsel = LOS.prefs.timezone || (z && z.zone && z.zone.includes('/') && !z.zone.startsWith('Etc/') ? z.zone : ''); },
+    render() {
+      content.innerHTML = `<input class="field" data-f id="zq" placeholder="Search, for example Chicago" value="${esc(zq)}" autocomplete="off" aria-label="Search time zones"><div class="time" id="znow"></div><div class="zlist" id="zl"></div>`;
+      $('#zq').oninput = e => { zq = e.target.value; listZones(); };
+      listZones();
+    } },
+  { id: 'network', title: 'Network', lead: 'LaunchOS connects to wired networks on its own. In VirtualBox that’s the NAT adapter.',
+    async render() {
+      content.innerHTML = `<div class="status" id="ns">${icon('wifi')}<span>Checking…</span></div><button class="btn" data-f id="nt">Test internet connection</button><div class="note" id="nr"></div><p class="note">Wi-Fi comes with the installed version of LaunchOS.</p>`;
+      $('#nt').onclick = async () => { $('#nr').textContent = 'Testing…'; const r = await call('internet_test'); $('#nr').innerHTML = r.online ? '<span class="ok">You’re online.</span>' : `<span class="bad">${esc(r.reason || 'Can’t reach the internet.')}</span>`; };
+      const n = await call('network');
+      const l = (n.links || []).find(x => x.ipv4.length);
+      $('#ns').innerHTML = n.connected ? `<span class="ok">${icon('check')}</span><span>Connected${l ? ' on ' + esc(l.name) + ' with address ' + esc(l.ipv4[0]) : ''}</span>` : `<span class="bad">${icon('wifi')}</span><span>Not connected. In VirtualBox, check Settings → Network: Adapter 1 enabled and attached to NAT.</span>`;
+    } },
+  { id: 'sound', title: 'Sound', lead: 'Set a comfortable volume. Use left and right on the slider.',
+    async render() {
+      vol = await call('volume_get');
+      if (!vol.available) { content.innerHTML = `<div class="status"><span class="bad">${icon('sound')}</span><span>No sound device found. In VirtualBox, turn on Settings → Audio.</span></div>`; return; }
+      content.innerHTML = `<div class="status">${icon('sound')}<span>Volume <b id="vv">${vol.value}%</b></span></div><div class="slider" data-f data-slider id="vs"><i></i><b></b></div><button class="btn" data-f id="vt">Play a test sound</button>`;
+      paintVol();
+      $('#vt').onclick = () => call('sound_test');
+    } },
+  { id: 'display', title: 'Screen size', lead: 'If the edges of the picture are cut off on your TV, pick TV safe area.',
+    async render() {
+      const info = await call('info');
+      content.innerHTML = Object.keys(LOS.SIZE_NAMES).map(k => `<div class="opt${LOS.prefs.size === k ? ' sel' : ''}" data-f data-k="${k}"><span class="mark">${LOS.prefs.size === k ? icon('check') : ''}</span><span>${LOS.SIZE_NAMES[k]}<small>${{ fill: 'Use the whole screen', tv: 'Leave a small border on every side', compact: 'Leave a larger border' }[k]}</small></span></div>`).join('') + `<p class="note">Screen resolution: ${esc(info.resolution || 'unknown')}</p>`;
+      content.querySelectorAll('.opt').forEach(o => o.onclick = async () => { const k = o.dataset.k; LOS.save({ size: k }); await STEPS[cur].render(); focusAt(k); });
+    } },
+  { id: 'controller', title: 'Controllers and devices', lead: 'Press buttons and move the sticks to check your controller. On a controller, hold Menu to continue.',
+    async render() {
+      content.innerHTML = `<div class="cols"><div><div id="pad"></div></div><div><div id="devs"></div><button class="btn" data-f id="rd">${'Look for new devices'}</button><p class="note">Most controllers, keyboards and mice work as soon as you plug them in.</p></div></div>`;
+      drawPad(); await listDevs();
+      if (STEPS[cur].id !== 'controller' || !$('#rd')) return;   // left this step while devices were loading
+      $('#rd').onclick = async () => { $('#rd').textContent = 'Looking…'; await wait(900); await listDevs(); $('#rd').textContent = 'Look for new devices'; };
+      startPad();
+    },
+    leave() { stopPad(); } },
+  { id: 'look', title: 'Make it yours', lead: 'Pick a highlight color and background. Changes show right away.',
+    render() {
+      const p = LOS.prefs;
+      content.innerHTML = `<div class="swatches">${Object.keys(LOS.ACCENTS).map(k => `<button class="sw${p.accent === k ? ' sel' : ''}" data-f data-a="${k}" style="background:${LOS.ACCENTS[k][0]}" aria-label="${k}"></button>`).join('')}</div><div class="opt${p.pattern ? ' sel' : ''}" data-f id="pat"><span class="mark">${p.pattern ? icon('check') : ''}</span><span>Background lines<small>The contour pattern behind the home screen</small></span></div>`;
+      content.querySelectorAll('.sw').forEach(b => b.onclick = () => { LOS.save({ accent: b.dataset.a }); content.querySelectorAll('.sw').forEach(x => x.classList.toggle('sel', x === b)); });
+      $('#pat').onclick = () => { LOS.save({ pattern: !LOS.prefs.pattern }); const on = LOS.prefs.pattern; $('#pat').classList.toggle('sel', on); $('#pat .mark').innerHTML = on ? icon('check') : ''; };
+    } },
+  { id: 'apps', title: 'Which apps do you want?', lead: 'Pick the apps to show on Home. You can change this any time by running Setup again.',
+    render() {
+      const sel = new Set(LOS.prefs.appsPicked ? LOS.prefs.apps : APPS.map(a => a[0]));
+      content.innerHTML = `<div class="cols" style="gap:0 16px">${APPS.map(([k, n, d]) => `<div class="chk${sel.has(k) ? ' sel' : ''}" data-f data-k="${k}"><span class="mark">${sel.has(k) ? icon('check') : ''}</span><span>${esc(n)}<small>${esc(d)}</small></span></div>`).join('')}</div>`;
+      content.querySelectorAll('.chk').forEach(c => c.onclick = () => {
+        const s = new Set(LOS.prefs.appsPicked ? LOS.prefs.apps : APPS.map(a => a[0])); s.has(c.dataset.k) ? s.delete(c.dataset.k) : s.add(c.dataset.k);
+        LOS.save({ apps: [...s], appsPicked: true }); const on = s.has(c.dataset.k); c.classList.toggle('sel', on); c.querySelector('.mark').innerHTML = on ? icon('check') : '';
+      });
+    } },
+  { id: 'controls', title: 'You’re all set', lead: 'Here’s how to get around. Run Setup again any time from the home screen.',
+    render() {
+      const k = (c, t) => `<span class="key"><u style="background:${c}">${t}</u></span>`;
+      content.innerHTML = `<div class="ctl"><span>${k('#3ddc6b', 'A')} ${k('#cfe6ff', 'Enter')}</span><span>Select</span><span>${k('#e0443e', 'B')} ${k('#cfe6ff', 'Esc')}</span><span>Go back</span><span>${k('#cfe6ff', '≡')} ${k('#cfe6ff', 'M')}</span><span>Open the side menu: devices, settings, power</span><span>${k('#cfe6ff', 'D-pad')} ${k('#cfe6ff', 'Arrows')}</span><span>Move around</span><span>${k('#cfe6ff', 'Ctrl+W')}</span><span>Close the browser</span></div>`;
+    } },
+];
+
+/* ---------- time zones ---------- */
+function listZones() {
+  const q = zq.trim().toLowerCase().replace(/\s+/g, '_');
+  let list = q ? zones.filter(z => z.toLowerCase().includes(q)) : COMMON_ZONES.filter(z => zones.includes(z) || !zones.length);
+  if (zsel && !q && !list.includes(zsel)) list = [zsel, ...list];
+  list = list.slice(0, 7);
+  $('#zl').innerHTML = list.length ? list.map(z => `<div class="zrow${z === zsel ? ' sel' : ''}" data-f data-z="${z}"><span>${esc(prettyZone(z))}</span><span class="when">${tzNow(z)}</span></div>`).join('') : '<p class="note">No matches. Try a big city near you.</p>';
+  $('#zl').querySelectorAll('.zrow').forEach(r => r.onclick = () => pickZone(r.dataset.z));
+  $('#znow').textContent = zsel ? 'Selected: ' + prettyZone(zsel) + ', ' + tzNow(zsel) : 'No time zone picked yet';
+  collect();
+}
+async function pickZone(z) {
+  zsel = z; LOS.save({ timezone: z });
+  await call('timezone_set', z);
+  toast('Time zone set to ' + z.split('/').pop().replace(/_/g, ' '));
+  listZones(); focusAt(z);
+}
+
+/* ---------- sound ---------- */
+function paintVol() { const s = $('#vs'); if (!s) return; s.querySelector('i').style.width = vol.value + '%'; s.querySelector('b').style.left = vol.value + '%'; $('#vv').textContent = vol.value + '%'; }
+async function adjust(d) { if (!vol || !vol.available) return; vol.value = Math.max(0, Math.min(100, vol.value + d * 10)); paintVol(); vol = await call('volume_set', vol.value); paintVol(); }
+
+/* ---------- controller test ---------- */
+// [label, gamepad button index, left, top, wide?] laid out like a controller in a 360x250 box
+const PADB = [['LB', 4, 22, 12, 1], ['RB', 5, 274, 12, 1], ['View', 8, 128, 58, 1], ['Menu', 9, 200, 58, 1],
+  ['▲', 12, 58, 74], ['◀', 14, 22, 110], ['▶', 15, 94, 110], ['▼', 13, 58, 146],
+  ['Y', 3, 290, 74], ['X', 2, 254, 110], ['B', 1, 326, 110], ['A', 0, 290, 146]];
+function drawPad() {
+  const p = $('#pad'); if (!p) return;
+  p.innerHTML = PADB.map(([t, i, x, y, wide]) => `<span class="b${wide ? ' sh' : ''}" data-b="${i}" style="left:${x}px;top:${y}px">${t}</span>`).join('') +
+    `<span class="stick" id="sl" style="left:118px;top:120px"><i></i></span><span class="stick" id="sr" style="left:196px;top:120px"><i></i></span><span class="msg" id="pm">Plug in a controller and press any button</span>`;
+}
+let holdStart = 0;
+function startPad() {
+  stopPad();
+  const loop = () => {
+    const gp = navigator.getGamepads ? [...navigator.getGamepads()].find(x => x) : null;
+    const p = $('#pad');
+    if (p && gp) {
+      $('#pm').textContent = gp.id.replace(/\(.*?\)/g, '').trim().slice(0, 48);
+      p.querySelectorAll('.b').forEach(b => b.classList.toggle('on', !!(gp.buttons[+b.dataset.b] && gp.buttons[+b.dataset.b].pressed)));
+      const mv = (id, x, y) => { const i = $('#' + id + ' i'); if (i) i.style.transform = `translate(${(x || 0) * 22}px,${(y || 0) * 22}px)`; };
+      mv('sl', gp.axes[0], gp.axes[1]); mv('sr', gp.axes[2], gp.axes[3]);
+      const menuHeld = (gp.buttons[9] && gp.buttons[9].pressed) || (gp.buttons[16] && gp.buttons[16].pressed);
+      if (menuHeld) { if (!holdStart) holdStart = performance.now(); else if (performance.now() - holdStart > 1200) { holdStart = 0; next(); return; } } else holdStart = 0;
+    }
+    padTimer = requestAnimationFrame(loop);
+  };
+  padTimer = requestAnimationFrame(loop);
+}
+function stopPad() { if (padTimer) cancelAnimationFrame(padTimer); padTimer = null; holdStart = 0; }
+async function listDevs() {
+  const d = await call('inputs'); const el = $('#devs'); if (!el) return;
+  el.innerHTML = d.length ? d.map(x => `<div class="dev">${icon(x.kind === 'controller' ? 'pad' : x.kind === 'mouse' ? 'mouse' : 'keyboard')}<span>${esc(x.name)}${x.usb ? ' (USB)' : ''}</span></div>`).join('') : '<p class="note">No input devices found.</p>';
+}
+
+/* ---------- step flow and focus ---------- */
+const only = location.hash ? STEPS.findIndex(s => s.id === location.hash.slice(1)) : -1;   // opened for one step from Settings
+let cur = only >= 0 ? only : 0, F = [], fi = 0;
+function navButtons() {
+  if (only >= 0) return [['done', 'Done', true]];
+  if (cur === 0) return [['skip', 'Not now', false], ['next', 'Start setup', true]];
+  if (cur === STEPS.length - 1) return [['back', 'Back', false], ['finish', 'Go to home', true]];
+  return [['back', 'Back', false], ['next', 'Next', true]];
+}
+/* A step can take a moment to load (time zones, devices). Input waits until it's drawn,
+   and if another step was asked for meanwhile, the older one stops drawing. */
+let showSeq = 0, loading = false;
+async function show(i) {
+  const tok = ++showSeq;
+  const old = STEPS[cur]; if (old && old.leave && i !== cur) old.leave();
+  cur = i; const s = STEPS[cur];
+  loading = true;
+  $('#dots').innerHTML = only >= 0 ? '' : STEPS.map((x, k) => `<i class="${k === cur ? 'on' : k < cur ? 'done' : ''}"></i>`).join('');
+  $('#title').textContent = s.title; $('#lead').textContent = s.lead;
+  $('#nav').innerHTML = navButtons().map(([k, t, p]) => `<button class="btn${p ? ' primary' : ''}" data-f data-nav="${k}">${t}</button>`).join('');
+  $('#nav').querySelectorAll('[data-nav]').forEach(b => b.onclick = () => navAct(b.dataset.nav));
+  content.innerHTML = '';
+  if (s.enter) await s.enter();
+  if (tok !== showSeq) return;
+  const r = s.render(); if (r && r.then) { collect(); await r; }
+  if (tok !== showSeq) return;
+  loading = false;
+  collect();
+  const primary = F.findIndex(e => e.dataset.nav === 'next' || e.dataset.nav === 'finish' || e.dataset.nav === 'done');
+  fi = F.findIndex(e => e.closest('#content'));
+  if (fi < 0 || s.id === 'welcome' || s.id === 'controls' || s.id === 'network') fi = primary >= 0 ? primary : 0;
+  paint();
+}
+function collect() { F = [...document.querySelectorAll('#content [data-f], #nav [data-f]')]; fi = Math.min(fi, Math.max(0, F.length - 1)); paint(); }
+function paint() { F.forEach((e, k) => e.classList.toggle('f', k === fi)); const e = F[fi]; if (!e) return; if (e.tagName === 'INPUT') e.focus(); else if (document.activeElement && document.activeElement.tagName === 'INPUT') document.activeElement.blur(); e.scrollIntoView && e.scrollIntoView({ block: 'nearest' }); }
+function focusAt(key) { collect(); const k = F.findIndex(e => e.dataset.z === key || e.dataset.k === key); if (k >= 0) { fi = k; paint(); } }
+function next() { if (only >= 0) return finish(); if (cur < STEPS.length - 1) show(cur + 1); }
+function finish(early) { const s = STEPS[cur]; if (s.leave) s.leave(); if (only < 0 && !early) LOS.save({ setupDone: true }); location.href = 'index.html'; }
+function navAct(k) {
+  if (k === 'next') next();
+  else if (k === 'back') { if (cur > 0) show(cur - 1); }
+  else if (k === 'skip') location.href = 'index.html';
+  else if (k === 'finish' || k === 'done') finish();
+}
+function activate() {
+  const e = F[fi]; if (!e) return;
+  if (e.dataset.nav) return navAct(e.dataset.nav);
+  if (e.tagName === 'INPUT') { if (e.id === 'zq') { const first = F.findIndex(x => x.dataset.z); if (first >= 0) { fi = first; paint(); } } else { fi = Math.min(F.length - 1, fi + 1); paint(); } return; }
+  e.click();
+}
+LOS.onNav((a, ev) => {
+  const e = F[fi];
+  if (STEPS[cur].id === 'controller' && ev === null) return true;   // controller is being tested: hold Menu to continue
+  if (a === 'menu' || a === 'guide') { finish(true); return true; }   // leave setup (Menu, Super key or Xbox button); what you set so far is kept
+  if (loading) return true;   // the step is still being drawn
+  if (a === 'opts') return true;
+  if (a === 'ok') { activate(); return true; }
+  if (a === 'back') {
+    if (e && e.tagName === 'INPUT' && ev && ev.key === 'Backspace') return false;
+    if (only >= 0) finish(); else if (cur > 0) show(cur - 1); else location.href = 'index.html';
+    return true;
+  }
+  if (e && e.dataset.slider != null && (a === 'left' || a === 'right')) { adjust(a === 'left' ? -1 : 1); return true; }
+  move(a);
+  return true;
+}, { guide: true });
+
+/* Focus moves by section: Left/Right move along a row (color swatches, the
+   Back/Next buttons, a two-column grid); Up/Down move through a list and jump
+   between sections. Going down into the buttons lands on the main one. */
+function groupsOf() {
+  const gs = [];
+  F.forEach(el => { const p = el.parentElement; let gg = gs.find(x => x.p === p); if (!gg) { gg = { p, els: [] }; gs.push(gg); } gg.els.push(el); });
+  gs.forEach(gg => { gg.h = gg.p.classList.contains('swatches') || gg.p.id === 'nav'; gg.grid = getComputedStyle(gg.p).display === 'grid'; });
+  return gs;
+}
+function enter(gg, fromAbove) {
+  let t = fromAbove ? gg.els[0] : gg.els[gg.els.length - 1];
+  if (gg.h) t = gg.els.find(x => x.classList.contains('sel') || x.classList.contains('primary')) || gg.els[0];
+  fi = F.indexOf(t); paint();
+}
+function move(a) {
+  const e = F[fi]; if (!e) return;
+  const gs = groupsOf(), gi = gs.findIndex(x => x.els.includes(e)), gg = gs[gi], k = gg.els.indexOf(e);
+  if (a === 'left' || a === 'right') {
+    if (!(gg.h || gg.grid)) return;
+    const d = a === 'left' ? -1 : 1, nk = k + d;
+    if (nk >= 0 && nk < gg.els.length) { fi = F.indexOf(gg.els[nk]); paint(); }
+    return;
+  }
+  const d = a === 'up' ? -1 : 1;
+  if (!gg.h) {
+    const step = gg.grid ? 2 : 1, nk = k + d * step;
+    if (nk >= 0 && nk < gg.els.length) { fi = F.indexOf(gg.els[nk]); paint(); return; }
+  }
+  const ng = gs[gi + d];
+  if (ng) enter(ng, d > 0);
+}
+document.addEventListener('click', e => { const t = e.target.closest('[data-f]'); if (t) { const k = F.indexOf(t); if (k >= 0) { fi = k; paint(); } } });
+document.addEventListener('mousemove', e => { const t = e.target.closest('[data-f]'); if (!t || !LOS.mouseRecent()) return; const k = F.indexOf(t); if (k >= 0 && k !== fi) { fi = k; paint(); } });
+$('#ha').onclick = () => activate();
+$('#hm').onclick = () => finish(true);
+$('#hb').onclick = () => { if (only >= 0) finish(); else if (cur > 0) show(cur - 1); else location.href = 'index.html'; };
+show(cur);
+</script>
+</body>
+</html>

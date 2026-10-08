@@ -1,0 +1,22 @@
+#!/bin/bash
+# Starts the LaunchOS session. Picks real-GPU or software drawing before the
+# display server starts: VMs without 3D (VirtualBox VMSVGA, plain VGA) get software
+# drawing; real AMD, Intel or NVIDIA (nouveau) graphics get full acceleration.
+gpu=software
+for d in /sys/class/drm/card[0-9]*/device/driver; do
+  [ -e "$d" ] || continue
+  case "$(basename "$(readlink -f "$d")")" in
+    amdgpu|radeon|i915|xe|nouveau|nvidia) gpu=hardware ;;
+  esac
+done
+[ -f /etc/launchos/force-software ] && gpu=software
+export LAUNCHOS_GPU=$gpu
+export GDK_BACKEND=wayland XDG_RUNTIME_DIR=/run/player HOME=/home/player LIBSEAT_BACKEND=seatd GTK_A11Y=none
+export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WLR_NO_HARDWARE_CURSORS=1
+if [ "$gpu" = software ]; then
+  export WLR_RENDERER=pixman WLR_RENDERER_ALLOW_SOFTWARE=1 WLR_DRM_NO_MODIFIERS=1
+  export LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 GSK_RENDERER=cairo
+fi
+echo "LaunchOS session: graphics=$gpu"
+# sway: handles X11 apps (Steam, Wine, most games) reliably
+exec /usr/bin/sway -c /etc/launchos/sway.conf --unsupported-gpu

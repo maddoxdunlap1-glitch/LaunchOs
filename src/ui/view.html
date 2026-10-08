@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Viewer</title>
+<link rel="stylesheet" href="los.css">
+<style>
+#head { position: absolute; left: 56px; right: 56px; top: 24px; height: 40px; display: flex; align-items: center; gap: 16px; }
+#name { font-size: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+#count { font-size: 14px; color: var(--ink-2); white-space: nowrap; }
+#box { position: absolute; left: 40px; right: 40px; top: 76px; bottom: 60px; display: grid; place-items: center; overflow: hidden; border-radius: 12px; background: #070f1a; }
+#box img, #box video { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+#box video { width: 100%; height: 100%; }
+#box pre { margin: 0; align-self: stretch; justify-self: stretch; overflow: auto; padding: 18px 22px; font: 14px/1.5 "DejaVu Sans Mono", monospace; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.audio { display: grid; place-items: center; gap: 22px; text-align: center; }
+.audio .disc { width: 160px; height: 160px; border-radius: 50%; background: radial-gradient(circle, #1f3550 0 22%, #6e4a1f 23% 100%); display: grid; place-items: center; color: #f5d6a8; }
+.audio .disc .ic { width: 54px; height: 54px; }
+.audio audio { width: 520px; }
+#msg { color: var(--ink-2); font-size: 16px; text-align: center; padding: 20px; }
+#hints { position: absolute; right: 44px; bottom: 16px; }
+#hints button[hidden] { display: none; }
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+<div id="head"><span id="name"></span><span id="count"></span></div>
+<div id="box"></div>
+<div id="hints" class="hints">
+  <button id="hl" hidden><u style="background:#cfe6ff">&lsaquo;</u>Previous</button>
+  <button id="hr" hidden><u style="background:#cfe6ff">&rsaquo;</u>Next</button>
+  <button id="ha" hidden><u style="background:#3ddc6b">A</u><span id="hat">Play</span></button>
+  <button id="hb"><u style="background:#e0443e">B</u>Back to Files</button>
+</div>
+<div id="toast"></div>
+</div></div>
+<script src="los.js"></script>
+<script>
+const { $, icon, esc } = LOS;
+let V = null;
+try { V = JSON.parse(sessionStorage.getItem('launchos.view') || 'null'); } catch (e) { /* no storage */ }
+const fileUrl = p => 'file://' + p.split('/').map(encodeURIComponent).join('/');
+const back = () => { location.href = 'files.html'; };
+let media = null;
+
+function show() {
+  if (!V || !V.list || !V.list[V.i]) { back(); return; }
+  const f = V.list[V.i], url = fileUrl(f.path), box = $('#box');
+  $('#name').textContent = f.name;
+  $('#count').textContent = V.list.length > 1 ? (V.i + 1) + ' of ' + V.list.length : '';
+  $('#hl').hidden = $('#hr').hidden = V.list.length < 2;
+  media = null;
+  if (V.kind === 'image') {
+    box.innerHTML = '<img alt="">';
+    const im = box.firstChild;
+    im.onerror = () => { box.innerHTML = '<div id="msg">This picture can’t be shown.</div>'; };
+    im.src = url;
+  } else if (V.kind === 'video') {
+    box.innerHTML = '<video controls autoplay playsinline></video>';
+    media = box.firstChild;
+    media.onerror = () => { box.innerHTML = '<div id="msg">This video can’t be played here.</div>'; media = null; paint(); };
+    media.src = url;
+    // a file that isn't really a video can keep it searching forever: give up after a while
+    const mine = media;
+    setTimeout(() => { if (media === mine && mine.readyState === 0) mine.onerror(); }, 20000);
+  } else if (V.kind === 'audio') {
+    box.innerHTML = `<div class="audio"><div class="disc">${icon('music')}</div><audio controls autoplay></audio></div>`;
+    media = box.querySelector('audio');
+    media.onerror = () => { box.innerHTML = '<div id="msg">This sound can’t be played here.</div>'; media = null; paint(); };
+    media.src = url;
+  } else {
+    box.innerHTML = '<div id="msg">Loading…</div>';
+    const x = new XMLHttpRequest();
+    x.open('GET', url);
+    x.onload = () => { box.innerHTML = '<pre></pre>'; box.firstChild.textContent = x.responseText; };
+    x.onerror = () => { box.innerHTML = '<div id="msg">This file can’t be shown.</div>'; };
+    x.send();
+  }
+  if (media) { media.onplay = paint; media.onpause = paint; }
+  paint();
+}
+function paint() {
+  $('#ha').hidden = !media;
+  if (media) $('#hat').textContent = media.paused ? 'Play' : 'Pause';
+}
+function step(d) {
+  if (!V || V.list.length < 2) return;
+  V.i = (V.i + d + V.list.length) % V.list.length;
+  try { sessionStorage.setItem('launchos.view', JSON.stringify(V)); } catch (e) { /* no storage */ }
+  show();
+}
+function playPause() { if (media) { if (media.paused) media.play().catch(() => {}); else media.pause(); } }
+function seek(s) { if (media && isFinite(media.duration)) media.currentTime = Math.max(0, Math.min(media.duration, media.currentTime + s)); }
+LOS.onNav(a => {
+  if (a === 'back' || a === 'menu') back();
+  else if (a === 'left') media && V.kind !== 'image' ? seek(-10) : step(-1);
+  else if (a === 'right') media && V.kind !== 'image' ? seek(10) : step(1);
+  else if (a === 'up') { const pre = $('#box pre'); if (pre) pre.scrollTop -= 120; else step(-1); }
+  else if (a === 'down') { const pre = $('#box pre'); if (pre) pre.scrollTop += 120; else step(1); }
+  else if (a === 'ok') playPause();
+  return true;
+});
+$('#hl').onclick = () => step(-1); $('#hr').onclick = () => step(1); $('#ha').onclick = playPause; $('#hb').onclick = back;
+show();
+</script>
+</body>
+</html>

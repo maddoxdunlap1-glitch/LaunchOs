@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LaunchOS home</title>
+<link rel="stylesheet" href="los.css">
+<style>
+#top { position: absolute; left: 48px; right: 56px; top: 30px; height: 48px; }
+#me { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 14px; font-size: 17px; }
+#av { width: 46px; height: 46px; border-radius: 50%; background: #e0793a; position: relative; }
+#av:after { content: ""; position: absolute; left: 15px; top: 10px; width: 16px; height: 16px; border-radius: 50%; background: #1b3a5a; }
+#tb { position: absolute; left: 50%; top: 0; transform: translateX(-50%); display: flex; gap: 16px; }
+.tb { width: 46px; height: 46px; border-radius: 50%; background: #16273b; display: grid; place-items: center; color: #cfe6ff; transition: box-shadow .2s, transform .2s; }
+.tb.f { transform: scale(1.15); box-shadow: 0 0 0 2px var(--accent), 0 0 0 7px rgba(var(--accent-glow), .16), 0 0 24px 10px rgba(var(--accent-glow), .2); }
+#status { position: absolute; right: 0; top: 8px; display: flex; align-items: center; gap: 14px; font-size: 19px; color: #dce6f0; }
+#net { color: #cfe6ff; display: flex; }
+#net.off { color: #e0443e; }
+.rowglow { position: absolute; left: 30px; right: 30px; top: 322px; height: 210px; background: radial-gradient(60% 100% at 50% 50%, rgba(95, 184, 255, .14), rgba(95, 184, 255, 0)); filter: blur(14px); pointer-events: none; }
+.row { position: absolute; display: flex; }
+#r1 { left: 60px; top: 338px; align-items: flex-end; gap: 13px; transition: transform .25s ease; }
+#r2 { left: 56px; right: 38px; top: 532px; gap: 30px; }
+.t { position: relative; border-radius: 6px; overflow: hidden; cursor: pointer; transition: box-shadow .2s ease, transform .2s ease; }
+.t1.f { transform: scale(1.1); }
+.t1.big.f { transform: scale(1.05); }
+.t2.f { transform: scale(1.04); }
+.t1 { width: 108px; height: 106px; }
+.t1.big { width: 180px; height: 178px; }
+.t1 .g { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(255, 255, 255, .92); font-size: 34px; font-weight: 700; }
+.t1 .g .ic { width: 40px; height: 40px; }
+.t1 .g .appimg { width: 64px; height: 64px; object-fit: contain; }
+.t1.big .g .appimg { width: 104px; height: 104px; }
+.t1.big .g .ic { width: 58px; height: 58px; }
+.t1 b { position: absolute; left: 0; right: 0; bottom: 0; padding: 8px 10px; font-weight: 600; font-size: 15px; background: rgba(8, 14, 22, .78); display: none; }
+.t1.big b { display: block; }
+.t1 .soon { position: absolute; top: 7px; right: 7px; font-size: 11px; font-weight: 600; background: rgba(8, 14, 22, .8); color: var(--ink-2); padding: 2px 7px; border-radius: 8px; }
+.t1.soonish .g { opacity: .5; }
+.t1.run::after { content: ""; position: absolute; left: 50%; bottom: 8px; width: 20px; height: 4px; margin-left: -10px; border-radius: 2px; background: var(--accent); box-shadow: 0 0 10px 1px rgba(var(--accent-glow), .9); }
+.t1.big.run::after { left: 12px; top: 12px; bottom: auto; margin: 0; }
+.t1.mv { transform: translateY(-16px) scale(1.08) !important; box-shadow: 0 0 0 3px #fff, 0 0 0 9px rgba(255, 255, 255, .14), 0 16px 34px rgba(0, 0, 0, .55); z-index: 4; }
+#cap.moving { color: #fff; }
+#hx[hidden] { display: none; }
+.meterbar { height: 10px; border-radius: 5px; background: var(--chip); overflow: hidden; margin: 6px 0 10px; }
+.meterbar i { display: block; height: 100%; background: var(--accent); border-radius: 5px; transition: width .4s; }
+.pnote { font-size: 14px !important; color: var(--ink-2); margin: 0 0 14px !important; }
+label.pw { display: flex; gap: 8px; margin-bottom: 14px; }
+label.pw input { flex: 1; font-size: 17px; padding: 11px 14px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel-2); color: var(--ink); outline: none; }
+label.pw input:focus { border-color: var(--accent); }
+label.pw button { padding: 0 14px; border-radius: 10px; background: var(--chip); font-size: 14px; }
+.t2 { flex: 1; height: 146px; color: #fff; }
+.t2 .g { position: absolute; right: 16px; top: 14px; color: rgba(255, 255, 255, .7); }
+.t2 .g .ic { width: 34px; height: 34px; }
+.t2 b { position: absolute; left: 16px; bottom: 14px; font-weight: 600; font-size: 19px; text-shadow: 0 1px 6px rgba(0, 0, 0, .6); }
+.t2 small { position: absolute; left: 16px; bottom: 40px; font-size: 13px; color: rgba(255, 255, 255, .78); }
+#cap { position: absolute; left: 60px; top: 304px; font-size: 19px; font-weight: 600; }
+#hints { position: absolute; right: 44px; bottom: 8px; z-index: 4; }
+#guide { position: absolute; left: 0; top: 0; bottom: 0; width: 420px; background: var(--panel); border-right: 1px solid var(--line); transform: translateX(-112%); transition: transform .32s cubic-bezier(.2, .8, .2, 1); padding: 28px 26px; box-shadow: 0 0 0 8px rgba(95, 184, 255, .05), 0 0 0 18px rgba(95, 184, 255, .04), 0 0 60px 20px rgba(95, 184, 255, .08); z-index: 6; }
+#guide.on { transform: none; }
+#gtabs { display: flex; gap: 12px; margin: 22px 0 20px; }
+.gt { width: 42px; height: 42px; border-radius: 50%; background: var(--chip); display: grid; place-items: center; color: #cfe6ff; }
+.gt.on { background: var(--accent); color: var(--accent-ink); box-shadow: 0 0 0 6px rgba(var(--accent-glow), .14), 0 0 0 13px rgba(var(--accent-glow), .06); }
+.gt .ic { width: 20px; height: 20px; }
+#gh { font-size: 22px; font-weight: 600; margin: 0 0 14px; }
+#guide { display: flex; flex-direction: column; }
+/* lists scroll (wheel or focus) instead of running off the screen; padding keeps the focus ring visible */
+#gl, #pl { position: relative; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; padding: 6px 8px; margin: -6px -8px; }
+#gl { flex: 1; min-height: 0; }
+#pl { max-height: 430px; }
+#gl::-webkit-scrollbar, #pl::-webkit-scrollbar { display: none; }
+#bye { position: absolute; inset: 0; background: #000; display: none; align-items: center; justify-content: center; font-size: 20px; color: var(--mute); z-index: 40; }
+#intro { position: absolute; inset: 0; background: var(--bg); z-index: 50; transition: opacity .6s ease; }
+#intro.out { opacity: 0; pointer-events: none; }
+#intro img { position: absolute; display: block; }
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+<svg class="bgsvg" viewBox="0 0 1280 720" aria-hidden="true"><defs><path id="c" d="M-210 30 C-150 -110 120 -130 220 -10 C300 95 85 165 -50 130 C-170 100 -250 95 -210 30 Z" fill="none" stroke="#cfe6ff"/></defs><g transform="translate(420 210)"><use href="#c" transform="scale(.5)" opacity=".2" stroke-width="2"/><use href="#c" transform="scale(.8)" opacity=".17" stroke-width="1.3"/><use href="#c" transform="scale(1.15)" opacity=".14" stroke-width="1"/><use href="#c" transform="scale(1.6)" opacity=".12" stroke-width=".8"/><use href="#c" transform="scale(2.1)" opacity=".1" stroke-width=".6"/></g><g transform="translate(1040 190)"><use href="#c" transform="scale(.45)" opacity=".2" stroke-width="2"/><use href="#c" transform="scale(.8)" opacity=".16" stroke-width="1.2"/><use href="#c" transform="scale(1.2)" opacity=".13" stroke-width=".9"/><use href="#c" transform="scale(1.7)" opacity=".1" stroke-width=".7"/></g></svg>
+<div class="rowglow"></div>
+<div id="top"><button id="me" aria-label="Open menu"><span id="av"></span><span id="pname"></span></button><div id="tb"></div><div id="status"><span id="net" title="Network"></span><span id="clock"></span></div></div>
+<div id="cap"></div>
+<div class="row" id="r1"></div>
+<div class="row" id="r2"></div>
+<div id="hints" class="hints"><button id="ha"><u style="background:#3ddc6b">A</u>Select</button><button id="hb"><u style="background:#e0443e">B</u>Back</button><button id="hx" hidden><u style="background:#5fb8ff">X</u>Options</button><button id="hm"><u style="background:#cfe6ff">&#8801;</u>Menu</button></div>
+<div class="dim" id="dim"></div>
+<aside id="guide"><div style="font-size:17px;color:var(--mute)">Menu</div><div id="gtabs"></div><h2 id="gh"></h2><div id="gl"></div></aside>
+<section class="panel" id="panel" aria-live="polite"><h2 id="ph"></h2><p id="pp"></p><div id="pbody"></div><div id="pl"></div></section>
+<div id="bye"></div>
+<div id="toast"></div>
+<div id="intro" aria-hidden="true"><img id="iglow" src="img/glow.png" alt=""><img id="istand" src="img/stand.png" alt=""><img id="iwheel" src="img/wheel.png" alt=""></div>
+</div></div>
+<script src="los.js"></script>
+<script>
+const { $, call, toast, icon, esc } = LOS;
+const st = $('#stage');
+
+/* ---------- home tiles ---------- */
+/* Web apps run in their own window. Going Home keeps them running; Ctrl+click a tile to end one. */
+let running = {};   // app id -> task from the system
+let noteOnReturn = '';   // shown when you come back to Home (Home's timers pause while an app covers it)
+function backHome() {
+  // Drop any message left over from opening the app. Instantly, not with the fade: animations
+  // don't tick on Home until the next input after an app was on screen.
+  const t = $('#toast'); t.style.transition = 'none'; t.classList.remove('on'); void t.offsetWidth; t.style.transition = '';
+  if (noteOnReturn) { toast(noteOnReturn, 3600); noteOnReturn = ''; }
+}
+const web = (id, name, url) => () => openApp(id, name, url);
+async function openApp(id, name, url) {
+  toast((running[id] ? 'Back to ' : 'Opening ') + name);
+  const r = await call('open_app', { id, name, url });
+  if (r && r.ended) noteOnReturn = 'Ended ' + r.ended + ' to free up memory';
+  refreshTasks();
+}
+const monitor = () => { location.href = 'monitor.html'; };
+const files = () => { location.href = 'files.html'; };
+const store = hash => () => { location.href = 'store.html' + (hash ? '#' + encodeURIComponent(hash) : ''); };
+const fileUrl = p => 'file://' + String(p).split('/').map(encodeURIComponent).join('/');
+async function terminal() {
+  toast((running.terminal ? 'Back to ' : 'Opening ') + 'Terminal');
+  const r = await call('open_terminal');
+  if (r && r.error) toast(r.error, 3600);
+  if (r && r.ended) noteOnReturn = 'Ended ' + r.ended + ' to free up memory';
+  refreshTasks();
+}
+let storeApps = [];   // apps installed from the Store, shown on Home
+async function loadStoreApps() {
+  const list = await call('store_home');
+  if (!Array.isArray(list)) return;
+  const sig = JSON.stringify(list), old = JSON.stringify(storeApps);
+  storeApps = list;
+  if (sig !== old && mode === 'home') renderHome();
+}
+const goSetup = hash => () => { location.href = 'setup.html' + (hash ? '#' + hash : ''); };
+function tiles() {
+  const W = (id, name, url, extra) => Object.assign({ id, name, url, act: web(id, name, url) }, extra);
+  const all = [
+    W('browser', 'Browser', '', { bg: 'linear-gradient(160deg,#1f6fb0,#123e66)', glyph: 'globe' }),
+    { id: 'setup', name: LOS.prefs.setupDone ? 'Setup' : 'Start here: Setup', bg: 'linear-gradient(160deg,#2f8a55,#185033)', glyph: 'wand', act: goSetup() },
+    { id: 'settings', name: 'Settings', bg: '#34495f', glyph: 'gear', act: () => openG(4) },
+    W('youtube', 'YouTube', 'https://www.youtube.com', { bg: '#b3261e', glyph: 'play' }),
+    W('discord', 'Discord', 'https://discord.com/app', { bg: '#5865f2', letter: 'D' }),
+    W('twitch', 'Twitch', 'https://www.twitch.tv', { bg: '#7b3fe4', letter: 'T' }),
+    { id: 'files', name: 'Files', bg: 'linear-gradient(160deg,#b8862b,#7a5615)', glyph: 'folder', act: files },
+    { id: 'store', name: 'Store', bg: 'linear-gradient(160deg,#2d7ff9,#1b4fa8)', glyph: 'bag', act: store() },
+    { id: 'terminal', name: 'Terminal', bg: '#1d2733', glyph: 'terminal', act: terminal },
+    { id: 'monitor', name: 'System monitor', bg: '#1f4a5c', glyph: 'chart', act: monitor },
+    { id: 'steam', name: 'Steam', bg: 'linear-gradient(160deg,#1b2838,#2a475e)', letter: 'S', outside: true, act: () => openExt('steam', 'Steam') },
+    { id: 'roblox', name: 'Roblox', bg: '#393b3d', letter: 'R', outside: true, act: () => openExt('roblox', 'Roblox') },
+    { id: 'freetube', name: 'FreeTube', bg: '#d1453b', letter: 'F', outside: true, act: () => openExt('freetube', 'FreeTube') },
+    { id: 'winprog', name: 'Windows programs', bg: '#2b5797', glyph: 'grid', outside: true, act: () => running.winprog ? openExt('winprog', 'Windows program') : programsPanel() },
+    // apps you got from the Store
+    ...storeApps.map(a => ({ id: 'app:' + a.id, name: a.name, bg: '#22344a', img: a.icon, letter: (a.name || '?')[0].toUpperCase(), outside: true, store: a.id,
+      act: () => openExt('app:' + a.id, a.name) })),
+  ];
+  // your own order (Move in a tile's options), then anything new at the end
+  const order = Array.isArray(LOS.prefs.order) ? LOS.prefs.order : [];
+  const rank = t => { const i = order.indexOf(t.id); return i < 0 ? order.length + all.indexOf(t) : i; };
+  const list = order.length ? all.slice().sort((a, b) => rank(a) - rank(b)) : all;
+  if (!LOS.prefs.setupDone) list.unshift(...list.splice(list.findIndex(t => t.id === 'setup'), 1));   // setup stays first until it's done
+  // apps you turned off in Setup are left off Home
+  const PICKABLE = ['steam', 'roblox', 'freetube', 'winprog', 'youtube', 'discord', 'twitch'];
+  if (LOS.prefs.appsPicked) return list.filter(t => !PICKABLE.includes(t.id) || LOS.prefs.apps.includes(t.id));
+  return list;
+}
+const T2 = [
+  { name: 'Browse the web', sub: 'Start page', bg: 'linear-gradient(120deg,#123e66,#1f6fb0 60%,#2aa6a0)', glyph: 'globe', app: 'browser', act: web('browser', 'Browser', '') },
+  { name: 'Run Setup', sub: 'Name, time zone, sound and more', bg: 'linear-gradient(120deg,#185033,#2f8a55)', glyph: 'wand', app: 'setup', act: goSetup() },
+  { name: 'Customize your Home', sub: 'Colors and background', bg: '#0f2233', glyph: 'palette', act: goSetup('look') },
+  { name: 'Test your controller', sub: 'Buttons and sticks', bg: '#0a0a0a', glyph: 'pad', act: goSetup('controller') },
+];
+const TB = [['globe', 'Browser', web('browser', 'Browser', ''), 'browser'], ['wand', 'Setup', goSetup(), 'setup'], ['folder', 'Files', files, 'files'], ['bag', 'Store', store(), 'store'], ['chart', 'System monitor', monitor, 'monitor'], ['pad', 'Devices', () => openG(2)], ['gear', 'Settings', () => openG(4), 'settings']];
+
+let T1 = [], R = [], pos = { r: 1, c: 0 }, mode = 'home';
+// come back to the tile you left from (monitor, setup, browser) instead of the first one
+try { const p = JSON.parse(sessionStorage.getItem('launchos.pos') || 'null'); if (p && Number.isInteger(p.r) && Number.isInteger(p.c)) pos = p; } catch (e) { /* no storage */ }
+function renderHome(keep) {
+  if (!keep) T1 = tiles();
+  $('#tb').innerHTML = TB.map(t => `<button class="tb" aria-label="${t[1]}">${icon(t[0])}</button>`).join('');
+  $('#r1').innerHTML = T1.map((t, i) => `<div class="t t1${i === 0 ? ' big' : ''}${t.soon ? ' soonish' : ''}" style="background:${t.bg}"><span class="g" style="${t.ink ? 'color:' + t.ink : ''}">${t.img ? `<img class="appimg" src="${esc(fileUrl(t.img))}" alt="">` : t.glyph ? icon(t.glyph) : esc(t.letter)}</span>${t.soon ? '<span class="soon">Soon</span>' : ''}<b>${esc(t.name)}</b></div>`).join('');
+  $('#r2').innerHTML = T2.map(t => `<div class="t t2" style="background:${t.bg}"><span class="g">${icon(t.glyph)}</span><small>${esc(t.sub)}</small><b>${esc(t.name)}</b></div>`).join('');
+  R = [[...document.querySelectorAll('.tb')], [...document.querySelectorAll('.t1')], [...document.querySelectorAll('.t2')]];
+  if (!R[pos.r] || !R[pos.r].length) pos = { r: 1, c: 0 };
+  pos.c = Math.max(0, Math.min(pos.c, R[pos.r].length - 1));   // the app list may have changed
+  R.forEach((row, r) => row.forEach((el, c) => {
+    el.onclick = e => {
+      if (mode === 'move') { dropMove(); return; }
+      if (mode !== 'home') return;
+      pos = { r, c }; foc();
+      if (e.ctrlKey && appAt(r, c)) appOptions(); else act();   // Ctrl+click: options (end task, restart, move…)
+    };
+    el.oncontextmenu = e => { e.preventDefault(); if (mode !== 'home') return; pos = { r, c }; foc(); appOptions(); };
+    el.onmousemove = () => { if (mode !== 'home' || !LOS.mouseRecent() || (pos.r === r && pos.c === c)) return; pos = { r, c }; foc(); };
+  }));
+  $('#pname').textContent = LOS.prefs.name;
+  $('#av').style.background = LOS.prefs.avatar;
+  paintRun();
+  foc();
+}
+const NAMES = () => [TB.map(t => t[1]), T1.map(t => t.name), T2.map(t => t.name)];
+function foc() {
+  R.flat().forEach(e => e.classList.remove('f'));
+  R[pos.r][pos.c].classList.add('f');
+  try { sessionStorage.setItem('launchos.pos', JSON.stringify(pos)); } catch (e) { /* no storage */ }
+  const t = T1[pos.c];
+  $('#cap').classList.toggle('moving', mode === 'move');
+  $('#cap').textContent = mode === 'move' ? 'Moving ' + t.name + ': left and right to move, A to drop, B to cancel'
+    : (pos.r === 1 && pos.c > 0) ? NAMES()[1][pos.c] + (running[t.id] ? ' · Running' : '') : '';
+  $('#hx').hidden = !(mode === 'home' && appAt(pos.r, pos.c));
+  scrollRow();
+}
+/* The app row is wider than the screen: slide it so the selected tile is in view. */
+let rowX = 0;
+function scrollRow() {
+  const row = $('#r1'); if (!R[1] || !R[1].length) return;
+  if (pos.r !== 1) return;
+  const el = R[1][pos.c], view = 1280 - 60 - 48;
+  let x = rowX;
+  const left = el.offsetLeft, right = left + el.offsetWidth;
+  if (right - x > view) x = right - view + 10;
+  if (left - x < 0) x = left === 0 ? 0 : left - 10;
+  x = Math.max(0, Math.min(x, Math.max(0, row.scrollWidth - view)));
+  if (x !== rowX) { rowX = x; row.style.transform = `translateX(${-x}px)`; }
+}
+function act() {
+  if (pos.r === 0) TB[pos.c][2]();
+  else if (pos.r === 1) T1[pos.c].act();
+  else T2[pos.c].act();
+}
+
+/* ---------- outside apps: Steam, Roblox, FreeTube, Windows programs ---------- */
+let appsInfo = null, storage = null;
+const GET = { roblox: { name: 'Roblox', size: 'about 1 GB', what: 'Roblox runs through Sober, a free app made for Linux.' },
+              freetube: { name: 'FreeTube', size: 'about 300 MB', what: 'FreeTube plays YouTube without ads or tracking.' } };
+async function openExt(id, name, path, checked) {
+  appsInfo = appsInfo || await call('apps_info');
+  if (GET[id] && appsInfo[id] && !appsInfo[id].installed) { getPanel(id); return; }
+  if (!checked && !running[id] && (id === 'steam' || id === 'roblox')) {
+    storage = storage || await call('storage');
+    const notes = [];
+    if (appsInfo.gpu === 'software') notes.push('This PC has no graphics acceleration here (VirtualBox works like this), so games will be slow or may not start. For games, start LaunchOS from a USB stick on your PC.');
+    if (storage && !storage.saving) notes.push('Saving is off, so what ' + name + ' downloads is gone after you shut down. Turn on saving in Settings.');
+    if (id === 'steam') notes.push('Steam is Valve’s own app (free, not open source). The first time, it downloads and updates itself, which takes a few minutes. Press Super or the Xbox button to come back to Home any time.');
+    if (notes.length > (id === 'steam' ? 1 : 0)) {
+      panel(name, notes.join(' '), [row('Open ' + name, '', 'play', () => { closePanel(); openExt(id, name, path, true); }), row('Cancel', '', 'check', () => closePanel())]);
+      return;
+    }
+  }
+  toast((running[id] ? 'Back to ' : 'Opening ') + name);
+  const r = await call('open_ext', { id, path });
+  if (r && r.busy) {
+    panel('Close ' + r.busy + '?', 'One game or app like this runs at a time, like on a console.', [
+      row('Close ' + r.busy + ' and open ' + name, 'Unsaved progress in ' + r.busy + ' may be lost', 'close', async () => { closePanel(); await call('end_app', r.busy_id); setTimeout(() => openExt(id, name, path, true), 800); }),
+      row('Cancel', '', 'check', () => closePanel())]);
+  } else if (r && r.error) {
+    toast(name + ' couldn’t start', 3200);
+  }
+  refreshTasks();
+}
+function getPanel(id) {
+  const g0 = GET[id];
+  panel('Get ' + g0.name, g0.what + ' It’s a one-time download (' + g0.size + ') from Flathub, the Linux app store.', [
+    row('Download ' + g0.name, 'Needs an internet connection', 'usb', async () => { await call('get_app', id); progressPanel('get-' + id, 'Getting ' + g0.name, () => { appsInfo = null; openExt(id, g0.name); }); }),
+    row('Cancel', '', 'check', () => closePanel())]);
+}
+/* Shows a background job's progress (downloads, saving, installing) until it's done. */
+function progressPanel(job, title, onDone, doneRows, isUpdate) {
+  const paint = st => {
+    const pct = Math.max(0, Math.min(100, st.percent || 0));
+    return `<div class="meterbar"><i style="width:${pct}%"></i></div><p class="pnote">${esc(st.step || 'Starting…')}${st.done ? '' : ' · ' + pct + '%'}</p>`;
+  };
+  panel(title, 'You can leave this open or go back to Home. It keeps going.', [row('Hide', 'Keep going in the background', 'check', () => closePanel())], { body: paint({}) });
+  const myP = P;
+  const tick = async () => {
+    if (P !== myP) return;   // the panel was closed or replaced
+    const st = await call('job_status', job);
+    if (P !== myP) return;
+    if (st && st.done) {
+      if (st.error) panel(title, st.error, [row('Try again', '', 'refresh', () => { closePanel(); }), row('Close', '', 'check', () => closePanel())]);
+      else if (isUpdate) updatesPanel(st.step);
+      else if (onDone) { closePanel(); onDone(); }
+      else panel(title, st.step, doneRows || [row('Done', '', 'check', () => closePanel())]);
+      return;
+    }
+    $('#pbody').innerHTML = paint(st || {});
+    setTimeout(tick, 1000);
+  };
+  setTimeout(tick, 800);
+}
+async function programsPanel() {
+  panel('Windows programs', 'Looking in Downloads and on USB drives…', [row('Cancel', '', 'check', () => closePanel())]);
+  const myP = P;
+  await call('mount_drives');
+  await new Promise(r => setTimeout(r, 1500));
+  const list = await call('win_programs');
+  if (P !== myP) return;
+  const kb = n => n > 1048576 ? Math.round(n / 1048576) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+  const rows = (Array.isArray(list) ? list : []).map(p => row(p.name, p.where + ' · ' + kb(p.size), 'grid', () => { closePanel(); openExt('winprog', p.name, p.path, true); }));
+  panel('Windows programs', rows.length ? 'Runs Windows programs (.exe) with Wine. Most installers and small games work; some programs don’t. The very first one takes a minute while Wine sets itself up.'
+    : 'No Windows programs found. Download a .exe with the Browser, or plug in a USB drive that has one.',
+    rows.concat([row('Close', '', 'check', () => closePanel())]));
+}
+
+/* ---------- running apps and app options ---------- */
+function setTasks(list) {
+  const keep = mode === 'guide' ? (items()[g.i] || {}).t : null;
+  running = {};
+  (Array.isArray(list) ? list : []).forEach(t => { running[t.id] = t; });
+  if (!R.length) return;   // home not drawn yet
+  paintRun();
+  if (mode === 'home') foc();
+  else if (mode === 'guide') {   // running apps head the Home tab: keep the same row selected as it shifts
+    const k = items().findIndex(o => o.t === keep);
+    if (k >= 0) g.i = k;
+    rg();
+  }
+}
+async function refreshTasks() { setTasks(await call('tasks')); }
+window.__losTasks = list => { setTasks(list); if (!list.some(t => t.shown)) backHome(); };   // the system sends the list whenever an app starts, goes to the background or ends
+function paintRun() { (R[1] || []).forEach((el, c) => el.classList.toggle('run', !!(T1[c] && running[T1[c].id]))); }
+function appAt(r, c) {
+  const id = r === 1 ? (T1[c] || {}).id : r === 2 ? (T2[c] || {}).app : r === 0 ? (TB[c] || [])[3] : null;
+  return id ? T1.find(t => t.id === id) || null : null;
+}
+const dur = s => s < 60 ? 'less than a minute' : s < 3600 ? Math.floor(s / 60) + ' min' : Math.floor(s / 3600) + ' h ' + Math.floor(s % 3600 / 60) + ' min';
+async function appOptions() {
+  const a = appAt(pos.r, pos.c); if (!a) return;
+  await refreshTasks();   // fresh running time and page title
+  if (mode !== 'home') return;
+  const t = running[a.id];
+  const kind = a.store ? 'App from the Store' : a.outside ? 'Game or app' : a.url != null ? 'Web app' : 'Built into LaunchOS';
+  let body = `<dl class="kv"><dt>Status</dt><dd>${t ? 'Running for ' + dur(t.running_s) : 'Not running'}</dd>`;
+  if (t && t.title && t.title !== a.name) body += `<dt>Showing</dt><dd>${esc(t.title)}</dd>`;
+  body += `<dt>Type</dt><dd>${kind}</dd></dl>`;
+  const text = t ? 'Running in the background. End it to free up memory.'
+    : a.outside ? 'Not running.' : a.url != null ? 'Not running. Opening it starts it fresh.' : 'Part of LaunchOS. It only runs while it’s open.';
+  const rows = [];
+  if (t) {
+    rows.push(row('Resume', 'Go back to where you left off', 'play', () => { closePanel(); a.act(); }));
+    rows.push(row('Restart', 'End it and open it fresh', 'refresh', async () => { closePanel(); await call('end_app', a.id); a.act(); }));
+    rows.push(row('End task', 'Close it and free up memory', 'close', async () => {
+      const r = await call('end_app', a.id); closePanel();
+      toast(r && r.ok ? 'Ended ' + a.name : a.name + ' already stopped'); refreshTasks();
+    }));
+  } else {
+    rows.push(row('Open', '', a.glyph || 'play', () => { closePanel(); a.act(); }));
+  }
+  if (canMove(a)) rows.push(row('Move', 'Change where it sits on Home', 'move', startMove));
+  if (a.store) rows.push(row('Uninstall', 'Remove it in the Store', 'close', store(a.store)));
+  rows.push(row('Cancel', '', 'check', () => closePanel()));
+  panel(a.name, text, rows, { body });
+}
+/* Move: lift the tile, slide it with left/right, drop it with A (B cancels). */
+let moveSaved = null;
+const lockedFirst = () => !LOS.prefs.setupDone;   // until Setup is done its tile stays first
+const canMove = a => T1.length > 1 && !(lockedFirst() && a.id === 'setup');
+function startMove() {
+  const a = appAt(pos.r, pos.c);
+  closePanel(true); $('#dim').classList.remove('on');
+  pos = { r: 1, c: T1.indexOf(a) };
+  moveSaved = T1.map(t => t.id);
+  mode = 'move'; drawMove();
+}
+function drawMove() { renderHome(true); R[1][pos.c].classList.add('mv'); }
+function moveBy(d) {
+  const c = pos.c, n = c + d, lo = lockedFirst() ? 1 : 0;
+  if (n < lo || n >= T1.length) return;
+  [T1[c], T1[n]] = [T1[n], T1[c]]; pos.c = n; drawMove();
+}
+function dropMove() { LOS.save({ order: T1.map(t => t.id) }); mode = 'home'; renderHome(); toast('Moved ' + T1[pos.c].name); }
+function cancelMove() {
+  const id = T1[pos.c].id;
+  T1 = moveSaved.map(x => T1.find(t => t.id === x)); pos.c = T1.findIndex(t => t.id === id);
+  mode = 'home'; renderHome(true);
+}
+
+/* ---------- live status: clock and network ---------- */
+let net = null, vol = null, info = null, zone = '', inputs = [];
+function tick() { $('#clock').textContent = LOS.clockText(); }
+async function refreshNet() {
+  net = await call('network');
+  const el = $('#net');
+  el.innerHTML = icon('wifi');
+  el.classList.toggle('off', !(net && net.connected));
+  el.title = net && net.connected ? 'Connected' : 'Not connected';
+}
+
+/* ---------- side menu ---------- */
+const TABS = [['home', 'Home'], ['chat', 'Chat'], ['pad', 'Devices'], ['bell', 'Notifications'], ['gear', 'Settings']];
+let g = { t: 0, i: 0 };
+const row = (t, s, glyph, a, extra) => Object.assign({ t, s, glyph, a }, extra || {});
+function items() {
+  const ip = net && net.connected ? (net.links.find(l => l.ipv4.length) || {}).ipv4 : null;
+  switch (g.t) {
+    case 0: return [
+      ...Object.values(running).map(t => row(t.outside ? t.title || t.name : t.name, 'Running · ' + dur(t.running_s), 'play', () => { closeAll(); t.outside ? openExt(t.id, t.name) : openApp(t.id, t.name, ''); })),
+      row('Browser', 'Browse the web', 'globe', web('browser', 'Browser', '')),
+      row('Setup', LOS.prefs.setupDone ? 'Go through setup again' : 'Not finished yet', 'wand', goSetup()),
+      row('Customize your Home', 'Colors and background', 'palette', goSetup('look')),
+      row('Files', 'Downloads, USB drives and disks', 'folder', files),
+      row('Store', 'Get apps and games from Flathub', 'bag', store()),
+      row('Terminal', 'Type commands', 'terminal', terminal),
+      row('System monitor', 'CPU, memory, network and apps', 'chart', monitor),
+      row('Reload home screen', 'Refresh this screen', 'refresh', () => location.reload()),
+    ];
+    case 1: return [
+      row('Discord', 'Opens beside Home. Super closes it.', 'chat', () => { closeAll(); call('discord_panel', { open: true }); }),
+      row('Discord full screen', 'As its own app', 'chat', web('discord', 'Discord', 'https://discord.com/app')),
+      row('Discord status', 'Check if Discord is having problems', 'info', web('discordstatus', 'Discord status', 'https://discordstatus.com')),
+    ];
+    case 2: return [
+      ...inputs.map(d => row(d.name, (d.kind === 'controller' ? 'Controller' : d.kind === 'mouse' ? 'Mouse or touchpad' : 'Keyboard') + (d.usb ? ', USB' : ''), d.kind === 'controller' ? 'pad' : d.kind === 'mouse' ? 'mouse' : 'keyboard', () => toast(d.name + ' is working'))),
+      row('Detect new device', 'Plug it in, then select this', 'usb', detect),
+      row('USB drives and disks', 'Open, eject or format them in Files', 'drive', files),
+      row('Test your controller', 'See every button and stick', 'pad', goSetup('controller')),
+    ];
+    case 3: {
+      const n = [];
+      if (!LOS.prefs.setupDone) n.push(row('Finish setting up', 'Run Setup to pick your name, time zone and more', 'wand', goSetup()));
+      if (net && !net.connected) n.push(row('No network connection', 'Open Network settings', 'wifi', () => netPanel()));
+      if (vol && vol.available && vol.muted) n.push(row('Sound is muted', 'Open Sound settings', 'sound', () => volPanel()));
+      if (storage && !storage.saving) n.push(row('Saving is off', 'Changes reset when you shut down', 'info', () => savingPanel()));
+      return n;
+    }
+    case 4: return [
+      row('Screen size', LOS.SIZE_NAMES[LOS.prefs.size] || 'Fill screen', 'display', () => sizePanel()),
+      row('Sound', vol ? (vol.available ? (vol.muted ? 'Muted' : 'Volume ' + vol.value + '%') : 'No sound device found') : 'Checking…', 'sound', () => volPanel()),
+      row('Network', net ? (net.connected ? 'Connected' + (ip ? ', ' + ip[0] : '') : 'Not connected') : 'Checking…', 'wifi', () => netPanel()),
+      row('Wi-Fi', 'Find and join networks', 'wifi', () => wifiPanel()),
+      row('Time zone', (LOS.prefs.timezone || zone || 'UTC').replace(/^Etc\//, '').replace(/_/g, ' '), 'clock', goSetup('timezone')),
+      row('Name and colors', LOS.prefs.name, 'user', goSetup('name')),
+      row('Saving', storage ? (storage.saving ? 'On' : 'Off · changes reset at shut down') : 'Checking…', 'usb', () => savingPanel()),
+      row('Drives', 'Open, eject or format drives in Files', 'drive', files),
+      ...(storage && storage.installed ? [] : [row('Install LaunchOS', 'Put it on a drive in this PC', 'usb', () => installPanel())]),
+      row('System monitor', 'CPU, memory, network and apps', 'chart', monitor),
+      row('Updates', 'LaunchOS, your apps and the system', 'refresh', () => updatesPanel()),
+      row('Admin password', adminSet ? 'Set · for sudo in the Terminal' : 'Not set', 'user', () => adminPanel()),
+      row('About LaunchOS', info ? 'Version ' + info.version : 'Version', 'info', () => aboutPanel()),
+      row('Power', 'Shut down or restart', 'power', () => powerPanel()),
+    ];
+  }
+  return [];
+}
+/* Scroll a list just enough to show its focused row. */
+function keepVisible(list) {
+  const f = list.querySelector('.f'); if (!f) return;
+  const pad = 8;
+  if (f.offsetTop - pad < list.scrollTop) list.scrollTop = f.offsetTop - pad;
+  else if (f.offsetTop + f.offsetHeight + pad > list.scrollTop + list.clientHeight) list.scrollTop = f.offsetTop + f.offsetHeight + pad - list.clientHeight;
+}
+function rg() {
+  $('#gtabs').innerHTML = TABS.map((t, k) => `<button class="gt${k === g.t ? ' on' : ''}" data-k="${k}" aria-label="${t[1]}">${icon(t[0])}</button>`).join('');
+  $('#gh').textContent = TABS[g.t][1];
+  const L = items();
+  g.i = Math.min(g.i, L.length - 1);
+  $('#gl').innerHTML = L.map((o, k) => `<div class="it${k === g.i ? ' f' : ''}" data-k="${k}"><span class="glyph">${icon(o.glyph)}</span><span class="txt"><span>${esc(o.t)}</span><small>${esc(o.s)}</small></span></div>`).join('');
+  keepVisible($('#gl'));
+}
+let adminSet = false;
+async function refreshAll() {
+  call('admin_set').then(r => { adminSet = !!(r && r.set); if (mode === 'guide') rg(); });
+  [vol, info, inputs, storage] = await Promise.all([call('volume_get'), call('info'), call('inputs'), call('storage'), refreshTasks()]);
+  const z = await call('timezone_get'); zone = z && z.zone;
+  await refreshNet();
+  if (mode === 'guide') rg();
+}
+function openG(t) { mode = 'guide'; if (t != null) g = { t, i: 0 }; $('#guide').classList.add('on'); $('#dim').classList.add('on'); rg(); refreshAll(); }
+function closeAll() { mode = 'home'; $('#guide').classList.remove('on'); $('#dim').classList.remove('on'); closePanel(true); }
+function gact() { const o = items()[g.i]; if (o) o.a(); }
+async function detect() {
+  const before = inputs.map(d => d.name);
+  toast('Looking for new devices…');
+  await new Promise(r => setTimeout(r, 1200));
+  inputs = await call('inputs');
+  const fresh = inputs.filter(d => !before.includes(d.name));
+  toast(fresh.length ? 'Found: ' + fresh.map(d => d.name).join(', ') : 'No new devices. Try another USB port or cable.', 3600);
+  rg();
+}
+
+/* ---------- panels (pop-ups) ---------- */
+let P = null;   // { rows:[], i, back }
+function panel(title, text, rows, opts) {
+  // a pop-up that replaces another one goes back to where the first one came from
+  const from = mode === 'panel' && P ? P.from : mode;
+  P = Object.assign({ rows, i: 0, from }, opts || {});
+  mode = 'panel';
+  $('#ph').textContent = title; $('#pp').textContent = text || '';
+  $('#pbody').innerHTML = P.body || '';
+  rp();
+  $('#dim').classList.add('on'); $('#panel').classList.add('on');
+}
+function dropInput() { const a = document.activeElement; if (a && a.closest && a.closest('#panel')) a.blur(); }
+function rp() {
+  $('#pl').innerHTML = P.rows.map((o, k) => o.slider != null
+    ? `<div class="slider${k === P.i ? ' f' : ''}" data-k="${k}" role="slider" aria-valuenow="${o.slider}"><i style="width:${o.slider}%"></i><b style="left:${o.slider}%"></b></div>`
+    : `<div class="it${k === P.i ? ' f' : ''}" data-k="${k}"><span class="glyph">${icon(o.glyph || 'check')}</span><span class="txt"><span>${esc(o.t)}</span>${o.s ? `<small>${esc(o.s)}</small>` : ''}</span></div>`).join('');
+  keepVisible($('#pl'));
+}
+function closePanel(silent) {
+  $('#panel').classList.remove('on');
+  dropInput();
+  if (!P) return;
+  const from = P.from; P = null;
+  if (silent) return;
+  mode = from === 'guide' ? 'guide' : 'home';
+  if (mode === 'home') $('#dim').classList.remove('on'); else rg();
+}
+function pact(dir) {
+  const o = P.rows[P.i];
+  if (!o) return;   // a "please wait" panel has no choices yet
+  if (dir && o.slider != null) { o.adjust(dir); return; }
+  if (!dir && o.a) o.a();
+}
+async function volPanel() {
+  vol = await call('volume_get');
+  if (!vol.available) { panel('Sound', 'No sound device was found. In VirtualBox, check Settings → Audio is enabled.', [row('Close', '', 'check', () => closePanel())]); return; }
+  const s = { slider: vol.value, async adjust(d) { this.slider = Math.max(0, Math.min(100, this.slider + d * 10)); rp(); vol = await call('volume_set', this.slider); } };
+  panel('Sound', 'Use left and right to change the volume.', [s, row('Play a test sound', '', 'sound', () => call('sound_test')), row('Done', '', 'check', () => closePanel())]);
+}
+function sizePanel() {
+  const pick = k => () => { LOS.save({ size: k }); toast('Screen size: ' + LOS.SIZE_NAMES[k]); closePanel(); };
+  panel('Screen size', 'Pick TV safe area if the edges of the screen are cut off on your TV.', Object.keys(LOS.SIZE_NAMES).map(k => row(LOS.SIZE_NAMES[k], k === LOS.prefs.size ? 'Current' : '', k === LOS.prefs.size ? 'check' : 'display', pick(k))));
+}
+async function netPanel() {
+  await refreshNet();
+  const l = (net.links || []).find(x => x.ipv4.length) || (net.links || [])[0] || {};
+  const body = `<dl class="kv"><dt>Status</dt><dd>${net.connected ? 'Connected' : 'Not connected'}</dd><dt>Adapter</dt><dd>${esc(l.name || 'None found')}</dd><dt>IP address</dt><dd>${esc((l.ipv4 || []).join(', ') || '—')}</dd><dt>Router</dt><dd>${esc(net.gateway || '—')}</dd><dt>DNS</dt><dd>${esc((net.dns || []).join(', ') || '—')}</dd></dl>`;
+  panel('Network', net.connected ? 'Wired network. For Wi-Fi, use Settings → Wi-Fi.' : 'No connection. In VirtualBox, check Settings → Network: Adapter 1 enabled, attached to NAT.', [
+    row('Test internet connection', '', 'globe', async () => { toast('Testing…'); const r = await call('internet_test'); toast(r.online ? 'You’re online' : (r.reason || 'Can’t reach the internet'), 3600); }),
+    row('Done', '', 'check', () => closePanel()),
+  ], { body });
+}
+async function aboutPanel() {
+  info = await call('info');
+  const body = `<dl class="kv"><dt>Version</dt><dd>${esc(info.version)} (${esc(info.build)})</dd><dt>Processor</dt><dd>${esc(info.cpu)}, ${info.cores} cores</dd><dt>Memory</dt><dd>${info.mem_free_mb} MB free of ${info.mem_total_mb} MB</dd><dt>Screen</dt><dd>${esc(info.resolution)}</dd><dt>Running for</dt><dd>${info.uptime_min} min</dd></dl>`;
+  storage = await call('storage'); appsInfo = await call('apps_info');
+  const body2 = body.replace('</dl>', `<dt>Graphics</dt><dd>${appsInfo.gpu === 'hardware' ? 'Hardware accelerated' : 'Software (no acceleration)'}</dd><dt>Saving</dt><dd>${storage.installed ? 'Installed on a drive' : storage.saving ? 'On' : 'Off'}</dd></dl>`);
+  panel('About LaunchOS', storage.installed ? 'Installed on this PC.' : storage.saving ? 'Running live, with saving on.' : 'Running live: nothing you change is saved after you shut down.', [row('Done', '', 'check', () => closePanel())], { body: body2 });
+}
+/* ---------- Wi-Fi ---------- */
+async function wifiPanel(msg) {
+  const w = await call('wifi_status');
+  if (!w || !w.available) { panel('Wi-Fi', (w && w.reason) || 'Wi-Fi isn’t available.', [row('Done', '', 'check', () => closePanel())]); return; }
+  const bars = n => '▂▄▆█'.slice(0, n.bars);
+  const rows = w.networks.map(n => row(n.name, [n.connected ? 'Connected' : n.known ? 'Saved' : '', n.type === 'open' ? 'Open' : 'Secured', bars(n)].filter(Boolean).join(' · '), 'wifi', () => wifiNetwork(n)));
+  rows.push(row('Scan again', w.scanning ? 'Scanning…' : 'Look for networks', 'refresh', async () => { await call('wifi_scan'); toast('Scanning…'); setTimeout(() => { if (mode === 'panel') wifiPanel(); }, 3500); }));
+  rows.push(row('Done', '', 'check', () => closePanel()));
+  panel('Wi-Fi', msg || (w.networks.length ? (w.state === 'connected' ? 'Connected.' : 'Pick a network.') : 'No networks found yet.'), rows);
+}
+function wifiNetwork(n) {
+  if (n.connected) {
+    panel(n.name, 'Connected.', [row('Disconnect', '', 'close', async () => { await call('wifi_disconnect'); wifiPanel('Disconnected.'); }),
+      row('Forget this network', 'Removes the saved password', 'close', async () => { await call('wifi_forget', n.name); wifiPanel('Forgotten.'); }),
+      row('Back', '', 'check', () => wifiPanel())]);
+  } else if (n.known || n.type === 'open') wifiJoin(n);
+  else wifiPassword(n);
+}
+function wifiPassword(n, err) {
+  const body = `<label class="pw"><input id="wpw" type="password" maxlength="63" autocomplete="off" spellcheck="false" placeholder="Password"><button id="wshow" type="button">Show</button></label>`;
+  panel(n.name, err || 'Type the Wi-Fi password, then press Enter.', [row('Connect', '', 'wifi', () => wifiJoin(n, $('#wpw').value)), row('Cancel', '', 'check', () => wifiPanel())], { body });
+  const i = $('#wpw');
+  $('#wshow').onclick = () => { i.type = i.type === 'password' ? 'text' : 'password'; i.focus(); };
+  setTimeout(() => i.focus(), 50);
+}
+async function wifiJoin(n, pw) {
+  panel(n.name, 'Connecting…', []);
+  const r = await call('wifi_connect', { name: n.name, passphrase: pw });
+  if (r && r.ok) { toast('Connected to ' + n.name); wifiPanel('Connected to ' + n.name + '.'); refreshNet(); }
+  else if (r && r.need_password) wifiPassword(n, r.error);
+  else wifiPanel((r && r.error) || 'Couldn’t connect.');
+}
+
+/* ---------- saving ---------- */
+async function savingPanel() {
+  storage = await call('storage');
+  const gb = n => (n / 1073741824).toFixed(1) + ' GB';
+  const done = [row('Done', '', 'check', () => closePanel())];
+  if (storage.installed) { panel('Saving', 'LaunchOS is installed on this PC’s drive, so everything is kept. ' + gb(storage.free) + ' free of ' + gb(storage.total) + '.', done); return; }
+  if (storage.saving) { panel('Saving is on', (storage.boot === 'usb' ? 'Saves go in the free space on this USB stick. ' : '') + 'Your settings, sign-ins, downloads and games are kept between restarts. ' + gb(storage.free) + ' free of ' + gb(storage.total) + '.', done); return; }
+  if (storage.job && storage.job.done && !storage.job.error) { panel('Saving', 'Saving is set up. Restart LaunchOS to start using it.', [row('Restart now', '', 'refresh', () => call('power', 'reboot')), ...done]); return; }
+  if (storage.can_usb_saving) {
+    panel('Saving is off', 'LaunchOS can keep your stuff in the free space on this USB stick. Nothing already on it is changed.', [
+      row('Turn on saving', 'Uses the free space on this USB stick', 'usb', async () => {
+        await call('usb_saving');
+        progressPanel('usb-saving', 'Turning on saving', null, [row('Restart now', 'Saving starts after a restart', 'refresh', () => call('power', 'reboot')), ...done]);
+      }), ...done]);
+    return;
+  }
+  panel('Saving is off', storage.boot === 'usb' ? 'This USB stick has no free space for saves.'
+    : 'Nothing you change is kept after you shut down. In VirtualBox, use LaunchOS.vbox from the download: it comes with a save disk. On a PC, start LaunchOS from a USB stick and turn saving on, or install it.', done);
+}
+
+/* ---------- install to a drive ---------- */
+async function installPanel() {
+  const job = await call('job_status', 'install');
+  if (job && job.step && !job.done) { progressPanel('install', 'Installing LaunchOS', null, installDone()); return; }
+  panel('Install LaunchOS', 'Looking for drives…', []);
+  const disks = await call('install_disks');
+  const gb = n => Math.round(n / 1e9) + ' GB';
+  if (!Array.isArray(disks) || !disks.length) {
+    panel('Install LaunchOS', 'No drive to install on. LaunchOS needs a spare drive of 16 GB or more that isn’t the USB stick it’s running from.', [row('Done', '', 'check', () => closePanel())]);
+    return;
+  }
+  panel('Install LaunchOS', 'Pick the drive to install on. Everything on it will be erased.', disks.map(d => row(d.model + ' · ' + gb(d.size),
+    (d.usb ? 'USB drive' : 'Drive inside this PC') + (d.parts ? ' · has ' + d.parts + ' partition' + (d.parts > 1 ? 's' : '') + ' with files' : ' · empty'), 'usb', () => confirmInstall(d)))
+    .concat([row('Cancel', '', 'check', () => closePanel())]));
+}
+function confirmInstall(d, second) {
+  const name = d.model + ' (' + Math.round(d.size / 1e9) + ' GB)';
+  panel(second ? 'Last chance' : 'Erase ' + name + '?',
+    second ? 'Installing will erase everything on ' + name + ' and replace it with LaunchOS. This can’t be undone.'
+      : 'Every file, program and operating system on ' + name + ' will be deleted. Back up anything you want to keep first.', [
+      row('Cancel', 'Keep everything on this drive', 'check', () => closePanel()),
+      row(second ? 'Erase and install' : 'Continue', '', 'close', async () => {
+        if (!second) { confirmInstall(d, true); return; }
+        await call('install_system', { disk: d.path, confirm: 'ERASE ' + d.path });
+        progressPanel('install', 'Installing LaunchOS', null, installDone());
+      })]);
+}
+const installDone = () => [row('Restart now', 'Remove the USB stick or disc first', 'refresh', () => call('power', 'reboot')), row('Done', '', 'check', () => closePanel())];
+
+/* ---------- updates ---------- */
+async function updatesPanel(msg) {
+  const u = await call('update_info');
+  if (!u || u.error) { panel('Updates', 'Updates work when running as LaunchOS.', [row('Done', '', 'check', () => closePanel())]); return; }
+  const c = u.check || {}, rows = [];
+  if (c.done && c.restart) rows.push(row('Restart now', 'Finishes the LaunchOS update', 'refresh', () => call('power', 'reboot')));
+  else if (c.done && c.available) rows.push(row('Update to LaunchOS ' + c.latest, c.full ? 'Needs a fresh download from GitHub' : u.saving ? 'Downloads from GitHub, then restart' : 'Needs saving turned on', 'usb', () => runUpdate('apply', 'update', 'Updating LaunchOS')));
+  else rows.push(row('Check for LaunchOS updates', c.done && !c.error ? c.step : 'From LaunchOS on GitHub', 'refresh', () => runUpdate('check', 'update', 'Checking for updates')));
+  rows.push(row('Update your apps', u.saving ? 'Apps from the Store' : 'Needs saving turned on', 'bag', () => runUpdate('apps', 'appupdate', 'Updating your apps')));
+  rows.push(row('Update the system', u.saving ? 'Ubuntu security fixes' : 'Needs saving turned on', 'gear', () => runUpdate('system', 'sysupdate', 'Updating the system')));
+  rows.push(row('Done', '', 'check', () => closePanel()));
+  const notes = c.done && c.available && c.notes ? `<p class="pnote">${esc(c.notes.slice(0, 400))}${c.notes.length > 400 ? '…' : ''}</p>` : '';
+  panel('Updates', msg || ('You have LaunchOS ' + u.version + (u.build ? ' (' + u.build + ')' : '') + '.'), rows, { body: notes });
+}
+async function runUpdate(what, job, title) {
+  const r = await call('update_action', what);
+  if (!r || !r.ok) { toast((r && r.error) || 'Updates work when running as LaunchOS', 3600); return; }
+  progressPanel(job, title, null, null, true);
+}
+/* ---------- admin password (sudo in the Terminal) ---------- */
+async function adminPanel(err) {
+  const r = await call('admin_set'); adminSet = !!(r && r.set);
+  const body = (adminSet ? `<label class="pw"><input id="apo" type="password" maxlength="128" autocomplete="off" placeholder="Current password"></label>` : '')
+    + `<label class="pw"><input id="apn" type="password" maxlength="128" autocomplete="off" placeholder="New password"></label>`
+    + `<label class="pw"><input id="apn2" type="password" maxlength="128" autocomplete="off" placeholder="Type it again"></label>`;
+  panel('Admin password', err || (adminSet ? 'Change the password you use for sudo in the Terminal.' : 'Set a password to run admin commands (sudo) in the Terminal. Keep it somewhere safe.'), [
+    row('Save', 'Or press Enter', 'check', async () => {
+      const n = $('#apn').value, n2 = $('#apn2').value, o = adminSet ? $('#apo').value : '';
+      if (n.length < 6) { adminPanel('Use 6 or more characters.'); return; }
+      if (n !== n2) { adminPanel('The two passwords don’t match.'); return; }
+      panel('Admin password', 'Saving…', [], { busy: true });
+      let res = await call('admin_password', { new: n, old: o });
+      // the first time, LaunchOS asks for a key press, so only someone at the PC can do this
+      for (let i = 0; i < 90 && res && !res.done && !res.error; i++) {
+        $('#pp').textContent = res.step || 'Saving…';
+        await new Promise(r => setTimeout(r, 1000));
+        res = await call('job_status', 'admin');
+      }
+      if (res && res.done && !res.error) { adminSet = true; if (P) P.from = 'guide'; panel('Admin password', 'Saved. In the Terminal, type sudo before a command and enter this password.', [row('Done', '', 'check', () => closePanel())]); }
+      else adminPanel((res && res.error) || 'Couldn’t save the password.');
+    }),
+    row('Cancel', '', 'close', () => closePanel())], { body });
+  setTimeout(() => { const i = $(adminSet ? '#apo' : '#apn'); if (i) i.focus(); }, 60);
+}
+function powerPanel() {
+  const go = a => async () => {
+    const b = $('#bye'); b.textContent = a === 'poweroff' ? 'Shutting down' : 'Restarting'; b.style.display = 'flex';
+    const r = await call('power', a);
+    if (!r || !r.ok) setTimeout(() => { b.style.display = 'none'; toast('Power controls work when running as LaunchOS'); }, 1200);
+  };
+  panel('Power', 'Turn off or restart your console.', [row('Shut down', 'Turn off the console', 'power', go('poweroff')), row('Restart', 'Turn it off and back on', 'refresh', go('reboot')), row('Cancel', 'Go back', 'check', () => closePanel())]);
+}
+
+/* ---------- navigation ---------- */
+function mv(dx, dy) {
+  if (mode === 'panel') {
+    const o = P.rows[P.i];
+    if (!o) return;
+    if (dx && o.slider != null) { pact(dx); return; }
+    if (dy) { P.i = Math.max(0, Math.min(P.rows.length - 1, P.i + dy)); rp(); }
+    return;
+  }
+  if (mode === 'guide') {
+    if (dx) { g.t = (g.t + dx + TABS.length) % TABS.length; g.i = 0; }
+    if (dy) g.i = Math.max(0, Math.min(items().length - 1, g.i + dy));
+    rg(); return;
+  }
+  if (mode !== 'home') return;
+  const n = R[pos.r].length;
+  if (dx) pos.c = Math.max(0, Math.min(n - 1, pos.c + dx));
+  if (dy) { const r = Math.max(0, Math.min(2, pos.r + dy)); if (r !== pos.r) { pos.c = Math.round(pos.c * (R[r].length - 1) / (n - 1 || 1)); pos.r = r; } }
+  foc();
+}
+function back() { if (mode === 'panel') closePanel(); else if (mode === 'guide') closeAll(); }
+function menu() { if (mode === 'home') openG(); else closeAll(); }
+function ok() { if (mode === 'home') act(); else if (mode === 'guide') gact(); else if (mode === 'panel') pact(); }
+function nav(a) {
+  if (introUp) { endIntro(); return; }
+  if (mode === 'move') { const f = { left: () => moveBy(-1), right: () => moveBy(1), ok: dropMove, back: cancelMove, menu: cancelMove, guide: cancelMove }[a]; if (f) f(); return; }
+  const f = { left: () => mv(-1, 0), right: () => mv(1, 0), up: () => mv(0, -1), down: () => mv(0, 1), ok, back, menu,
+    guide: menu,                                              // Super key / Xbox button: open or close the side menu
+    opts: () => { if (mode === 'home') appOptions(); } }[a];  // X / menu key: options for the selected app
+  if (f) f();
+}
+LOS.onNav(nav, { guide: true });
+addEventListener('focus', () => { backHome(); refreshTasks(); loadStoreApps(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) backHome(); });
+$('#hx').onclick = () => { if (mode === 'home') appOptions(); };
+// on-screen hints and the avatar go through the same handler as keys and buttons, so every mode handles them
+$('#me').onclick = () => nav('menu'); $('#hm').onclick = () => nav('menu'); $('#hb').onclick = () => nav('back'); $('#ha').onclick = () => nav('ok'); $('#dim').onclick = () => nav('back');
+$('#gtabs').onclick = e => { if (mode !== 'guide') return; const b = e.target.closest('.gt'); if (b) { g.t = +b.dataset.k; g.i = 0; rg(); } };
+$('#gl').onclick = e => { if (mode !== 'guide') return; const b = e.target.closest('.it'); if (b) { g.i = +b.dataset.k; rg(); gact(); } };
+function hoverRow(list, set) {
+  list.addEventListener('mousemove', e => {
+    const b = e.target.closest('[data-k]');
+    if (!b || !LOS.mouseRecent() || b.classList.contains('f')) return;
+    list.querySelectorAll('.f').forEach(x => x.classList.remove('f'));
+    b.classList.add('f'); set(+b.dataset.k);
+  });
+}
+hoverRow($('#gl'), k => { if (mode === 'guide') g.i = k; });
+hoverRow($('#pl'), k => { if (mode === 'panel' && P) P.i = k; });
+$('#pl').onclick = e => {
+  const b = e.target.closest('[data-k]'); if (!b) return;
+  P.i = +b.dataset.k;
+  const o = P.rows[P.i];
+  if (o.slider != null) {
+    const r = b.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(100, Math.round((e.clientX - r.left) / r.width * 20) * 5));
+    o.adjust((pct - o.slider) / 10);
+    return;
+  }
+  rp(); pact();
+};
+
+/* ---------- ferris wheel intro (once per boot) ---------- */
+let introUp = false, endIntro = () => {};
+(function () {
+  const it = $('#intro');
+  let seen = false;
+  try { seen = sessionStorage.getItem('launchos.intro') === '1'; sessionStorage.setItem('launchos.intro', '1'); } catch (e) { /* no storage */ }
+  if (seen) { it.remove(); return; }
+  introUp = true;
+  const S = 720 / 1080 * 1.6, cx = 640, cy = 360 - 30 * S, Rw = 150 * S;
+  let ok = true, t0 = null, done = false;
+  const put = (el, w, h, x, y) => Object.assign(el.style, { width: w + 'px', height: h + 'px', left: x + 'px', top: y + 'px' });
+  put($('#iglow'), 560 * S, 560 * S, cx - 280 * S, cy - 280 * S); put($('#istand'), 260 * S, 240 * S, cx - 130 * S, cy - 18 * S); put($('#iwheel'), 332 * S, 332 * S, cx - 166 * S, cy - 166 * S);
+  const gs = [];
+  for (let i = 0; i < 8; i++) { const gi = document.createElement('img'); gi.src = 'img/gondola' + i + '.png'; gi.alt = ''; gi.style.width = 42 * S + 'px'; gi.style.height = 48 * S + 'px'; it.append(gi); gs.push(gi); }
+  it.querySelectorAll('img').forEach(i => i.onerror = () => { ok = false; });
+  endIntro = () => { if (done) return; done = true; introUp = false; it.classList.add('out'); setTimeout(() => it.remove(), 700); };
+  function step(t) {
+    if (!ok) { it.remove(); introUp = false; return; }
+    const wheel = $('#iwheel');
+    if (!wheel) return;   // intro already removed
+    if (t0 == null) t0 = t;
+    const ang = (t - t0) / 1000 * 0.4;
+    wheel.style.transform = `rotate(${ang}rad)`;
+    gs.forEach((gi, i) => { const a = ang + i * Math.PI / 4; gi.style.left = (cx + Math.cos(a) * Rw - 21 * S) + 'px'; gi.style.top = (cy + Math.sin(a) * Rw) + 'px'; });
+    if (!done || t - t0 < 2300) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+  setTimeout(endIntro, 1600);
+  addEventListener('mousedown', endIntro, { once: true });
+})();
+
+/* ---------- start ---------- */
+renderHome();
+refreshTasks();
+tick(); setInterval(tick, 10000);
+refreshNet(); setInterval(refreshNet, 15000);
+refreshAll();
+loadStoreApps();
+if (!LOS.prefs.setupDone) setTimeout(() => toast('New here? Start with Setup', 3800), 2400);
+else setTimeout(() => toast('Press M or the menu button for the side menu', 3400), 2400);
+</script>
+</body>
+</html>

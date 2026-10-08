@@ -1,0 +1,20 @@
+#!/bin/bash
+# Runs at start-up on a live system with saving. If the LaunchOS image (a newer USB stick or
+# disc) is newer than LaunchOS's own files kept in the save area (from an earlier update),
+# the image's files win, so an old update can never hide a newer LaunchOS.
+IMG=/rofs
+[ -f $IMG/etc/launchos-release ] || exit 0
+v() { grep -oE '^VERSION="?[0-9.]+' "$1" 2>/dev/null | grep -oE '[0-9.]+$'; }
+img=$(v $IMG/etc/launchos-release); cur=$(v /etc/launchos-release)
+[ -n "$img" ] || exit 0
+[ "$img" = "$cur" ] && exit 0
+newest=$(printf '%s\n%s\n' "$img" "$cur" | sort -V | tail -1)
+[ "$newest" = "$img" ] || exit 0
+for d in opt/launcher usr/local/bin usr/local/sbin usr/local/lib/launchos etc/launchos; do
+  [ -d "$IMG/$d" ] && cp -a "$IMG/$d/." "/$d/"
+done
+for f in $IMG/etc/systemd/system/launch* $IMG/etc/udev/rules.d/90-launchos* $IMG/etc/tmpfiles.d/launchos*; do
+  [ -e "$f" ] && cp -a "$f" "${f#$IMG}"
+done
+cp -a $IMG/etc/launchos-release /etc/launchos-release
+systemctl daemon-reload

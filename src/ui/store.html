@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Store</title>
+<link rel="stylesheet" href="los.css">
+<style>
+#head { position: absolute; left: 56px; right: 48px; top: 24px; height: 46px; display: flex; align-items: center; gap: 18px; }
+#head h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -.01em; }
+#search { flex: 0 0 360px; display: flex; align-items: center; gap: 10px; background: var(--panel-2); border: 2px solid var(--line); border-radius: 22px; padding: 0 16px; height: 44px; color: var(--mute); }
+#search.f, #search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 6px rgba(var(--accent-glow), .1); }
+#search input { flex: 1; background: none; border: 0; outline: none; color: var(--ink); font-size: 16px; }
+#search .ic { width: 20px; height: 20px; }
+#note { flex: 1; font-size: 14px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+#jobchip { display: none; align-items: center; gap: 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 18px; padding: 6px 14px; font-size: 14px; max-width: 360px; }
+#jobchip.on { display: flex; }
+#jobchip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#jobchip .meter { width: 80px; height: 6px; border-radius: 3px; background: var(--chip); overflow: hidden; flex: none; }
+#jobchip .meter i { display: block; height: 100%; background: var(--accent); }
+
+#tabs { position: absolute; left: 48px; right: 48px; top: 88px; display: flex; gap: 10px; }
+.tab { padding: 9px 16px; border-radius: 20px; background: var(--panel-2); color: var(--ink-2); font-size: 15px; border: 2px solid transparent; white-space: nowrap; }
+.tab.on { background: var(--chip); color: var(--ink); }
+.tab.f { border-color: var(--accent); color: var(--ink); box-shadow: 0 0 0 5px rgba(var(--accent-glow), .1); }
+
+#grid { position: absolute; left: 40px; right: 40px; top: 148px; bottom: 60px; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; padding: 8px; display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 118px; gap: 14px; align-content: start; }
+#grid::-webkit-scrollbar { display: none; }
+.card { display: flex; gap: 14px; align-items: center; background: var(--panel-2); border-radius: 12px; padding: 14px 16px; border: 2px solid transparent; cursor: pointer; position: relative; transition: transform .14s ease, border-color .14s; min-width: 0; }
+.card.f { border-color: var(--accent); transform: scale(1.03); box-shadow: 0 0 0 6px rgba(var(--accent-glow), .1), 0 0 28px 6px rgba(var(--accent-glow), .12); z-index: 2; }
+.aicon { width: 64px; height: 64px; border-radius: 14px; flex: none; display: grid; place-items: center; font-size: 28px; font-weight: 700; color: #fff; background: #2a4260; overflow: hidden; }
+.aicon img { width: 100%; height: 100%; object-fit: contain; }
+.card .txt { min-width: 0; flex: 1; }
+.card b { display: block; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; color: var(--mute); margin-top: 4px; line-height: 1.35; }
+.card em { position: absolute; top: 10px; right: 12px; font-style: normal; font-size: 11px; font-weight: 600; background: var(--accent); color: var(--accent-ink); border-radius: 9px; padding: 1px 8px; }
+.card.more { justify-content: center; color: var(--ink-2); font-size: 15px; }
+#empty { position: absolute; left: 0; right: 0; top: 260px; text-align: center; color: var(--mute); font-size: 16px; line-height: 1.6; display: none; }
+#empty b { display: block; color: var(--ink-2); font-size: 19px; font-weight: 600; margin-bottom: 6px; }
+#empty .meterbar { width: 360px; margin: 14px auto 0; }
+
+#detail { position: absolute; inset: 0; background: var(--bg); z-index: 7; display: none; }
+#detail.on { display: block; }
+#dhead { position: absolute; left: 64px; right: 64px; top: 40px; display: flex; gap: 26px; align-items: center; }
+#dhead .aicon { width: 112px; height: 112px; border-radius: 24px; font-size: 48px; }
+#dhead h2 { margin: 0; font-size: 32px; font-weight: 700; }
+#dhead .dev { color: var(--mute); font-size: 15px; margin-top: 4px; }
+#dhead .sum { color: var(--ink-2); font-size: 17px; margin-top: 8px; }
+#dbtns { position: absolute; left: 64px; top: 186px; display: flex; gap: 12px; align-items: center; }
+.btn { display: flex; align-items: center; gap: 10px; padding: 12px 22px; border-radius: 24px; background: var(--chip); font-size: 16px; font-weight: 600; border: 2px solid transparent; }
+.btn.main { background: var(--accent); color: var(--accent-ink); }
+.btn.f { border-color: #fff; box-shadow: 0 0 0 6px rgba(var(--accent-glow), .18); transform: scale(1.04); }
+.btn .ic { width: 20px; height: 20px; }
+#dprog { width: 320px; display: none; }
+#dprog.on { display: block; }
+#dprog .meterbar { height: 10px; border-radius: 5px; background: var(--chip); overflow: hidden; }
+#dprog .meterbar i { display: block; height: 100%; background: var(--accent); transition: width .4s; }
+#dprog p { margin: 6px 0 0; font-size: 14px; color: var(--ink-2); }
+#dbody { position: absolute; left: 64px; right: 64px; top: 262px; bottom: 60px; display: grid; grid-template-columns: 1fr 520px; gap: 34px; }
+#ddesc { font-size: 15px; line-height: 1.6; color: var(--ink-2); overflow: hidden; }
+#dshot { border-radius: 12px; overflow: hidden; background: #070f1a; display: grid; place-items: center; max-height: 330px; }
+#dshot img { width: 100%; height: 100%; object-fit: contain; display: block; }
+#hints { position: absolute; right: 44px; bottom: 16px; z-index: 9; }
+#hints button[hidden] { display: none; }
+.meterbar { height: 10px; border-radius: 5px; background: var(--chip); overflow: hidden; }
+.meterbar i { display: block; height: 100%; background: var(--accent); }
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+<div id="head"><h1>Store</h1><label id="search"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M11 4a7 7 0 100 14 7 7 0 000-14zM16 16l5 5"/></svg><input id="q" type="text" placeholder="Search apps and games" autocomplete="off" spellcheck="false"></label><span id="note"></span><span id="jobchip"><span id="jobtxt"></span><span class="meter"><i id="jobbar"></i></span></span></div>
+<div id="tabs"></div>
+<div id="grid" role="listbox"></div>
+<div id="empty"></div>
+<section id="detail" aria-live="polite">
+  <div id="dhead"></div>
+  <div id="dbtns"></div>
+  <div id="dbody"><div id="ddesc"></div><div id="dshot"></div></div>
+</section>
+<div id="hints" class="hints"><button id="ha"><u style="background:#3ddc6b">A</u><span id="hat">Open</span></button><button id="hb"><u style="background:#e0443e">B</u><span id="hbt">Back</span></button><button id="hy"><u style="background:#e6c75a">Y</u>Search</button><button id="hm"><u style="background:#cfe6ff">&#8801;</u>Home</button></div>
+<div id="toast"></div>
+</div></div>
+<script src="los.js"></script>
+<script>
+const { $, call, toast, icon, esc } = LOS;
+
+/* Picks for the Featured shelf. Names and descriptions here are used until Flathub's own list has arrived. */
+const FEATURED = [
+  ['com.heroicgameslauncher.hgl', 'Heroic Games Launcher', 'Play your Epic, GOG and Amazon games'],
+  ['org.prismlauncher.PrismLauncher', 'Prism Launcher', 'Minecraft: Java Edition, with mods'],
+  ['net.lutris.Lutris', 'Lutris', 'Play games from many stores and emulators'],
+  ['com.discordapp.Discord', 'Discord', 'Chat, voice and video'],
+  ['com.spotify.Client', 'Spotify', 'Music and podcasts'],
+  ['org.videolan.VLC', 'VLC', 'Plays almost any video or music file'],
+  ['com.obsproject.Studio', 'OBS Studio', 'Record and stream your games'],
+  ['org.libretro.RetroArch', 'RetroArch', 'Classic consoles in one app'],
+  ['org.DolphinEmu.dolphin-emu', 'Dolphin', 'GameCube and Wii games'],
+  ['net.davidotek.pupgui2', 'ProtonUp-Qt', 'More Proton versions for Steam games'],
+  ['com.usebottles.bottles', 'Bottles', 'Run Windows apps and games'],
+  ['com.moonlight_stream.Moonlight', 'Moonlight', 'Stream games from your gaming PC'],
+  ['org.mozilla.firefox', 'Firefox', 'A full web browser'],
+  ['com.google.Chrome', 'Google Chrome', 'Google’s web browser'],
+  ['org.libreoffice.LibreOffice', 'LibreOffice', 'Documents, spreadsheets and slides'],
+  ['org.gimp.GIMP', 'GIMP', 'Edit photos and pictures'],
+  ['org.kde.kdenlive', 'Kdenlive', 'Edit videos'],
+  ['org.blender.Blender', 'Blender', '3D models and animation'],
+  ['org.godotengine.Godot', 'Godot', 'Make your own games'],
+  ['com.visualstudio.code', 'Visual Studio Code', 'Code editor'],
+];
+const TABS = [['featured', 'Featured'], ['games', 'Games'], ['internet', 'Internet & chat'], ['media', 'Music & video'], ['creative', 'Creative'], ['work', 'Work & school'], ['tools', 'Tools'], ['installed', 'Installed']];
+const COLORS = ['#2d7ff9', '#7b3fe4', '#d1453b', '#2f8a55', '#b8862b', '#1f6fb0', '#5865f2', '#34495f'];
+const PAGE = 96;
+
+let catalog = [], byId = {}, installed = {}, job = {}, free = 0, saving = true;
+let tab = 0, list = [], shown = PAGE, pos = 0, area = 'grid', query = '', detail = null, dbtn = 0;
+let refreshing = false, refreshError = '', freshened = false;
+
+const fileUrl = p => 'file://' + String(p).split('/').map(encodeURIComponent).join('/');
+const color = id => COLORS[[...id].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length];
+const iconHtml = a => `<span class="aicon" style="background:${a.icon ? '#1a2b40' : color(a.id)}">${a.icon ? `<img src="${esc(fileUrl(a.icon))}" alt="" onerror="this.remove()">` : esc((a.name || '?')[0].toUpperCase())}</span>`;
+const app = id => byId[id] || (FEATURED.find(f => f[0] === id) ? { id, name: FEATURED.find(f => f[0] === id)[1], summary: FEATURED.find(f => f[0] === id)[2], desc: '', dev: '', icon: '', shots: [], shelves: [] } : { id, name: id.split('.').pop(), summary: '', desc: '', icon: '', shots: [], shelves: [] });
+function size(n) { const u = ['bytes', 'KB', 'MB', 'GB', 'TB']; let i = 0; while (n >= 1024 && i < 4) { n /= 1024; i++; } return (n >= 100 || !i ? Math.round(n) : n.toFixed(1)) + ' ' + u[i]; }
+
+/* ---------- data ---------- */
+async function load() {
+  const r = await call('store_info');
+  if (!r || r.error || !Array.isArray(r.apps)) return false;
+  catalog = r.apps; byId = {}; catalog.forEach(a => { byId[a.id] = a; });
+  installed = r.installed || {}; job = r.job || {}; free = r.free || 0; saving = r.saving !== false;
+  if (!catalog.length && !refreshing && !refreshError) getCatalog();
+  else if (catalog.length && r.catalog_age_h > 24 * 7 && !refreshing && !refreshError && !freshened && !(job.step && !job.done)) { freshened = true; getCatalog(true); }   // a week old: freshen it up quietly, once
+  return true;
+}
+async function getCatalog(quiet) {
+  refreshing = !quiet; refreshError = '';
+  render();
+  const r = await call('store_action', { op: 'refresh' });
+  if (!r || !r.ok) { refreshing = false; refreshError = (r && r.error) || 'Couldn’t reach Flathub.'; render(); return; }
+  watchJob();
+}
+
+/* ---------- the grid ---------- */
+function pick() {
+  const k = TABS[tab][0];
+  if (query) {
+    const q = query.toLowerCase();
+    const score = a => (a.name.toLowerCase().startsWith(q) ? 0 : a.name.toLowerCase().includes(q) ? 1 : 2);
+    return catalog.filter(a => a.name.toLowerCase().includes(q) || a.summary.toLowerCase().includes(q) || a.id.toLowerCase().includes(q))
+      .sort((a, b) => score(a) - score(b)).slice(0, 200);
+  }
+  if (k === 'featured') return FEATURED.map(f => app(f[0]));
+  if (k === 'installed') return Object.keys(installed).map(id => Object.assign({}, app(id), { name: (byId[id] || {}).name || installed[id].name })).sort((a, b) => a.name.localeCompare(b.name));
+  return catalog.filter(a => (a.shelves || []).includes(k));
+}
+function render(keep) {
+  $('#tabs').innerHTML = TABS.map((t, k) => `<button class="tab${k === tab ? ' on' : ''}${area === 'tabs' && k === tab ? ' f' : ''}" data-k="${k}">${esc(t[1])}</button>`).join('');
+  list = pick();
+  if (!keep) { shown = PAGE; pos = Math.min(pos, Math.max(0, list.length - 1)); }
+  const items = list.slice(0, shown);
+  let h = items.map((a, k) => `<div class="card" data-k="${k}">${iconHtml(a)}<span class="txt"><b>${esc(a.name)}</b><small>${esc(a.summary || '')}</small></span>${installed[a.id] ? '<em>Installed</em>' : ''}</div>`).join('');
+  if (list.length > shown) h += `<div class="card more" data-k="${items.length}">Show more (${list.length - shown})</div>`;
+  $('#grid').innerHTML = h;
+  const e = $('#empty');
+  let msg = '';
+  if (!catalog.length && TABS[tab][0] !== 'featured' && TABS[tab][0] !== 'installed') {
+    msg = refreshError ? `<b>Couldn’t get the app list</b>${esc(refreshError)}<br>Press A to try again.` : '<b>Getting the app list from Flathub…</b>The first time takes a minute.' + (job.step && !job.done ? `<div class="meterbar"><i style="width:${job.percent || 0}%"></i></div>` : '');
+  } else if (!list.length) msg = query ? `<b>Nothing found for “${esc(query)}”</b>Try another word.` : TABS[tab][0] === 'installed' ? '<b>No apps yet</b>Apps you get from the Store show up here and on Home.' : '<b>Nothing here yet</b>';
+  e.innerHTML = msg; e.style.display = msg ? 'block' : 'none';
+  $('#note').textContent = !saving ? 'Saving is off: apps you get are gone after you shut down' : refreshError && !catalog.length ? 'Couldn’t reach Flathub. Check your internet connection.' : query ? list.length + ' found' : catalog.length ? catalog.length.toLocaleString('en-US') + ' apps from Flathub · ' + size(free) + ' free' : '';
+  paint();
+}
+function cards() { return [...document.querySelectorAll('#grid .card')]; }
+function paint() {
+  const cs = cards();
+  pos = Math.max(0, Math.min(pos, cs.length - 1));
+  cs.forEach((c, k) => c.classList.toggle('f', area === 'grid' && k === pos));
+  document.querySelectorAll('.tab').forEach((t, k) => t.classList.toggle('f', area === 'tabs' && k === tab));
+  $('#search').classList.toggle('f', area === 'search');
+  const f = cs[pos];
+  if (f && area === 'grid') { const g = $('#grid'); if (f.offsetTop - 10 < g.scrollTop) g.scrollTop = f.offsetTop - 10; else if (f.offsetTop + f.offsetHeight + 10 > g.scrollTop + g.clientHeight) g.scrollTop = f.offsetTop + f.offsetHeight + 10 - g.clientHeight; }
+  if (area === 'tabs' || area === 'search') $('#grid').scrollTop = 0;
+  hints();
+}
+function hints() {
+  $('#hat').textContent = detail ? 'Select' : area === 'tabs' ? 'Show' : 'Open';
+  $('#hbt').textContent = detail ? 'Back' : query ? 'Clear search' : 'Home';
+}
+function openCard(k) {
+  const items = list.slice(0, shown);
+  if (k >= items.length) { if (list.length > shown) { shown += PAGE; render(true); pos = k; paint(); } else if (!catalog.length && refreshError) getCatalog(); return; }
+  openDetail(items[k].id);
+}
+
+/* ---------- one app ---------- */
+function openDetail(id) {
+  detail = id; dbtn = 0;
+  try { history.replaceState(null, '', '#' + encodeURIComponent(id)); } catch (e) { /* file page */ }
+  $('#detail').classList.add('on');
+  drawDetail();
+}
+function closeDetail() {
+  detail = null; $('#detail').classList.remove('on');
+  try { history.replaceState(null, '', location.pathname); } catch (e) { /* file page */ }
+  render(true);
+}
+function buttons() {
+  const a = app(detail), inst = !!installed[detail], busy = job.step && !job.done;
+  const mine = busy && job.app === detail;
+  const b = [];
+  if (mine) b.push(['Working…', 'refresh', () => {}, true]);
+  else if (inst) { b.push(['Open', 'play', () => openApp(a), true]); b.push(['Uninstall', 'trash', () => confirmRemove(a)]); }
+  else b.push(['Install', 'usb', () => install(a), true]);
+  b.push(['Back', 'close', closeDetail]);
+  return b;
+}
+function drawDetail() {
+  if (!detail) return;
+  const a = app(detail), inst = installed[detail];
+  $('#dhead').innerHTML = iconHtml(a) + `<div><h2>${esc(a.name)}</h2>${a.dev ? `<div class="dev">${esc(a.dev)}</div>` : ''}<div class="sum">${esc(a.summary || '')}</div></div>`;
+  const b = buttons();
+  dbtn = Math.min(dbtn, b.length - 1);
+  const mine = job.step && !job.done && job.app === detail;
+  $('#dbtns').innerHTML = b.map((x, k) => `<button class="btn${x[3] ? ' main' : ''}${k === dbtn ? ' f' : ''}" data-k="${k}">${icon(x[1])}${esc(x[0])}</button>`).join('')
+    + `<div id="dprog" class="${mine ? 'on' : ''}"><div class="meterbar"><i style="width:${mine ? job.percent || 0 : 0}%"></i></div><p>${mine ? esc(job.step) + ' · ' + (job.percent || 0) + '%' : ''}</p></div>`
+    + (job.done && job.error && job.app === detail && !mine ? `<span style="color:#ffb3ae;font-size:14px;max-width:420px">${esc(job.error)}</span>` : '')
+    + (inst ? `<span style="color:var(--mute);font-size:14px">Installed${inst.version ? ' · version ' + esc(inst.version) : ''}</span>` : `<span style="color:var(--mute);font-size:14px">Free from Flathub · ${size(free)} free on this PC</span>`);
+  $('#ddesc').textContent = a.desc || a.summary || '';
+  const shot = (a.shots || [])[0];
+  $('#dshot').innerHTML = shot ? `<img src="${esc(shot)}" alt="" onerror="this.parentNode.style.display='none'">` : '';
+  $('#dshot').style.display = shot ? '' : 'none';
+  hints();
+}
+async function install(a) {
+  const r = await call('store_action', { op: 'install', app: a.id, name: a.name });
+  if (!r || !r.ok) { toast((r && r.error) || 'Couldn’t start the download', 4000); return; }
+  toast('Getting ' + a.name + '. You can keep browsing.', 3200);
+  job = { step: 'Starting', percent: 0, app: a.id, done: false };
+  drawDetail(); watchJob();
+}
+function confirmRemove(a) {
+  $('#dbtns').innerHTML = `<span style="font-size:16px;margin-right:10px">Uninstall ${esc(a.name)}? Its saved settings are kept.</span>`
+    + `<button class="btn main f" data-k="0">${icon('check')}Keep it</button><button class="btn" data-k="1">${icon('trash')}Uninstall</button>`;
+  dbtn = 0; confirming = a;
+}
+let confirming = null;
+async function remove(a) {
+  confirming = null;
+  const r = await call('store_action', { op: 'remove', app: a.id, name: a.name });
+  if (!r || !r.ok) { toast((r && r.error) || 'Couldn’t uninstall', 4000); drawDetail(); return; }
+  job = { step: 'Removing', percent: 10, app: a.id, done: false };
+  drawDetail(); watchJob();
+}
+async function openApp(a, again) {
+  toast('Opening ' + a.name);
+  const r = await call('open_ext', { id: 'app:' + a.id });
+  if (r && r.busy && !again) {
+    toast('Close ' + r.busy + ' first (Ctrl+click its tile on Home, then End task)', 4500);
+  } else if (r && r.error) toast(a.name + ' couldn’t start', 3600);
+}
+
+/* ---------- a download or removal in progress ---------- */
+let jobTimer = null;
+function watchJob() {
+  if (jobTimer) return;
+  const tick = async () => {
+    const st = await call('store_job');
+    job = st || {};
+    const chip = $('#jobchip');
+    if (job.step && !job.done) {
+      chip.classList.add('on'); $('#jobtxt').textContent = job.step + ' · ' + (job.percent || 0) + '%'; $('#jobbar').style.width = (job.percent || 0) + '%';
+      if (detail) drawDetail(); else if (!catalog.length) render(true);
+      jobTimer = setTimeout(tick, 1000);
+      return;
+    }
+    jobTimer = null; chip.classList.remove('on');
+    const wasRefresh = job.op === 'refresh';
+    refreshing = false;
+    if (job.error) { if (wasRefresh) refreshError = job.error; else toast(job.error, 5000); }
+    else if (job.op === 'install') toast((job.name || 'The app') + ' is ready. It’s on Home too.', 4000);
+    else if (job.op === 'remove') toast('Uninstalled ' + (job.name || 'the app'), 3600);
+    await load();
+    if (detail) drawDetail(); else render(true);
+  };
+  jobTimer = setTimeout(tick, 600);
+}
+
+/* ---------- moving around ---------- */
+const COLS = 4;
+function nav(a, e) {
+  const typing = e && e.target && e.target.id === 'q';
+  if (detail) {
+    const n = $('#dbtns').querySelectorAll('.btn').length;
+    if (a === 'left') dbtn = Math.max(0, dbtn - 1);
+    else if (a === 'right') dbtn = Math.min(n - 1, dbtn + 1);
+    else if (a === 'ok') {
+      if (confirming) { const c = confirming; if (dbtn === 1) remove(c); else { confirming = null; drawDetail(); } return true; }
+      const b = buttons()[dbtn]; if (b) b[2]();
+      return true;
+    } else if (a === 'back' || a === 'menu') { if (confirming) { confirming = null; drawDetail(); } else if (a === 'menu') home(); else closeDetail(); return true; }
+    else if (a === 'up' || a === 'down') { const d = $('#ddesc'); d.style.overflow = 'auto'; d.scrollTop += a === 'down' ? 120 : -120; return true; }
+    $('#dbtns').querySelectorAll('.btn').forEach((x, k) => x.classList.toggle('f', k === dbtn));
+    return true;
+  }
+  if (typing) {
+    if (a === 'ok' || a === 'down') { $('#q').blur(); area = 'grid'; pos = 0; paint(); }
+    else if (a === 'back') { $('#q').value = ''; setQuery(''); $('#q').blur(); area = 'tabs'; paint(); }
+    return true;
+  }
+  const n = cards().length;
+  switch (a) {
+    case 'left': if (area === 'tabs') { tab = (tab + TABS.length - 1) % TABS.length; pos = 0; render(); } else if (area === 'grid' && pos % COLS) { pos--; paint(); } break;
+    case 'right': if (area === 'tabs') { tab = (tab + 1) % TABS.length; pos = 0; render(); } else if (area === 'grid' && pos % COLS < COLS - 1 && pos + 1 < n) { pos++; paint(); } break;
+    case 'up': if (area === 'grid') { if (pos >= COLS) pos -= COLS; else area = 'tabs'; } else if (area === 'tabs') area = 'search'; paint(); break;
+    case 'down': if (area === 'search') area = 'tabs'; else if (area === 'tabs') { if (n) { area = 'grid'; pos = 0; } } else if (pos + COLS < n) pos += COLS; else if (Math.floor(pos / COLS) < Math.floor((n - 1) / COLS)) pos = n - 1; paint(); break;
+    case 'ok': if (area === 'search') { $('#q').focus(); } else if (area === 'tabs') { if (n) { area = 'grid'; pos = 0; paint(); } else if (refreshError) getCatalog(); } else openCard(pos); break;
+    case 'opts': area = 'search'; paint(); $('#q').focus(); break;
+    case 'back': if (query) { $('#q').value = ''; setQuery(''); } else home(); break;
+    case 'menu': home(); break;
+  }
+  return true;
+}
+const home = () => { location.href = 'index.html'; };
+let qTimer = null;
+function setQuery(v) { query = v.trim(); if (query && tab !== 0) { /* search covers every shelf */ } pos = 0; render(); }
+$('#q').addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(() => setQuery($('#q').value), 200); });
+$('#q').addEventListener('focus', () => { area = 'search'; paint(); });
+LOS.onNav(nav);
+addEventListener('keydown', e => {   // "/" jumps to search, like on websites
+  if (e.key === '/' && e.target.id !== 'q' && !detail) { e.preventDefault(); e.stopImmediatePropagation(); area = 'search'; paint(); $('#q').focus(); }
+}, true);
+
+/* mouse */
+$('#tabs').onclick = e => { const t = e.target.closest('.tab'); if (!t || detail) return; tab = +t.dataset.k; area = 'tabs'; pos = 0; if (query) { $('#q').value = ''; query = ''; } render(); };
+$('#grid').onclick = e => { const c = e.target.closest('.card'); if (!c || detail) return; area = 'grid'; pos = +c.dataset.k; paint(); openCard(pos); };
+$('#grid').addEventListener('mousemove', e => { const c = e.target.closest('.card'); if (!c || detail || !LOS.mouseRecent()) return; const k = +c.dataset.k; if (area === 'grid' && k === pos) return; area = 'grid'; pos = k; paint(); });
+$('#dbtns').onclick = e => { const b = e.target.closest('.btn'); if (!b) return; dbtn = +b.dataset.k; nav('ok'); };
+$('#ha').onclick = () => nav('ok'); $('#hb').onclick = () => nav('back'); $('#hm').onclick = home; $('#hy').onclick = () => nav('opts');
+
+/* start */
+(async function start() {
+  for (let i = 0; i < 10 && !(await load()); i++) await new Promise(r => setTimeout(r, 1000));
+  render();
+  if (job.step && !job.done) watchJob();
+  const want = decodeURIComponent(location.hash.slice(1));
+  if (/^[A-Za-z][\w-]*(\.[\w-]+){2,}$/.test(want)) openDetail(want);
+})();
+</script>
+</body>
+</html>

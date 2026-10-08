@@ -1,0 +1,60 @@
+#!/usr/bin/python3
+"""Closes a drive so it's safe to unplug: finishes writing, unmounts it and, for a USB
+drive, powers it down. Usage: launchos-eject /dev/sdX   (run by launchos-helper)"""
+import os, sys
+sys.path.insert(0, "/usr/local/lib/launchos")
+import disks as D
+
+
+def walk(nodes):
+    for n in nodes:
+        yield n
+        yield from walk(n.get("children") or [])
+
+
+def main():
+    disk = sys.argv[1] if len(sys.argv) > 1 else ""
+    fd = D.lock()
+    try:
+        D.status("drive", "Finishing writing to the drive", 20)
+        if not D.DISK.fullmatch(disk) or not os.path.exists(disk):
+            D.status("drive", "", 100, True, "That drive isn’t there any more.")
+            return
+        info = (D.lsblk(disk) or [{}])[0]
+        nodes = list(walk([info]))
+        devs = {n.get("name") for n in nodes}
+        if devs & D.system_disks():
+            D.status("drive", "", 100, True, "That drive is used by LaunchOS itself.")
+            return
+        points, held = D.in_use(nodes)
+        if held or any(not p.startswith(D.MEDIA + "/") for p in points):
+            D.status("drive", "", 100, True, "That drive is in use by the system.")
+            return
+        os.sync()
+        for p in sorted(points, key=len, reverse=True):
+            if D.sh("umount", p, timeout=120).returncode != 0:
+                D.status("drive", "", 100, True, "Something is still using this drive. Close any program or game running from it, then try again.")
+                return
+            try:
+                os.rmdir(p)
+            except OSError:
+                pass
+        removable = bool(info.get("rm")) or info.get("tran") == "usb"
+        if removable:
+            D.set_ejected(D.ejected() | {n.get("uuid") for n in nodes if n.get("uuid")})
+            if info.get("tran") == "usb":   # power it down, like "safely remove" on Windows
+                D.sh("sync")
+                try:
+                    with open(f"/sys/block/{os.path.basename(disk)}/device/delete", "w") as f:
+                        f.write("1")
+                except OSError:
+                    pass
+            D.status("drive", "Safe to unplug", 100, True)
+        else:
+            D.status("drive", "Closed", 100, True)
+    finally:
+        os.close(fd)
+
+
+if __name__ == "__main__":
+    main()

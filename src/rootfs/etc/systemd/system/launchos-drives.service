@@ -1,0 +1,7 @@
+[Unit]
+Description=Open USB drives for LaunchOS
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/launchos-drives --udev

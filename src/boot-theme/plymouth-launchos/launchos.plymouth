@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=LaunchOS
+Description=Spinning ferris wheel
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/launchos
+ScriptFile=/usr/share/plymouth/themes/launchos/launchos.script

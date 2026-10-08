@@ -1,0 +1,292 @@
+#!/usr/bin/python3
+"""Updates, run as root by launchos-helper.
+
+  launchos-update check    is there a newer LaunchOS on GitHub?
+  launchos-update apply    download it, check it, and put it in place
+  launchos-update apps     update the apps installed from the Store
+  launchos-update system   Ubuntu's own updates (security fixes)
+
+A LaunchOS update is a small package published with each release: launchos-update.json
+(the version, the package's SHA-256 and any system packages it needs) and
+launchos-update.tar.gz (LaunchOS's own files). Only LaunchOS's own folders can be written.
+"""
+import hashlib, io, json, os, re, shutil, subprocess, sys, tarfile, time, urllib.request
+sys.path.insert(0, "/usr/local/lib/launchos")
+import disks as D
+
+CONF = "/etc/launchos/update.conf"
+DEFAULT_URL = "https://github.com/maddoxdunlap1-glitch/LaunchOs/releases/latest/download/"
+CACHE = "/var/cache/launchos"
+MAX_SIZE = 200 << 20
+# the only places an update may write to
+ALLOWED = ("opt/launcher/", "usr/local/bin/launchos-", "usr/local/sbin/launchos-", "usr/local/lib/launchos/",
+           "etc/launchos/", "etc/systemd/system/launch", "etc/udev/rules.d/90-launchos", "etc/tmpfiles.d/launchos",
+           "etc/launchos-release")
+NEVER = ("etc/launchos/installed", "etc/launchos/update.conf")
+PKG = re.compile(r"[a-z0-9][a-z0-9+.-]{1,60}")
+
+
+def version(text):
+    m = re.search(r'VERSION="?([0-9][0-9.]*)', text or "")
+    return m.group(1) if m else "0"
+
+
+def vtuple(v):
+    return tuple(int(x) for x in re.findall(r"\d+", str(v))[:4]) or (0,)
+
+
+def current():
+    try:
+        with open("/etc/launchos-release") as f:
+            return version(f.read())
+    except OSError:
+        return "0"
+
+
+def base_url():
+    try:
+        with open(CONF) as f:
+            for line in f:
+                if line.strip().startswith("url="):
+                    u = line.split("=", 1)[1].strip()
+                    # https only (plain http just for the test machine's own address)
+                    if u.startswith("https://") or u.startswith("http://10.0.2.2"):
+                        return u if u.endswith("/") else u + "/"
+    except OSError:
+        pass
+    return DEFAULT_URL
+
+
+def fetch(name, limit, progress=None, url=None):
+    req = urllib.request.Request(url or base_url() + name, headers={"User-Agent": "LaunchOS-updater"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        total = int(r.headers.get("Content-Length") or 0)
+        if total > limit:
+            raise ValueError("too big")
+        out, got = io.BytesIO(), 0
+        while True:
+            chunk = r.read(1 << 16)
+            if not chunk:
+                break
+            got += len(chunk)
+            if got > limit:
+                raise ValueError("too big")
+            out.write(chunk)
+            if progress and total:
+                progress(got, total)
+        return out.getvalue()
+
+
+def manifest():
+    m = json.loads(fetch("launchos-update.json", 1 << 20).decode("utf-8"))
+    if not isinstance(m, dict) or not re.fullmatch(r"[0-9]+(\.[0-9]+){0,3}", str(m.get("version", ""))):
+        raise ValueError("bad manifest")
+    return m
+
+
+def say(step, pct, done=False, err="", **extra):
+    D.status("update", step, pct, done, err, **extra)
+
+
+def offline(e):
+    import urllib.error
+    if isinstance(e, urllib.error.HTTPError) and e.code == 404:
+        return "No update is published right now. Try again later."
+    if isinstance(e, ValueError):
+        return "The update on GitHub isn’t right. Try again later."
+    return "Couldn’t reach GitHub. Check your internet connection and try again."
+
+
+def check():
+    say("Checking for updates", 10)
+    try:
+        m = manifest()
+    except Exception as e:
+        say("", 100, True, offline(e))
+        return
+    cur, new = current(), str(m["version"])
+    notes = str(m.get("notes", ""))[:2000]
+    if vtuple(new) > vtuple(cur):
+        say("LaunchOS " + new + " is available", 100, True, available=True, latest=new, current=cur, notes=notes,
+            full=bool(m.get("full")))
+    else:
+        say("LaunchOS is up to date (" + cur + ")", 100, True, available=False, latest=new, current=cur)
+
+
+def safe_members(tar):
+    """Every file in the package, checked: plain files and folders inside LaunchOS's own places only."""
+    out = []
+    for m in tar.getmembers():
+        if m.name.startswith("/") or ".." in m.name.split("/"):
+            raise ValueError("bad path " + m.name)
+        name = os.path.normpath(m.name)
+        name = name[2:] if name.startswith("./") else name
+        if not name or name == "." or ".." in name.split("/"):
+            raise ValueError("bad path " + m.name)
+        if m.isdir():
+            continue
+        if not m.isfile():
+            raise ValueError("not a plain file: " + m.name)
+        if not name.startswith(ALLOWED) or name in NEVER:
+            raise ValueError("outside LaunchOS: " + m.name)
+        out.append((name, m))
+    return out
+
+
+def apply():
+    say("Checking for updates", 3)
+    try:
+        m = manifest()
+    except Exception as e:
+        say("", 100, True, offline(e))
+        return
+    new = str(m["version"])
+    if vtuple(new) <= vtuple(current()):
+        say("LaunchOS is up to date (" + current() + ")", 100, True, available=False)
+        return
+    if not saving():
+        say("", 100, True, "Turn on saving first: without it, the update is gone when you restart.")
+        return
+    if m.get("full"):
+        say("", 100, True, "LaunchOS " + new + " has to be installed fresh: download LaunchOS.zip from GitHub and write it to your USB stick again.")
+        return
+    name = "launchos-update.tar.gz"
+    base = base_url()
+    # the package of exactly this version (not "latest", which may change in between)
+    url = base.replace("/releases/latest/download/", "/releases/download/v" + new + "/") + name
+    try:
+        data = fetch(name, MAX_SIZE, lambda got, total: say("Downloading LaunchOS " + new, 5 + 55 * got // total), url=url)
+    except Exception as e:
+        say("", 100, True, offline(e))
+        return
+    if hashlib.sha256(data).hexdigest() != str(m.get("sha256", "")).lower():
+        say("", 100, True, "The download was damaged. Try again.")
+        return
+    say("Checking the update", 62)
+    try:
+        tar = tarfile.open(fileobj=io.BytesIO(data), mode="r:gz")
+        files = safe_members(tar)
+    except Exception:
+        say("", 100, True, "The update on GitHub isn’t right. Try again later.")
+        return
+    pkgs = [p for p in m.get("apt") or [] if isinstance(p, str) and PKG.fullmatch(p)]
+    missing = [p for p in pkgs if subprocess.run(["dpkg-query", "-W", "-f=${Status}", p], capture_output=True,
+                                                   text=True).stdout.strip() != "install ok installed"]
+    if missing:   # new system parts it needs, first, so nothing runs without them
+        say("Getting the system parts it needs", 65)
+        env = dict(os.environ, DEBIAN_FRONTEND="noninteractive")
+        subprocess.run(["apt-get", "update", "-qq"], env=env, capture_output=True, timeout=1800)
+        r = subprocess.run(["apt-get", "install", "-y", "--no-install-recommends", *missing], env=env,
+                           capture_output=True, text=True, timeout=3600)
+        if r.returncode != 0:
+            say("", 100, True, "Couldn’t get the system parts this update needs. Check your internet connection and try again.")
+            return
+    say("Installing LaunchOS " + new, 80)
+    release = None
+    for name, member in files:
+        if name == "etc/launchos-release":
+            release = (name, member)   # last, so a half-done update still looks like the old version
+            continue
+        put(tar, name, member)
+    for name in m.get("delete") or []:   # files a newer LaunchOS doesn't use any more
+        name = str(name)
+        if ".." not in name.split("/") and name.startswith(ALLOWED) and name not in NEVER and os.path.isfile("/" + name) \
+                and not os.path.islink("/" + name):
+            os.unlink("/" + name)
+    if release:
+        put(tar, *release)
+    for cmd in (["systemctl", "daemon-reload"], ["systemd-tmpfiles", "--create"], ["udevadm", "control", "--reload"]):
+        subprocess.run(cmd, capture_output=True)
+    for unit in m.get("enable") or []:   # new LaunchOS services
+        if re.fullmatch(r"launch[a-z0-9-]*\.(service|path|timer)", str(unit)):
+            subprocess.run(["systemctl", "enable", str(unit)], capture_output=True)
+    say("Updated to LaunchOS " + new + ". Restart to finish.", 100, True, restart=True, latest=new)
+
+
+def put(tar, name, member):
+    dest = "/" + name
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    tmp = dest + ".launchos-new"
+    src = tar.extractfile(member)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "wb") as f:
+        shutil.copyfileobj(src, f)
+    os.chmod(tmp, 0o755 if member.mode & 0o111 else 0o644)
+    os.replace(tmp, dest)
+
+
+def saving():
+    with open("/proc/cmdline") as f:
+        persistent = "persistent" in f.read().split()
+    labels = D.sh("lsblk", "-rno", "LABEL").stdout.split()
+    return os.path.exists("/etc/launchos/installed") or (persistent and ("casper-rw" in labels or "writable" in labels))
+
+
+def apps():
+    def say_a(step, pct, done=False, err=""):
+        D.status("appupdate", step, pct, done, err)
+    say_a("Updating your apps", 10)
+    if not saving():
+        say_a("", 100, True, "Turn on saving first: without it, updates are gone at the next start.")
+        return
+    r = subprocess.run(["flatpak", "update", "--system", "-y", "--noninteractive"], capture_output=True, text=True, timeout=7200)
+    if r.returncode != 0:
+        say_a("", 100, True, "Couldn’t update your apps. Check your internet connection and try again.")
+        return
+    subprocess.run(["flatpak", "uninstall", "--system", "-y", "--noninteractive", "--unused"], capture_output=True, timeout=1800)
+    say_a("Your apps are up to date", 100, True)
+
+
+def system():
+    """Ubuntu's updates. 'upgrade' (not full-upgrade) never adds or removes packages, so the
+    tested kernel and start-up files stay as they are."""
+    def say_s(step, pct, done=False, err=""):
+        D.status("sysupdate", step, pct, done, err)
+    if not saving():
+        say_s("", 100, True, "Turn on saving first: without it, updates are gone at the next start.")
+        return
+    env = dict(os.environ, DEBIAN_FRONTEND="noninteractive")
+    say_s("Checking for system updates", 5)
+    r = subprocess.run(["apt-get", "update"], env=env, capture_output=True, text=True, timeout=1800)
+    out = r.stdout + r.stderr
+    offline = any(t in out for t in ("Failed to fetch", "Could not resolve", "Temporary failure resolving", "Unable to connect"))
+    if r.returncode != 0 or offline:
+        say_s("", 100, True, "Couldn’t reach Ubuntu’s servers. Check your internet connection and try again.")
+        return
+    rfd, wfd = os.pipe()
+    p = subprocess.Popen(["apt-get", "-y", "-o", "APT::Status-Fd=%d" % wfd, "-o", "Dpkg::Options::=--force-confold",
+                          "-o", "Dpkg::Options::=--force-confdef", "upgrade"],
+                         env=env, pass_fds=(wfd,), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    os.close(wfd)
+    with os.fdopen(rfd) as f:
+        for line in f:   # dlstatus:…:percent:what / pmstatus:package:percent:what
+            parts = line.strip().split(":", 3)
+            if len(parts) == 4 and parts[0] in ("dlstatus", "pmstatus"):
+                try:
+                    pct = float(parts[2])
+                except ValueError:
+                    continue
+                if parts[0] == "dlstatus":
+                    say_s("Downloading updates", 10 + int(pct * 0.4))
+                else:
+                    say_s("Installing updates", 50 + int(pct * 0.49))
+    if p.wait() != 0:
+        say_s("", 100, True, "Some updates didn’t install. Try again later.")
+        return
+    say_s("Your system is up to date", 100, True)
+
+
+def main():
+    what = sys.argv[1] if len(sys.argv) > 1 else ""
+    fn = {"check": check, "apply": apply, "apps": apps, "system": system}.get(what)
+    if not fn:
+        return 1
+    try:
+        fn()
+    except Exception as e:   # never leave the screen waiting on a job that died
+        D.status({"system": "sysupdate", "apps": "appupdate"}.get(what, "update"), "", 100, True, "Something went wrong: " + str(e)[:200])
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

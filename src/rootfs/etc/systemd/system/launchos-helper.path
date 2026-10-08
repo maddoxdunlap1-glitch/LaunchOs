@@ -1,0 +1,6 @@
+[Unit]
+Description=Watch for requests from the LaunchOS launcher
+[Path]
+DirectoryNotEmpty=/run/launchos/requests
+[Install]
+WantedBy=multi-user.target
