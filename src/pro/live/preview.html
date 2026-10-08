@@ -1,0 +1,10 @@
+<!DOCTYPE html><html><head><style>html,body{margin:0;background:#000}#w{position:relative;width:1280px;height:720px}canvas{position:absolute;inset:0;width:100%;height:100%}</style>
+<base href="../../ui/"></head><body><div id="w"></div>
+<script src="../pro/live/common.js"></script><script src="../pro/live/aurora-src.js"></script>
+<script src="../pro/live/warp.js"></script><script src="../pro/live/drift.js"></script><script src="../pro/live/launch.js"></script><script src="../pro/live/sky.js"></script>
+<script>
+// Shows one live background (for checking them and making their previews): preview.html#warp
+const name = location.hash.slice(1) || 'warp';
+const c = document.createElement('canvas'); document.getElementById('w').append(c);
+window.stopLive = LOSLive[name](c, { hardware: true });
+</script></body></html>

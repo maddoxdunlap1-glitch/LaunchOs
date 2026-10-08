@@ -123,3 +123,8 @@ firmware-intel-misc
 firmware-mediatek
 firmware-libertas
 firmware-ti-connectivity
+# gaming (LaunchOS Pro's FPS counter), memory compression for every PC, QR codes in Settings
+mangohud
+mangohud:i386
+systemd-zram-generator
+python3-qrcode

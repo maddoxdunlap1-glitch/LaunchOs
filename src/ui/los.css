@@ -5,6 +5,11 @@
   --panel-2: #122235;
   --chip: #1a2b40;
   --line: #22344a;
+  --line2: #2a4260;
+  --tile1: #1d3550;
+  --tile2: #11233a;
+  --tb: #16273b;
+  --glyph: #1f3550;
   --ink: #f2f4f3;
   --ink-2: #b9c6d3;
   --mute: #8a98a8;
@@ -24,7 +29,13 @@ input { font: inherit; }
 #wrap { position: absolute; left: 50%; top: 50%; width: 1280px; height: 720px; }
 #stage { position: absolute; inset: 0; background: var(--bg); overflow: hidden; user-select: none; }
 .bgsvg { position: absolute; inset: 0; pointer-events: none; }
-body.nopattern .bgsvg { display: none; }
+body:not(.wall-contour) .bgsvg { display: none; }
+/* the background picture (or live background) behind Home, the sign-in screen and Setup */
+#wall { position: absolute; inset: 0; background: var(--bg) center / cover no-repeat; pointer-events: none; }
+#wall canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+/* darker at the top and bottom, so the clock, names and buttons stay easy to read */
+#wall::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(3, 7, 13, .5), rgba(3, 7, 13, .08) 20%, rgba(3, 7, 13, 0) 42%, rgba(3, 7, 13, .2) 62%, rgba(3, 7, 13, .62)); }
+body.wall-plain #wall::after { display: none; }
 .ic { width: 24px; height: 24px; }
 
 /* focus ring shared by every selectable thing */
@@ -34,7 +45,7 @@ body.nopattern .bgsvg { display: none; }
 .it { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 8px; margin-bottom: 8px; background: var(--panel-2); cursor: pointer; border: 2px solid transparent; }
 .it { transition: transform .16s ease, border-color .16s, box-shadow .16s; }
 .it.f { border-color: var(--accent); box-shadow: 0 0 0 6px rgba(var(--accent-glow), .1), 0 0 28px 6px rgba(var(--accent-glow), .12); transform: scale(1.025); }
-.it .glyph { width: 38px; height: 38px; border-radius: 10px; background: #1f3550; display: grid; place-items: center; font-size: 15px; color: #cfe6ff; flex: none; }
+.it .glyph { width: 38px; height: 38px; border-radius: 10px; background: var(--glyph); display: grid; place-items: center; font-size: 15px; color: #cfe6ff; flex: none; }
 .it .glyph .ic { width: 20px; height: 20px; }
 /* full-color icons (apps, settings): no tile behind them */
 .it .glyph.p { background: none; }
@@ -51,7 +62,7 @@ body.nopattern .bgsvg { display: none; }
 .hints button { display: flex; align-items: center; gap: 7px; }
 .hints u { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; text-decoration: none; font-size: 11px; font-weight: 600; color: #0b1726; }
 
-#toast { position: absolute; left: 50%; bottom: 58px; transform: translate(-50%, 30px); background: #16273b; border: 1px solid #2a4260; padding: 11px 20px; border-radius: 24px; font-size: 16px; opacity: 0; transition: .25s; z-index: 30; max-width: 1000px; width: max-content; text-align: center; pointer-events: none; }
+#toast { position: absolute; left: 50%; bottom: 58px; transform: translate(-50%, 30px); background: var(--tb); border: 1px solid var(--line2); padding: 11px 20px; border-radius: 24px; font-size: 16px; opacity: 0; transition: .25s; z-index: 30; max-width: 1000px; width: max-content; text-align: center; pointer-events: none; }
 #toast.on { opacity: 1; transform: translate(-50%, 0); }
 
 /* modal panel */

@@ -10,11 +10,11 @@ vec3 sky(vec2 p, float v) {
   for (int k = 0; k < 2; k++) {
     float fk = float(k);
     float x = p.x * (1.05 + fk * .45) + fk * 2.7;
-    float base = .66 - .09 * p.x + fk * .07 + .085 * sin(x * 2.3 + .4 + fk * 2.) + .06 * (fbm4(vec2(x * 1.6, fk * 4.)) - .5);
+    float base = .66 - .09 * p.x + fk * .07 + .085 * sin(x * 2.3 + .4 + fk * 2. + T * .15) + .06 * (fbm4(vec2(x * 1.6 + T * .05, fk * 4.)) - .5);
     float h = v - base;
-    float strength = smoothstep(.35, .62, fbm4(vec2(x * .75 + 2. + fk * 5., fk * 7.))) * (1. - fk * .3);
-    float len = .05 + .3 * pow(noise(vec2(x * 23., fk * 5. + 1.)), 2.);      // each ray its own height
-    float fine = noise(vec2(x * 70. + fbm4(vec2(x * 5., 1.)) * 4., fk * 3.));
+    float strength = smoothstep(.35, .62, fbm4(vec2(x * .75 + 2. + fk * 5. + T * .03, fk * 7.))) * (1. - fk * .3);
+    float len = .05 + .3 * pow(noise(vec2(x * 23. + T * .4, fk * 5. + 1.)), 2.);      // each ray its own height
+    float fine = noise(vec2(x * 70. + fbm4(vec2(x * 5., 1. + T * .2)) * 4., fk * 3. + T * .3));
     float a = smoothstep(-.06, .01, h) * exp(-max(h, 0.) / len) * (.3 + .9 * fine) * strength;
     a += exp(-abs(h) * 45.) * strength * .55;    // the bright lower edge
     vec3 c = mix(vec3(.3, 1., .62), vec3(.25, .9, .85), smoothstep(.0, .07, h));

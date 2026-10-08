@@ -6,28 +6,28 @@
 <title>Sign in to LaunchOS</title>
 <link rel="stylesheet" href="los.css">
 <style>
-#status { position: absolute; right: 56px; top: 38px; display: flex; align-items: center; gap: 14px; font-size: 19px; color: #dce6f0; }
+#status { position: absolute; right: 56px; top: 38px; display: flex; align-items: center; gap: 14px; font-size: 19px; color: #dce6f0; text-shadow: 0 1px 8px rgba(0, 0, 0, .7); }
 #net { color: #cfe6ff; display: flex; }
 #net.off { color: #e0443e; }
-#when { position: absolute; left: 0; right: 0; top: 96px; text-align: center; }
+#when { position: absolute; left: 0; right: 0; top: 96px; text-align: center; text-shadow: 0 2px 14px rgba(0, 0, 0, .55); }
 #time { font-size: 84px; font-weight: 300; letter-spacing: -.02em; line-height: 1; }
 #date { font-size: 20px; color: var(--ink-2); margin-top: 10px; }
 #card { position: absolute; left: 50%; top: 300px; width: 420px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 18px; }
 #av { width: 120px; height: 120px; border-radius: 50%; position: relative; box-shadow: 0 0 0 6px rgba(255, 255, 255, .06), 0 0 60px 10px rgba(95, 184, 255, .12); }
 #av:after { content: ""; position: absolute; left: 39px; top: 26px; width: 42px; height: 42px; border-radius: 50%; background: #1b3a5a; }
 #av:before { content: ""; position: absolute; left: 24px; bottom: 18px; width: 72px; height: 34px; border-radius: 36px 36px 10px 10px; background: #1b3a5a; }
-#nm { font-size: 30px; font-weight: 600; }
+#nm { font-size: 30px; font-weight: 600; text-shadow: 0 1px 10px rgba(0, 0, 0, .6); }
 .pw { display: flex; width: 100%; gap: 10px; }
 .pw input { flex: 1; font-size: 19px; padding: 13px 16px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel-2); color: var(--ink); outline: none; min-width: 0; }
 .pw input.f { border-color: var(--accent); }
 .pw button { padding: 0 16px; border-radius: 12px; background: var(--chip); font-size: 14px; }
 .go { min-width: 220px; padding: 14px 30px; border-radius: 28px; background: var(--accent); color: var(--accent-ink); font-size: 18px; font-weight: 700; border: 2px solid transparent; transition: transform .16s ease, box-shadow .16s; }
 .go.f { transform: scale(1.06); }
-#msg { min-height: 22px; font-size: 15px; color: var(--ink-2); text-align: center; }
+#msg { min-height: 22px; font-size: 15px; color: var(--ink-2); text-align: center; text-shadow: 0 1px 6px rgba(0, 0, 0, .8); }
 #msg.bad { color: #ff8a84; }
-#note { font-size: 14px; color: var(--mute); text-align: center; }
+#note { font-size: 14px; color: var(--ink-2); text-align: center; text-shadow: 0 1px 6px rgba(0, 0, 0, .8); }
 #bottom { position: absolute; left: 48px; bottom: 34px; display: flex; gap: 14px; }
-.sq { display: flex; align-items: center; gap: 10px; padding: 9px 16px 9px 10px; border-radius: 24px; background: #16273b; font-size: 15px; border: 2px solid transparent; transition: transform .16s ease, box-shadow .16s; }
+.sq { display: flex; align-items: center; gap: 10px; padding: 9px 16px 9px 10px; border-radius: 24px; background: var(--tb); font-size: 15px; border: 2px solid transparent; transition: transform .16s ease, box-shadow .16s; }
 .sq .pic { width: 28px; height: 28px; }
 .sq.f { transform: scale(1.06); }
 #hints { position: absolute; right: 44px; bottom: 12px; z-index: 4; }

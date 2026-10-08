@@ -7,14 +7,14 @@
 <link rel="stylesheet" href="los.css">
 <style>
 #top { position: absolute; left: 48px; right: 56px; top: 30px; height: 48px; }
-#me { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 14px; font-size: 17px; }
+#me { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 14px; font-size: 17px; text-shadow: 0 1px 8px rgba(0, 0, 0, .7); }
 #av { width: 46px; height: 46px; border-radius: 50%; background: #e0793a; position: relative; }
 #av:after { content: ""; position: absolute; left: 15px; top: 10px; width: 16px; height: 16px; border-radius: 50%; background: #1b3a5a; }
 #tb { position: absolute; left: 50%; top: 0; transform: translateX(-50%); display: flex; gap: 16px; }
-.tb { width: 46px; height: 46px; border-radius: 50%; background: #16273b; display: grid; place-items: center; color: #cfe6ff; transition: box-shadow .2s, transform .2s; }
+.tb { width: 46px; height: 46px; border-radius: 50%; background: var(--tb); display: grid; place-items: center; color: #cfe6ff; transition: box-shadow .2s, transform .2s; }
 .tb .pic { width: 30px; height: 30px; }
 .tb.f { transform: scale(1.15); box-shadow: 0 0 0 2px var(--accent), 0 0 0 7px rgba(var(--accent-glow), .16), 0 0 24px 10px rgba(var(--accent-glow), .2); }
-#status { position: absolute; right: 0; top: 8px; display: flex; align-items: center; gap: 14px; font-size: 19px; color: #dce6f0; }
+#status { position: absolute; right: 0; top: 8px; display: flex; align-items: center; gap: 14px; font-size: 19px; color: #dce6f0; text-shadow: 0 1px 8px rgba(0, 0, 0, .7); }
 #net { color: #cfe6ff; display: flex; }
 #net.off { color: #e0443e; }
 .rowglow { position: absolute; left: 30px; right: 30px; top: 322px; height: 210px; background: radial-gradient(60% 100% at 50% 50%, rgba(95, 184, 255, .14), rgba(95, 184, 255, 0)); filter: blur(14px); pointer-events: none; }
@@ -55,7 +55,7 @@ label.pw button { padding: 0 14px; border-radius: 10px; background: var(--chip);
 .t2 .g .pic { width: 44px; height: 44px; }
 .t2 b { position: absolute; left: 16px; bottom: 14px; font-weight: 600; font-size: 19px; text-shadow: 0 1px 6px rgba(0, 0, 0, .6); }
 .t2 small { position: absolute; left: 16px; bottom: 40px; font-size: 13px; color: rgba(255, 255, 255, .78); }
-#cap { position: absolute; left: 60px; top: 304px; font-size: 19px; font-weight: 600; }
+#cap { position: absolute; left: 60px; top: 304px; font-size: 19px; font-weight: 600; text-shadow: 0 1px 8px rgba(0, 0, 0, .7); }
 #hints { position: absolute; right: 44px; bottom: 8px; z-index: 4; }
 #guide { position: absolute; left: 0; top: 0; bottom: 0; width: 420px; background: var(--panel); border-right: 1px solid var(--line); transform: translateX(-112%); transition: transform .32s cubic-bezier(.2, .8, .2, 1); padding: 28px 26px; box-shadow: 0 0 0 8px rgba(95, 184, 255, .05), 0 0 0 18px rgba(95, 184, 255, .04), 0 0 60px 20px rgba(95, 184, 255, .08); z-index: 6; }
 #guide.on { transform: none; }
@@ -93,7 +93,7 @@ label.pw button { padding: 0 14px; border-radius: 10px; background: var(--chip);
 const { $, call, toast, icon, pic, appPic, esc } = LOS;
 const st = $('#stage');
 call('session_state').then(s => { if (s && s.signed_in === false) location.href = 'login.html'; });
-const TILE = 'linear-gradient(160deg,#1d3550,#11233a)';
+const TILE = 'linear-gradient(160deg,var(--tile1),var(--tile2))';
 
 /* ---------- home tiles ---------- */
 /* Web apps run in their own window. Going Home keeps them running; Ctrl+click a tile to end one. */

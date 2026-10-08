@@ -200,10 +200,14 @@
   addEventListener('unhandledrejection', e => report(e.reason && (e.reason.stack || e.reason.message) || e.reason, 'promise'));
 
   /* ---------- saved preferences ---------- */
-  const DEFAULTS = { name: 'Player 1', avatar: '#e0793a', accent: 'green', size: 'fill', pattern: true, timezone: '', setupDone: false, apps: [], order: [] };
+  const DEFAULTS = { name: 'Player 1', avatar: '#e0793a', accent: 'green', size: 'fill', pattern: true, timezone: '', setupDone: false, apps: [], order: [],
+    wall: '', theme: 'midnight', proOn: false };
   function load() {
-    try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('launchos.prefs') || '{}')); }
-    catch (e) { return Object.assign({}, DEFAULTS); }
+    let p;
+    try { p = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('launchos.prefs') || '{}')); }
+    catch (e) { p = Object.assign({}, DEFAULTS); }
+    if (!p.wall) p.wall = p.pattern === false ? 'plain' : 'liftoff';   // (before 1.0 there was only the line pattern, on or off)
+    return p;
   }
   let prefs = load();
   function save(patch) {
@@ -225,12 +229,81 @@
   const SIZES = { fill: 1, tv: 0.93, compact: 0.85 };
   const SIZE_NAMES = { fill: 'Fill screen', tv: 'TV safe area', compact: 'Compact' };
 
+  /* Backgrounds: pictures for everyone, live (moving) ones with LaunchOS Pro. */
+  const WALLS = [['liftoff', 'Liftoff'], ['nebula', 'Nebula'], ['aurora', 'Aurora'], ['orbit', 'Orbit'], ['dunes', 'Dunes'], ['waves', 'Waves'],
+    ['grid', 'Retro'], ['contour', 'Contour lines'], ['plain', 'Plain']].map(([id, name]) => ({ id, name }));
+  const LIVE = [['warp', 'Warp speed', 'nebula'], ['drift', 'Nebula drift', 'nebula'], ['sky', 'Living aurora', 'aurora'], ['launch', 'Launch day', 'liftoff']]
+    .map(([id, name, still]) => ({ id: 'live:' + id, live: id, name, still, pro: true }));
+  /* Color themes: Midnight for everyone, the rest with LaunchOS Pro. */
+  const THEMES = {
+    midnight: ['Midnight', '#0b1726 #0f1b2a #122235 #1a2b40 #22344a #1d3550 #11233a #16273b #1f3550 #2a4260'],
+    carbon: ['Carbon', '#0d0e10 #141518 #1a1c20 #23262b #2c3036 #25282e #17191c #1c1e22 #262a30 #353a42'],
+    ocean: ['Deep sea', '#05181c #0a2025 #0d2a30 #13363d #1b444c #134049 #0b2a30 #10313a #164049 #22535c'],
+    royal: ['Royal', '#110b22 #170f2c #1d1637 #261d46 #312857 #2c2152 #1a1335 #21183f #2b2150 #3b3170'],
+    ember: ['Ember', '#170d0b #1f1210 #281814 #33201a #422a22 #3a241c #241612 #2c1b16 #3a2219 #52352a'],
+    oled: ['Pure black', '#000000 #0a0a0b #111214 #1a1b1e #26282c #1b1c20 #0f1012 #141518 #1d1f23 #303238'],
+  };
+  const THEME_VARS = ['--bg', '--panel', '--panel-2', '--chip', '--line', '--tile1', '--tile2', '--tb', '--glyph', '--line2'];
+  const proOK = () => !!prefs.proOn;
+  let liveStop = null, liveId = '';
+  function applyWall() {
+    const st = $('#stage'); if (!st || !document.body) return;
+    let w = $('#wall');
+    if (!w) { w = document.createElement('div'); w.id = 'wall'; w.setAttribute('aria-hidden', 'true'); st.prepend(w); }
+    let id = prefs.wall;
+    const live = LIVE.find(x => x.id === id);
+    if (live && !proOK()) id = live.still;
+    if (!live && !WALLS.some(x => x.id === id)) id = 'liftoff';
+    const still = live && proOK() ? live.still : id;
+    document.body.classList.toggle('wall-contour', still === 'contour');
+    document.body.classList.toggle('wall-plain', still === 'plain' || still === 'contour');
+    w.style.backgroundImage = still === 'contour' || still === 'plain' ? 'none' : `url("walls/${still}.webp")`;
+    // a live background draws on a canvas over its still picture (which shows if it can't run)
+    const want = live && proOK() ? live.live : '';
+    if (want === liveId) return;
+    if (liveStop) { try { liveStop(); } catch (e) { /* already gone */ } liveStop = null; }
+    w.querySelectorAll('canvas').forEach(c => c.remove());
+    liveId = want;
+    if (!want) return;
+    const start = () => {
+      const fn = window.LOSLive && window.LOSLive[want];
+      if (!fn || liveId !== want) return;
+      const c = document.createElement('canvas'); w.append(c);
+      try { liveStop = fn(c, { hardware: !!window.__losHW }); } catch (e) { c.remove(); report(e.message, 'live ' + want); }
+    };
+    if (window.LOSLive && window.LOSLive[want]) { start(); return; }
+    // the live backgrounds come with LaunchOS Pro: shared helpers first, then the one wanted
+    const base = native ? 'file:///opt/launchos-pro/live/' : '../pro/live/';
+    const files = ['common'].concat(want === 'sky' ? ['aurora-src'] : [], [want]);
+    const next = () => {
+      const f = files.shift();
+      if (!f) { start(); return; }
+      if (document.querySelector(`script[data-live="${f}"]`)) { next(); return; }
+      const sc = document.createElement('script');
+      sc.src = base + f + '.js'; sc.dataset.live = f;
+      sc.onload = next;
+      document.head.append(sc);
+    };
+    next();
+  }
   function applyLook() {
     const a = ACCENTS[prefs.accent] || ACCENTS.green;
     const r = document.documentElement.style;
     r.setProperty('--accent', a[0]); r.setProperty('--accent-glow', a[1]); r.setProperty('--accent-ink', a[2]);
+    const th = (prefs.theme !== 'midnight' && proOK() && THEMES[prefs.theme]) || THEMES.midnight;
+    th[1].split(' ').forEach((c, i) => r.setProperty(THEME_VARS[i], c));
     document.body && document.body.classList.toggle('nopattern', !prefs.pattern);
+    applyWall();
     fit();
+  }
+  /* Whether LaunchOS Pro is on (remembered, so the look is right from the first frame). */
+  function checkPro() {
+    if (!native) return;
+    raw('pro_state').then(s => {
+      if (!s || s.error) return;
+      const on = !!s.active;
+      if (on !== !!prefs.proOn) save({ proOn: on });
+    });
   }
 
   /* ---------- fit the 1280x720 stage to any screen ---------- */
@@ -388,8 +461,8 @@
 
   window.LOS = {
     $, call, native, toast, icon, pic, appPic, fileUrl, esc, fit, clockText, mouseRecent,
-    get prefs() { return prefs; }, save, ACCENTS, SIZE_NAMES,
+    get prefs() { return prefs; }, save, ACCENTS, SIZE_NAMES, WALLS, LIVE, THEMES, get pro() { return proOK(); }, checkPro,
     onNav(fn, opts) { handler = fn; guideHere = !!(opts && opts.guide); },   // opts.guide: the page handles the Super key itself
   };
-  document.addEventListener('DOMContentLoaded', () => { hideCur(); applyLook(); });
+  document.addEventListener('DOMContentLoaded', () => { hideCur(); applyLook(); checkPro(); });
 })();
