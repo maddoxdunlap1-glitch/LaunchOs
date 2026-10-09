@@ -297,7 +297,8 @@ function nav(a, e) {
       if (confirming) { const c = confirming; if (dbtn === 1) remove(c); else { confirming = null; drawDetail(); } return true; }
       const b = buttons()[dbtn]; if (b) b[2]();
       return true;
-    } else if (a === 'back' || a === 'menu') { if (confirming) { confirming = null; drawDetail(); } else if (a === 'menu') home(); else closeDetail(); return true; }
+    } else if (a === 'menu') { home(); return true; }   // (≡ goes Home from anywhere, like its button; nothing is uninstalled)
+    else if (a === 'back') { if (confirming) { confirming = null; drawDetail(); } else closeDetail(); return true; }
     else if (a === 'up' || a === 'down') { const d = $('#ddesc'); d.style.overflow = 'auto'; d.scrollTop += a === 'down' ? 120 : -120; return true; }
     $('#dbtns').querySelectorAll('.btn').forEach((x, k) => x.classList.toggle('f', k === dbtn));
     return true;
@@ -335,7 +336,7 @@ $('#tabs').onclick = e => { const t = e.target.closest('.tab'); if (!t || detail
 $('#grid').onclick = e => { const c = e.target.closest('.card'); if (!c || detail) return; area = 'grid'; pos = +c.dataset.k; paint(); openCard(pos); };
 $('#grid').addEventListener('mousemove', e => { const c = e.target.closest('.card'); if (!c || detail || !LOS.mouseRecent()) return; const k = +c.dataset.k; if (area === 'grid' && k === pos) return; area = 'grid'; pos = k; paint(); });
 $('#dbtns').onclick = e => { const b = e.target.closest('.btn'); if (!b) return; dbtn = +b.dataset.k; nav('ok'); };
-$('#ha').onclick = () => nav('ok'); $('#hb').onclick = () => nav('back'); $('#hm').onclick = home; $('#hy').onclick = () => nav('opts');
+$('#ha').onclick = () => nav('ok'); $('#hb').onclick = () => nav('back'); $('#hm').onclick = () => nav('menu'); $('#hy').onclick = () => nav('opts');
 
 /* start */
 (async function start() {

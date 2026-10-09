@@ -63,7 +63,7 @@ chown -R 0:0 "$R/opt/launcher"; chmod -R a+rX,go-w "$R/opt/launcher"
 sed -i "s/^VERSION=.*/VERSION=\"$VERSION\"/; s/^BUILD_DATE=.*/BUILD_DATE=\"$(date -u +%F)\"/" "$R/etc/launchos-release"
 cat "$R/etc/launchos-release"
 
-# boot screen: the ferris wheel
+# boot screen: the rocket
 rm -rf "$R/usr/share/plymouth/themes/launchos"
 cp -a "$SRC/boot-theme/plymouth-launchos" "$R/usr/share/plymouth/themes/launchos"
 chown -R 0:0 "$R/usr/share/plymouth/themes/launchos"

@@ -258,7 +258,7 @@ namespace LaunchOSFlasher
             var d = drives.SelectedItem as Drive;
             string target = TargetVersion();
             if (driveNote.Tag is string problem) driveNote.Text = problem;
-            else if (d == null) driveNote.Text = "Plug in a USB drive of 4 GB or more. Everything on it will be erased.";
+            else if (d == null) driveNote.Text = "Plug in a USB drive of 8 GB or more. Everything on it will be erased.";
             else if (d.HasLaunchOS && target != "" && Images.CompareVersions(d.LaunchOSVersion, target) < 0)
                 driveNote.Text = "This drive has " + Images.Describe(d.LaunchOSVersion) + ". Writing updates it to LaunchOS " + target + " (saves on the drive are erased).";
             else if (d.HasLaunchOS && target != "" && Images.CompareVersions(d.LaunchOSVersion, target) == 0)

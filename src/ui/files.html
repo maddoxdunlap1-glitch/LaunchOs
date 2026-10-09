@@ -49,8 +49,10 @@
 .k-folder { background: #3a5a2a !important; color: #e6f5c8 !important; }
 .k-image { background: #2c4c74 !important; } .k-video { background: #5a2f6e !important; } .k-audio { background: #6e4a1f !important; }
 .k-program { background: #2b5797 !important; } .k-archive { background: #5c4a33 !important; } .k-doc { background: #7a2e2e !important; }
-#empty { position: absolute; inset: 150px 20px auto; text-align: center; color: var(--mute); font-size: 16px; line-height: 1.6; display: none; }
+#empty { position: absolute; top: 150px; left: 50%; transform: translateX(-50%); width: min(520px, calc(100% - 40px)); box-sizing: border-box; padding: 20px 18px; border: 1px solid transparent; border-radius: 14px; text-align: center; color: var(--mute); font-size: 16px; line-height: 1.6; display: none; }
 #empty b { display: block; color: var(--ink-2); font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+/* an empty folder that has the focus (B goes back, X has New folder and Paste here) */
+#empty.f { border-color: var(--accent); background: rgba(var(--accent-glow), .07); box-shadow: 0 0 0 4px rgba(var(--accent-glow), .08); }
 #main.focus { border-color: #2f4a68; }
 
 #clip { position: absolute; left: 56px; bottom: 18px; font-size: 14px; color: var(--ink-2); display: none; align-items: center; gap: 10px; max-width: 640px; }
@@ -273,6 +275,7 @@ function paintList() {
     el.classList.toggle('sel', !!e && sel.has(e.name));
   });
   $('#main').classList.toggle('focus', focus === 'list');
+  $('#empty').classList.toggle('f', focus === 'list' && mode !== 'panel' && !entries.length);
   hints();
 }
 function showRow() {

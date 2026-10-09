@@ -85,12 +85,15 @@ const osk = { name: 'on-screen keyboard', when: "document.body && document.body.
 const bye = { name: 'power', when: "getComputedStyle(document.querySelector('#bye')).display !== 'none'", modal: true, box: '#bye', busy: 'true', groups: [] };
 const outside = { sel: '#dim', act: 'outside', kb: { key: 'Escape' }, name: 'outside' };
 const panelLayer = extra => Object.assign({ name: 'panel', when: "document.querySelector('#panel').classList.contains('on')", modal: true, head: '#ph', box: '#panel', rows: '#pl > [data-k]' }, extra);
+// Rows that open the on-screen keyboard are for controllers (with a keyboard you type in the box, where Enter
+// does the panel's main thing), so the keyboard pass presses them with the pretend controller.
+const TYPE_ROWS = '^Type (the|with)';
 
 const PAGES = [
   { file: 'index.html', depth: 5, cap: 900, variants: [{ q: '', name: 'plain' }, { q: '?onsale' }, { q: '?pro' }],
     layers: [osk, bye,
       panelLayer({ under: "document.querySelector('#guide').classList.contains('on') ? 'over menu' : 'over home'",
-        groups: [{ sel: '#pl > [data-k]', kb: 'nav', name: 'panel row' }, { sel: '#panel input', kb: 'input', name: 'text box' },
+        groups: [{ sel: '#pl > [data-k]', kb: 'nav', name: 'panel row', padKeys: TYPE_ROWS }, { sel: '#panel input', kb: 'input', name: 'text box' },
           { sel: '#pbody button, #panel label.pw button', kb: 'none', name: 'panel button' }, outside] }),
       { name: 'moving a tile', when: "document.querySelector('#cap').classList.contains('moving')", modal: true, box: '#stage',
         groups: [{ sel: '#r1 .t1.mv', kb: { key: 'Enter' }, name: 'lifted tile' }, { sel: '#r1 .t1:not(.mv)', kb: { key: 'Enter' }, name: 'tile', max: 1 }, hints] },
@@ -109,10 +112,11 @@ const PAGES = [
       groups: [{ sel: '#content [data-f]', kb: 'nav', name: 'choice', max: 30 }, { sel: '#nav [data-f]', kb: 'nav', name: 'step button' }, hints] }] },
   { file: 'files.html', depth: 6, cap: 900, variants: [{ q: '' }],
     layers: [osk,
-      panelLayer({ groups: [{ sel: '#pl > [data-k]', kb: 'nav', name: 'panel row' }, { sel: '#panel input', kb: 'input', name: 'text box' }, outside] }),
+      panelLayer({ groups: [{ sel: '#pl > [data-k]', kb: 'nav', name: 'panel row', padKeys: TYPE_ROWS }, { sel: '#panel input', kb: 'input', name: 'text box' }, outside] }),
       { name: 'files', when: 'true', head: '#crumb', box: '#stage', navOrder: 'cols', selectMode: "mode === 'select'",
         groups: [{ sel: '#side .it', kb: 'nav', ctx: true, ctxPick: '^(Downloads|USB STICK|Windows|VBOX HARDDISK)$', name: 'place or drive' },
           { sel: '#list .fr', kb: 'nav', ctx: true, ctxMax: 4, act: 'dbl', name: 'file', max: 8, nosig: true },
+          { sel: '#empty', kb: 'nav', name: 'empty folder', press: false },   // (where the highlight is in an empty folder; nothing to press)
           { sel: '#crumb .c', kb: 'none', name: 'path part' }, { sel: '#clip button', kb: 'none', name: 'clipboard button' }, { sel: '#jobchip.on', kb: 'none', name: 'job chip' }, hints] }] },
   { file: 'store.html', depth: 5, cap: 500, variants: [{ q: '' }, { q: '#org.videolan.VLC' }],
     layers: [osk,
@@ -159,6 +163,27 @@ function INPAGE() {
   const ctr = el => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, h: r.height }; };
   // the same, in the coordinates of everything that scrolls it (a list that scrolls to keep the highlight in one place still counts as moving)
   const pos = el => { const c = ctr(el); for (let a = el.parentElement; a && a !== document.documentElement; a = a.parentElement) { c.x += a.scrollLeft; c.y += a.scrollTop; } return c; };
+  // the nearest box that scrolls an element, if any
+  const scrollerOf = el => {
+    for (let a = el.parentElement; a && a !== document.documentElement && a !== document.body; a = a.parentElement) {
+      const cs = getComputedStyle(a);
+      if ((/auto|scroll/.test(cs.overflowY) && a.scrollHeight > a.clientHeight + 1) || (/auto|scroll/.test(cs.overflowX) && a.scrollWidth > a.clientWidth + 1)) return a;
+    }
+    return null;
+  };
+  // Where the highlighted item and the target are, to tell whether a key press got closer. When only one of them is
+  // in a box that scrolls, both are put in that box's scrolled coordinates, and the one outside it counts as lying
+  // before or after all of its content (Setup's Back and Next buttons are past the last choice of a long page,
+  // however far it has scrolled). Otherwise each is placed with pos().
+  function pair(curEl, tgtEl) {
+    const sc = scrollerOf(curEl), stg = scrollerOf(tgtEl);
+    if (sc === stg || (sc && stg)) return { c: pos(curEl), t: pos(tgtEl) };
+    const S = sc || stg, R = S.getBoundingClientRect();
+    const map = (v, lo, hi, scroll, size) => v >= hi ? size + (v - hi) : v <= lo ? v - lo : v - lo + scroll;
+    const inside = el => { const v = ctr(el); return { x: v.x - R.left + S.scrollLeft, y: v.y - R.top + S.scrollTop, h: v.h }; };
+    const outside = el => { const v = ctr(el); return { x: map(v.x, R.left, R.right, S.scrollLeft, S.scrollWidth), y: map(v.y, R.top, R.bottom, S.scrollTop, S.scrollHeight), h: v.h }; };
+    return sc ? { c: inside(curEl), t: outside(tgtEl) } : { c: outside(curEl), t: inside(tgtEl) };
+  }
   const marked = el => el.classList.contains('f') || !!el.closest('.f') || !!el.querySelector('.f');
   const hits = (el, x, y) => { const h = document.elementFromPoint(x, y); return !!h && (h === el || el.contains(h)); };
   const layerOf = Ls => Ls.find(L => test(L.when)) || null;
@@ -262,10 +287,14 @@ function INPAGE() {
     const items = itemsOf(L);
     const head = L.head ? first((document.querySelector(L.head) || {}).innerText) : '';
     const under = L.under ? val(L.under) : '';
-    const keys = [...new Set(items.filter(o => !L.groups[o.gi].nosig).map(o => { const g = L.groups[o.gi]; return g.sigNorm && (o.el.innerText || '').includes(g.sigNorm[0]) ? g.sigNorm[1] : o.key; }))].sort();
+    const keysOf = list => [...new Set(list.filter(o => !L.groups[o.gi].nosig).map(o => { const g = L.groups[o.gi]; return g.sigNorm && (o.el.innerText || '').includes(g.sigNorm[0]) ? g.sigNorm[1] : o.key; }))].sort();
+    const sigOf = list => [L.name, L.sigHead === false ? '' : head, under, keysOf(list).join(' ¦ ')].join(' | ');
     const busy = busyOf(L);
     const s = { layer: L.name, modal: !!L.modal, head, under, busy, text: textOf(L).slice(0, 3000), url: location.href,
-      sig: [L.name, L.sigHead === false ? '' : head, under, keys.join(' ¦ ')].join(' | '),
+      sig: sigOf(items),
+      // the same without the button hints, which follow where the highlight is (Enter and a click may leave it in
+      // different places on the same screen, like Files: a click on a place stays in the left column, Enter goes in)
+      sigK: sigOf(items.filter(o => L.groups[o.gi].kb !== 'hint')),
       items: items.map(o => ({ gi: o.gi, i: o.i, key: o.key, id: o.el.id || '' })), active: desc(document.activeElement) };
     if (withAudit) s.audit = audit(L, items, busy);
     return s;
@@ -325,7 +354,8 @@ function INPAGE() {
     else if (g.kb === 'tabkey' || g.kb === 'input') { reached = ae === it.el; cur = items.find(o => o.el === ae); }
     else { reached = marked(it.el); cur = items.find(o => /^(nav|pad)$/.test(L.groups[o.gi].kb) && marked(o.el)); }
     const where = L.name + (L.head ? ' “' + first((document.querySelector(L.head) || {}).innerText) + '”' : '');
-    return { found: true, where, reached, tgt: pos(it.el), cur: cur ? Object.assign({ key: cur.key }, pos(cur.el)) : null, axis: g.kb === 'tab' ? 'x' : '', cols: L.navOrder === 'cols',
+    const at = cur ? pair(cur.el, it.el) : { t: pos(it.el) };
+    return { found: true, where, reached, tgt: at.t, cur: cur ? Object.assign({ key: cur.key }, at.c) : null, axis: g.kb === 'tab' ? 'x' : '', cols: L.navOrder === 'cols',
       slider: it.el.classList.contains('slider'), active: desc(ae), typing: !!ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA') };
   };
 }
@@ -419,7 +449,9 @@ async function kbdReach(pg, t, st, press) {
   press = press || (k => pg.keyboard.press(k));
   const trail = [], seen = {};
   for (let n = 0; n < 80; n++) {
-    const s = await kstate(pg, t, st);
+    let s = await kstate(pg, t, st);
+    // (a panel that opens after a call to the system can take a moment: wait for it before the first key)
+    for (let w = 0; n === 0 && w < 8 && s && !s.found; w++) { await sleep(200); s = await kstate(pg, t, st); }
     if (!s || !s.found) return { err: s ? s.why : 'the page went away', trail };
     if (s.reached) return { ok: true, trail, slider: s.slider };
     if (!s.cur) return { err: 'nothing is selected to start from', trail, nofocus: s.where };
@@ -461,6 +493,7 @@ async function kbdAct(pg, t, st) {
   if (st.act === 'hover') return { skip: 'the mouse only hovers it' };
   if (st.act === 'outside') { await pg.keyboard.press('Escape'); return { ok: true, how: 'Escape' }; }
   let kb = g.kb;
+  if (kb === 'nav' && g.padKeys && new RegExp(g.padKeys).test(st.key)) kb = 'pad';
   if (kb === 'hint') { if (!HINT_KEYS[st.id]) return { skip: 'no key for #' + st.id }; kb = { key: HINT_KEYS[st.id] }; }
   if (kb && kb.key) {
     if (kb.key.length === 1) { const s = await kstate(pg, t, st); if (s && s.typing) return { skip: 'a text box has focus, so “' + kb.key + '” is typed into it' }; }
@@ -595,6 +628,7 @@ function addErr(W, job, e, during) {
   add(kind, W, job, e.msg.split('\n')[0].slice(0, 200) + ' — in ' + pageOf(e.url) + (e.at ? ' at ' + String(e.at).replace(/file:\/\/[^ ]*\/ui\//g, '') : '') + (during ? ' (' + during + ')' : ''), kind + ' ' + e.msg.split('\n')[0]);
 }
 const outcome = o => !o ? 'nothing' : o.nav ? 'went to ' + String(o.nav).replace(/^file:\/\/.*\/ui\//, '') : o.s ? o.s.sig : 'nothing';
+const outcomeK = o => !o ? 'nothing' : o.nav ? 'went to ' + String(o.nav).replace(/^file:\/\/.*\/ui\//, '') : o.s ? o.s.sigK || o.s.sig : 'nothing';
 const short = o => !o ? 'nothing' : o.nav ? 'went to ' + String(o.nav).replace(/^file:\/\/.*\/ui\//, '') : o.s ? `${o.s.layer}${o.s.head ? ' “' + o.s.head + '”' : ''}${o.s.under ? ' (' + o.s.under + ')' : ''}` : 'nothing';
 
 function record(W, job, r) {
@@ -643,6 +677,7 @@ function itemsToPress(W, s) {
   const L = W.t.layers.find(l => l.name === s.layer), out = [];
   if (!L) return out;
   L.groups.forEach((g, gi) => {
+    if (g.press === false) return;
     const all = s.items.filter(o => o.gi === gi);
     let keep = all;
     if (g.max && all.length > g.max) {
@@ -689,7 +724,7 @@ async function walk(t, vp, kbdOn, budget) {
     if (job.via === 'kbd' && r.act && r.act.ok && r.o) {
       const m = mouseOut.get(pathKey(job.path));
       const meant = (r.act.pad && r.o.s && r.o.s.layer === 'on-screen keyboard') || r.act.selectMode;
-      if (m && !meant && outcome(m) !== outcome(r.o)) add('kbd-differs', W, job, `${job.path[job.path.length - 1].d}: a click → ${short(m)}; the keyboard (${r.act.how}) → ${short(r.o)}`, 'kd ' + pathKey(job.path));
+      if (m && !meant && outcomeK(m) !== outcomeK(r.o)) add('kbd-differs', W, job, `${job.path[job.path.length - 1].d}: a click → ${short(m)}; the keyboard (${r.act.how}) → ${short(r.o)}`, 'kd ' + pathKey(job.path));
     }
   };
   done({ via: 'root', path: [] }, await runJob(t, vp, { via: 'root', path: [] }));

@@ -30,7 +30,7 @@ From the [latest release](../../releases/latest):
 - `LaunchOS-Flasher.exe`: the easiest way onto a USB stick, on Windows (see below).
 - `LaunchOS.iso`: the system. Boots as a disc or a USB stick, on BIOS and UEFI.
 - `LaunchOS.zip`: for VirtualBox. It contains `LaunchOS.iso`, `LaunchOS.vbox` (a ready-made machine), `LaunchOS-data.vdi` (its save disk, which starts empty and grows as you use it) and `LaunchOS-storage.vdi` (a spare empty drive to try Files on).
-- `SHA256SUMS.txt`: checksums of the ISO and the zip.
+- `SHA256SUMS.txt`: checksums of the ISO, the zip and the flasher.
 
 Check which version you're running in **Settings → About LaunchOS**.
 
