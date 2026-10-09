@@ -81,7 +81,7 @@ label.pw button { padding: 0 14px; border-radius: 10px; background: var(--chip);
 #bye { position: absolute; inset: 0; background: #000; display: none; align-items: center; justify-content: center; font-size: 20px; color: var(--mute); z-index: 40; }
 </style>
 </head>
-<body>
+<body data-live>
 <div id="wrap"><div id="stage">
 <svg class="bgsvg" viewBox="0 0 1280 720" aria-hidden="true"><defs><path id="c" d="M-210 30 C-150 -110 120 -130 220 -10 C300 95 85 165 -50 130 C-170 100 -250 95 -210 30 Z" fill="none" stroke="#cfe6ff"/></defs><g transform="translate(420 210)"><use href="#c" transform="scale(.5)" opacity=".2" stroke-width="2"/><use href="#c" transform="scale(.8)" opacity=".17" stroke-width="1.3"/><use href="#c" transform="scale(1.15)" opacity=".14" stroke-width="1"/><use href="#c" transform="scale(1.6)" opacity=".12" stroke-width=".8"/><use href="#c" transform="scale(2.1)" opacity=".1" stroke-width=".6"/></g><g transform="translate(1040 190)"><use href="#c" transform="scale(.45)" opacity=".2" stroke-width="2"/><use href="#c" transform="scale(.8)" opacity=".16" stroke-width="1.2"/><use href="#c" transform="scale(1.2)" opacity=".13" stroke-width=".9"/><use href="#c" transform="scale(1.7)" opacity=".1" stroke-width=".7"/></g></svg>
 <div class="rowglow"></div>
@@ -214,12 +214,17 @@ function renderHome(keep) {
     el.oncontextmenu = e => { e.preventDefault(); if (mode !== 'home') return; pos = { r, c }; foc(); appOptions(); };
     el.onmousemove = () => { if (mode !== 'home' || !LOS.mouseRecent() || (pos.r === r && pos.c === c)) return; pos = { r, c }; foc(); };
   }));
-  $('#pname').innerHTML = esc(LOS.prefs.name) + (LOS.pro ? '<span class="probadge" title="LaunchOS Pro supporter">PRO</span>' : '');
-  $('#av').style.background = LOS.prefs.avatar;
-  $('#av').classList.toggle('pro', LOS.pro);
+  paintMe();
   paintRun();
   foc();
 }
+/* your name, color and (with Pro) the supporter badge, top left */
+function paintMe() {
+  $('#pname').innerHTML = esc(LOS.prefs.name) + (LOS.pro ? '<span class="probadge" title="LaunchOS Pro supporter">PRO</span>' : '');
+  $('#av').style.background = LOS.prefs.avatar;
+  $('#av').classList.toggle('pro', LOS.pro);
+}
+document.addEventListener('los:pro', () => paintMe());   // (Pro was turned on or off: the badge follows)
 const NAMES = () => [TB.map(t => t[1]), T1.map(t => t.name), T2.map(t => t.name)];
 function foc() {
   R.flat().forEach(e => e.classList.remove('f'));
@@ -292,7 +297,7 @@ function getPanel(a) {
     row('Cancel', '', 'check', () => closePanel())]);
 }
 /* Shows a background job's progress (downloads, saving, installing) until it's done. */
-function progressPanel(job, title, onDone, doneRows, isUpdate) {
+function progressPanel(job, title, onDone, doneRows, isUpdate, onRetry) {
   const paint = st => {
     const pct = Math.max(0, Math.min(100, st.percent || 0));
     return `<div class="meterbar"><i style="width:${pct}%"></i></div><p class="pnote">${esc(st.step || 'Starting…')}${st.done ? '' : ' · ' + pct + '%'}</p>`;
@@ -304,7 +309,7 @@ function progressPanel(job, title, onDone, doneRows, isUpdate) {
     const st = await call('job_status', job);
     if (P !== myP) return;
     if (st && st.done) {
-      if (st.error) panel(title, st.error, [row('Try again', '', 'refresh', () => { closePanel(); }), row('Close', '', 'check', () => closePanel())]);
+      if (st.error) panel(title, st.error, [row('Try again', '', 'refresh', () => { if (onRetry) onRetry(); else closePanel(); }), row('Close', '', 'check', () => closePanel())]);
       else if (isUpdate) updatesPanel(st.step);
       else if (onDone) { closePanel(); onDone(); }
       else panel(title, st.step, doneRows || [row('Done', '', 'check', () => closePanel())]);
@@ -547,6 +552,7 @@ function rp() {
 }
 function closePanel(silent) {
   $('#panel').classList.remove('on');
+  LOS.osk.hide();   // (its Done must never act for a panel that's gone)
   dropInput();
   if (!P) return;
   const from = P.from; P = null;
@@ -599,7 +605,11 @@ async function wifiPanel(msg) {
   if (!w || !w.available) { panel('Wi-Fi', (w && w.reason) || 'Wi-Fi isn’t available.', [row('Done', '', 'check', () => closePanel())]); return; }
   const bars = n => '▂▄▆█'.slice(0, n.bars);
   const rows = w.networks.map(n => row(n.name, [n.connected ? 'Connected' : n.known ? 'Saved' : '', n.type === 'open' ? 'Open' : 'Secured', bars(n)].filter(Boolean).join(' · '), 'wifi', () => wifiNetwork(n)));
-  rows.push(row('Scan again', w.scanning ? 'Scanning…' : 'Look for networks', 'refresh', async () => { await call('wifi_scan'); toast('Scanning…'); setTimeout(() => { if (mode === 'panel') wifiPanel(); }, 3500); }));
+  rows.push(row('Scan again', w.scanning ? 'Scanning…' : 'Look for networks', 'refresh', async () => {
+    await call('wifi_scan'); toast('Scanning…');
+    const myP = P;   // (only refresh the list if it's still what's open: not a password being typed)
+    setTimeout(() => { if (mode === 'panel' && P === myP) wifiPanel(); }, 3500);
+  }));
   rows.push(row('Done', '', 'check', () => closePanel()));
   panel('Wi-Fi', msg || (w.networks.length ? (w.state === 'connected' ? 'Connected.' : 'Pick a network.') : 'No networks found yet.'), rows);
 }
@@ -736,6 +746,13 @@ async function proPanel(msg) {
   if (!pro || pro.error) { panel('LaunchOS Pro', 'LaunchOS Pro works when running as LaunchOS.', [row('Done', '', 'check', () => closePanel())]); return; }
   const done = row('Done', '', 'check', () => closePanel());
   const list = `<ul class="feats">${PRO_FEATS.map(f => `<li>${esc(f)}</li>`).join('')}</ul>`;
+  if (pro.status === 'active' && !pro.installed) {   // the key is fine, the extras didn't download
+    panel('LaunchOS Pro', msg || 'Your key is unlocked. The Pro extras still have to download.', [
+      row('Get the Pro extras', 'Needs an internet connection', 'check', () => proJob('install', 'Getting the Pro extras'), { pic: 'updates' }),
+      row('Remove Pro from this PC', 'Frees this PC’s slot for another one', 'close', () => proJob('remove', 'Removing LaunchOS Pro')),
+      done]);
+    return;
+  }
   if (pro.active) {
     const body = `<dl class="kv"><dt>Status</dt><dd>On${pro.since ? ' since ' + esc(pro.since) : ''}</dd><dt>Key</dt><dd>${esc(pro.key_hint || '—')}</dd><dt>Pro extras</dt><dd>Version ${esc(pro.version || '?')}</dd></dl>`;
     panel('LaunchOS Pro', msg || 'Thanks for supporting LaunchOS!', [
@@ -759,27 +776,30 @@ async function proPanel(msg) {
     row('Open the Pro page', 'In the Browser', 'globe', () => { closeAll(); call('open_app', { id: 'browser', name: 'Browser', url: pro.buy, navigate: true }).then(refreshTasks); }, { pic: 'browser' }),
     done], { body: list + buy });
 }
-function keyPanel(err) {
+function keyPanel(err, typed) {
   const body = `<label class="pw"><input id="pkey" type="text" maxlength="64" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX" aria-label="Your LaunchOS Pro key"></label>`;
   const go = async () => {
     const key = $('#pkey').value.replace(/\s+/g, '');
-    if (key.length < 8) { keyPanel('Type the whole key. It’s in the email from your purchase.'); return; }
+    if (key.length < 8) { keyPanel('Type the whole key. It’s in the email from your purchase.', key); return; }
     const r = await call('pro_action', { op: 'activate', key });
-    if (!r || !r.ok) { keyPanel((r && r.error) || 'Couldn’t check the key. Try again.'); return; }
-    proProgress('Unlocking LaunchOS Pro');
+    if (!r || !r.ok) { keyPanel((r && r.error) || 'Couldn’t check the key. Try again.', key); return; }
+    proProgress('Unlocking LaunchOS Pro', () => keyPanel('', key));   // (Try again keeps what was typed)
   };
-  panel('Enter your Pro key', err || 'Type the key from your email. Letters, numbers and dashes.', [
+  // without saving, this PC forgets the key at the next start (it keeps its one slot on the key)
+  const hint = pro && pro.saving === false ? 'Saving is off, so you’ll enter it again after a restart.' : 'Letters, numbers and dashes.';
+  panel('Enter your Pro key', err || 'Type the key from your email. ' + hint, [
     typeRow('Type the key', ['pkey'], go), row('Unlock Pro', 'Needs an internet connection', 'check', go), row('Cancel', '', 'close', () => proPanel())], { body, enter: go });
+  if (typed) $('#pkey').value = typed;
   setTimeout(() => { const i = $('#pkey'); if (i) i.focus(); }, 60);
-  autoType(['pkey'], go);
+  if (!typed) autoType(['pkey'], go);
 }
 async function proJob(op, title) {
   const r = await call('pro_action', { op });
   if (!r || !r.ok) { toast((r && r.error) || 'Couldn’t start. Try again.', 3600); return; }
-  proProgress(title);
+  proProgress(title, () => proJob(op, title));
 }
-function proProgress(title) {
-  progressPanel('pro', title, null, [row('Done', '', 'check', async () => { LOS.checkPro(); await refreshAll(); proPanel(); })]);
+function proProgress(title, retry) {
+  progressPanel('pro', title, null, [row('Done', '', 'check', async () => { await LOS.checkPro(); await refreshAll(); proPanel(); })], false, retry);
   // the look follows Pro being on or off once the job is done
   const watch = async () => { const st = await call('job_status', 'pro'); if (st && st.done) { LOS.checkPro(); setTimeout(() => renderHome(), 600); } else setTimeout(watch, 1500); };
   setTimeout(watch, 1500);
@@ -795,7 +815,7 @@ async function gamingPanel() {
   }
   const g = await call('gaming_get');
   const order = ['off', 'fps', 'full'];
-  panel('Gaming', 'For Steam, Windows programs and apps from the Store. Changes count from the next game you start.', [
+  panel('Gaming', 'For Steam, Windows programs and games from the Store. Changes count from the next game you start (if Steam is open, close it first).', [
     row('Performance mode: ' + (g.perf ? 'On' : 'Off'), 'Full speed and top priority while a game runs', 'chart', async () => { await call('gaming_set', { perf: !g.perf }); gamingPanel(); }, { pic: 'monitor' }),
     row('FPS counter: ' + FPS_NAMES[g.fps], pro.fps_ok ? 'In Steam games and Windows programs' : 'Not available on this system', 'chart', async () => {
       if (!pro.fps_ok) return;

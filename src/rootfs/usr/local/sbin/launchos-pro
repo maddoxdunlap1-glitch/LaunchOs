@@ -392,14 +392,17 @@ def main():
     lock = locked(wait=what != 'check')
     if lock is None:
         return   # (the daily check skips while another Pro job runs)
-    if what == 'activate':
-        activate()
-    elif what == 'check':
-        check(force='--now' in sys.argv)
-    elif what == 'install':
-        install()
-    elif what == 'remove':
-        remove()
+    try:
+        if what == 'activate':
+            activate()
+        elif what == 'check':
+            check(force='--now' in sys.argv)
+        elif what == 'install':
+            install()
+        elif what == 'remove':
+            remove()
+    finally:
+        os.close(lock)
 
 
 if __name__ == '__main__':

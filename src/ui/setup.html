@@ -88,7 +88,7 @@ body.setup-look #wall::after { background: rgba(5, 10, 18, .45); }
 #wall::after { background: rgba(5, 10, 18, .78); }
 </style>
 </head>
-<body>
+<body data-live>
 <div id="wrap"><div id="stage">
 <svg class="bgsvg" viewBox="0 0 1280 720" aria-hidden="true"><defs><path id="c" d="M-210 30 C-150 -110 120 -130 220 -10 C300 95 85 165 -50 130 C-170 100 -250 95 -210 30 Z" fill="none" stroke="#cfe6ff"/></defs><g transform="translate(1120 620)"><use href="#c" transform="scale(.6)" opacity=".12" stroke-width="2"/><use href="#c" transform="scale(1)" opacity=".1" stroke-width="1.2"/><use href="#c" transform="scale(1.5)" opacity=".08" stroke-width=".9"/></g></svg>
 <div id="wall" aria-hidden="true"></div>
@@ -362,7 +362,8 @@ function activate() {
 LOS.onNav((a, ev) => {
   const e = F[fi];
   if (STEPS[cur].id === 'controller' && ev === null) return true;   // controller is being tested: hold Menu to continue
-  if (a === 'menu' || a === 'guide') { finish(true); return true; }   // leave setup (Menu, Super key or Xbox button); what you set so far is kept
+  if (a === 'menu' && ev && ev.key === 'Tab') a = ev.shiftKey ? 'up' : 'down';   // (Tab moves between choices here, it doesn't leave Setup)
+  else if (a === 'menu' || a === 'guide') { finish(true); return true; }   // leave setup (Menu, Super key or Xbox button); what you set so far is kept
   if (loading) return true;   // the step is still being drawn
   if (a === 'opts') return true;
   if (a === 'ok') { activate(); return true; }

@@ -15,10 +15,13 @@
       if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; return true; }
       return false;
     }
+    let timer = 0;
     function frame(now) {
       if (stopped) return;
-      raf = requestAnimationFrame(frame);
-      if (document.hidden || now - last < 1000 / fpsCap - 2) return;
+      if (!hw) {   // software drawing: wake up only when a frame is due (not 60 times a second)
+        timer = setTimeout(() => { raf = requestAnimationFrame(frame); }, 1000 / fpsCap);
+      } else raf = requestAnimationFrame(frame);
+      if (document.hidden || (hw && now - last < 1000 / fpsCap - 2)) return;
       const dt = Math.min(0.1, (now - (last || now)) / 1000);
       last = now;
       const resized = size();
@@ -26,6 +29,6 @@
     }
     size();
     raf = requestAnimationFrame(frame);
-    return () => { stopped = true; cancelAnimationFrame(raf); };
+    return () => { stopped = true; cancelAnimationFrame(raf); clearTimeout(timer); };
   };
 })();

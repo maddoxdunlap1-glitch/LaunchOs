@@ -366,6 +366,7 @@ function rp() {
 }
 function closePanel() {
   $('#panel').classList.remove('on'); $('#dim').classList.remove('on');
+  LOS.osk.hide();   // (its Done must never act for a panel that's gone)
   dropInput();
   if (!P) return;
   mode = P.from === 'select' && sel.size ? 'select' : 'browse'; P = null;
@@ -486,7 +487,7 @@ function inputPanel(title, text, value, action, label, onDone) {
   };
   const type = () => LOS.osk.show($('#nin'), { onDone: go });   // typing with a controller
   panel(title, text, [row('Type with the controller', 'The on-screen keyboard', 'edit', type), row(label, 'Or press Enter', 'check', go), row('Cancel', '', 'close', () => closePanel())], { body });
-  P.i = 1;
+  P.i = 1; P.enter = go;
   rp();
   const i = $('#nin'); i.value = value;
   setTimeout(() => { i.focus(); const dot = value.lastIndexOf('.'); i.setSelectionRange(0, dot > 0 ? dot : value.length); if (LOS.padRecent()) type(); }, 60);
@@ -593,7 +594,7 @@ function mv(d) {
 function nav(a, e) {
   if (mode === 'panel') {
     if (a === 'up') mv(-1); else if (a === 'down') mv(1);
-    else if (a === 'ok') { if (e && e.target && e.target.id === 'nin') P.i = 0; pact(); }   // Enter in a name box does the first choice
+    else if (a === 'ok') { if (e && e.target && e.target.id === 'nin' && P.enter) P.enter(); else pact(); }   // Enter in a name box: Rename / Make it
     else if ((a === 'back' || a === 'menu' || a === 'opts') && !P.busy) { if (P.job) { jobShown = false; } closePanel(); }
     return true;
   }

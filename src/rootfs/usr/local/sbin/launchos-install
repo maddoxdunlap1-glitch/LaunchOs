@@ -66,6 +66,14 @@ done
 rsync -aHAX /home/player/ $T/home/player/ 2>/dev/null
 step "Copying your apps" 78
 rsync -aHAX /var/lib/flatpak/ $T/var/lib/flatpak/ 2>/dev/null
+# LaunchOS Pro stays on (same PC, same slot on the key): its key, state and extras
+if [ -f /var/lib/launchos/pro.json ]; then
+  mkdir -p $T/var/lib/launchos
+  for f in pro.json pro-key pc-id; do [ -f /var/lib/launchos/$f ] && cp -a /var/lib/launchos/$f $T/var/lib/launchos/; done
+  [ -d /opt/launchos-pro ] && rsync -a /opt/launchos-pro/ $T/opt/launchos-pro/ 2>/dev/null
+fi
+# this PC makes its own machine id on the drive's first start (never the live system's)
+: > $T/etc/machine-id
 hash=$(getent shadow player | cut -d: -f2)
 if [ -f /etc/launchos/admin-set ] && [ -n "$hash" ] && usermod -R $T -p "$hash" player 2>/dev/null; then
   # (only once the password is really there: otherwise sign-in would ask for one that can't match)

@@ -167,8 +167,8 @@
     update_info: () => ({ version: '0.8', build: '2026-10-08', check: mockStore.upd, system: {}, installed: false, saving: true }),
     update_action: w => { mockStore.upd = w === 'check' ? { step: 'LaunchOS 0.9 is available', percent: 100, done: true, available: true, latest: '0.9', notes: 'Pretend notes for 0.9.' } : { step: w === 'apply' ? 'Updated to LaunchOS 0.9. Restart to finish.' : 'Up to date', percent: 100, done: true, restart: w === 'apply' }; return { ok: true }; },
     admin_set: () => ({ set: !!mockStore.admin }), admin_password: a => { if (mockStore.admin && a.old !== mockStore.admin) return { done: true, error: 'The current password isn’t right.' }; mockStore.admin = a.new; return { done: true, step: 'Saved', error: '' }; },
-    pro_state: () => ({ active: mockPro.active, status: mockPro.active ? 'active' : '', key_hint: mockPro.active ? '38b1…4d51' : '', since: mockPro.active ? '2026-10-08' : '',
-      version: mockPro.active ? '1.0' : '', on_sale: mockPro.onSale, buy: mockPro.onSale ? 'https://launchos.example/pro' : '', job: mockPro.job, fps_ok: true }),
+    pro_state: () => ({ active: mockPro.active, status: mockPro.active ? 'active' : '', installed: mockPro.active, key_hint: mockPro.active ? '38b1…4d51' : '', since: mockPro.active ? '2026-10-08' : '',
+      version: mockPro.active ? '1.0' : '', on_sale: mockPro.onSale, buy: mockPro.onSale ? 'https://launchos.example/pro' : '', job: mockPro.job, fps_ok: true, saving: true }),
     pro_action: a => {
       if (a.op === 'activate' && !/^[A-Za-z0-9-]{8,64}$/.test(a.key || '')) return { ok: false, error: 'That doesn’t look like a Pro key. It’s in the email from your purchase.' };
       const good = a.op !== 'activate' || a.key === 'TEST-KEY-1234';
