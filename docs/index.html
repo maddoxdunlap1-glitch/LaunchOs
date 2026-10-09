@@ -3,159 +3,466 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LaunchOS: a console-style Linux system</title>
-<meta name="description" content="LaunchOS boots to a controller-friendly Home screen with Steam, Windows programs, Files, a Store and a Terminal. Free, with an optional $5 Pro.">
+<title>LaunchOS: your PC, like a console</title>
+<meta name="description" content="LaunchOS is a free, console-style Linux system built on Debian. Start from a USB stick and play Steam games, Windows programs and apps from a Home screen made for a controller.">
+<meta name="color-scheme" content="dark">
 <link rel="icon" href="assets/launchos-icon.png">
 <style>
-:root{--bg:#0d1117;--panel:#161b22;--line:#2a313c;--text:#e6edf3;--dim:#9aa7b4;--accent:#3ddc97;--accent-ink:#06281a}
-@media (prefers-color-scheme:light){:root{--bg:#f6f8fa;--panel:#fff;--line:#d8dee4;--text:#1f2328;--dim:#59636e;--accent:#12a06b;--accent-ink:#fff}}
+:root{
+  --bg:#0a1220;--bg2:#0e1829;--panel:#111d30;--panel2:#16243a;--line:#22324a;--line2:#2c3f5c;
+  --text:#e8eef6;--dim:#9badc2;--mute:#6f8299;--accent:#3ddc6b;--accent-ink:#06210f;--glow:61,220,107;
+  --r:14px
+}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
-a{color:var(--accent)}
-.wrap{max-width:960px;margin:0 auto;padding:0 20px}
-header{border-bottom:1px solid var(--line)}
-nav{display:flex;align-items:center;gap:20px;padding:14px 0;flex-wrap:wrap}
-nav .brand{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--text);text-decoration:none;margin-right:auto}
-nav .brand img{width:28px;height:28px}
-nav a{color:var(--dim);text-decoration:none}
-nav a:hover{color:var(--text)}
-.hero{padding:56px 0 40px;text-align:center}
-h1{font-size:clamp(2rem,6vw,3.2rem);line-height:1.15;margin:0 0 14px}
-.lead{color:var(--dim);font-size:1.15rem;max-width:620px;margin:0 auto 26px}
-.btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-.btn{display:inline-block;padding:12px 22px;border-radius:10px;font-weight:600;text-decoration:none;border:1px solid var(--line);color:var(--text);background:var(--panel)}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+img{max-width:100%}
+.wrap{max-width:1040px;margin:0 auto;padding:0 20px}
+
+/* top bar and tabs */
+header{position:sticky;top:0;z-index:10;background:rgba(10,18,32,.86);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;gap:16px;height:64px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.05rem;color:var(--text);margin-right:auto}
+.brand:hover{text-decoration:none}
+.brand img{width:30px;height:30px;border-radius:8px}
+.gh{color:var(--dim);font-size:.92rem}
+.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;margin:0 -20px;padding:0 20px}
+.tabs::-webkit-scrollbar{display:none}
+.tab{appearance:none;border:0;background:none;color:var(--dim);font:inherit;font-weight:600;font-size:.95rem;padding:10px 14px 12px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+.tab:hover{color:var(--text)}
+.tab[aria-selected=true]{color:var(--text);border-bottom-color:var(--accent)}
+.tab .pill{font-size:.7rem;background:rgba(var(--glow),.16);color:var(--accent);padding:1px 7px;border-radius:20px;margin-left:6px;vertical-align:2px}
+.tab:focus-visible,.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+
+/* panels */
+.panel{padding:48px 0 64px}
+.js .panel[hidden]{display:none}
+h1{font-size:clamp(2.2rem,6vw,3.6rem);line-height:1.08;letter-spacing:-.02em;margin:0 0 16px}
+h2{font-size:clamp(1.5rem,3.4vw,2rem);line-height:1.2;letter-spacing:-.01em;margin:0 0 10px}
+h3{font-size:1.08rem;margin:0 0 6px}
+.lead{color:var(--dim);font-size:1.15rem;max-width:640px;margin:0 0 28px}
+.sub{color:var(--dim);max-width:680px;margin:0 0 28px}
+.eyebrow{color:var(--accent);font-weight:700;font-size:.8rem;letter-spacing:.12em;text-transform:uppercase;margin:0 0 10px}
+.btns{display:flex;gap:12px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:10px;font-weight:650;border:1px solid var(--line2);color:var(--text);background:var(--panel);cursor:pointer;font-size:1rem}
+.btn:hover{text-decoration:none;border-color:var(--dim)}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
-.btn[aria-disabled=true]{opacity:.55;pointer-events:none}
-.shot{margin:40px auto 0;max-width:720px;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn[aria-disabled=true]{opacity:.5;pointer-events:none}
+.note{color:var(--mute);font-size:.88rem;margin:12px 0 0}
+
+/* overview */
+.hero{display:grid;grid-template-columns:1.05fr 1fr;gap:40px;align-items:center}
+.shot{border:1px solid var(--line2);border-radius:var(--r);overflow:hidden;background:#000;box-shadow:0 30px 80px -30px rgba(0,0,0,.8)}
 .shot img{display:block;width:100%;height:auto}
-section{padding:44px 0;border-top:1px solid var(--line)}
-h2{margin:0 0 18px;font-size:1.6rem}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
-.card h3{margin:0 0 4px;font-size:1.05rem}
+.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin:56px 0 0}
+.fact{background:var(--bg2);padding:20px 22px}
+.fact b{display:block;font-size:1.6rem;letter-spacing:-.01em}
+.fact span{color:var(--dim);font-size:.92rem}
+.how{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:48px}
+.how .card .n{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:rgba(var(--glow),.15);color:var(--accent);font-weight:700;font-size:.9rem;margin-bottom:10px}
+
+/* cards */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:20px}
 .card p{margin:0;color:var(--dim);font-size:.95rem}
-.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
-.plan{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}
-.plan.pro{border-color:var(--accent)}
-.plan h3{margin:0}
-.price{font-size:2rem;font-weight:700;margin:4px 0 12px}
-.price small{font-size:1rem;color:var(--dim);font-weight:400}
-.plan ul{padding-left:20px;margin:0 0 18px}
-.plan li{margin:4px 0}
-ol.steps{padding-left:22px}
-ol.steps li{margin:8px 0}
-details{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin:10px 0}
-summary{cursor:pointer;font-weight:600}
-details p{margin:10px 0 0;color:var(--dim)}
-footer{border-top:1px solid var(--line);padding:28px 0 40px;color:var(--dim);font-size:.9rem}
+.group{margin-top:40px}
+.group > h3{color:var(--mute);font-size:.8rem;letter-spacing:.12em;text-transform:uppercase;margin:0 0 12px}
+
+/* pro */
+.pro-head{display:grid;grid-template-columns:1fr auto;gap:28px;align-items:end;margin-bottom:36px}
+.price{background:var(--panel);border:1px solid var(--accent);border-radius:var(--r);padding:22px 26px;min-width:260px;box-shadow:0 0 0 4px rgba(var(--glow),.07)}
+.price .amt{font-size:2.6rem;font-weight:750;letter-spacing:-.02em;line-height:1}
+.price .amt small{font-size:1rem;color:var(--dim);font-weight:500;letter-spacing:0}
+.price ul{list-style:none;padding:0;margin:14px 0 18px;color:var(--dim);font-size:.92rem}
+.price li{padding-left:22px;position:relative;margin:4px 0}
+.price li::before{content:"";position:absolute;left:2px;top:.55em;width:10px;height:6px;border-left:2px solid var(--accent);border-bottom:2px solid var(--accent);transform:rotate(-45deg)}
+.feature{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:center;padding:36px 0;border-top:1px solid var(--line)}
+.feature.flip .media{order:-1}
+.feature p{color:var(--dim);margin:0 0 12px}
+.feature ul{color:var(--dim);margin:0;padding-left:20px}
+.feature li{margin:5px 0}
+.feature li b{color:var(--text);font-weight:600}
+.media{border-radius:var(--r);overflow:hidden;border:1px solid var(--line2);background:var(--panel)}
+.walls{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px}
+.walls figure{margin:0;position:relative;border-radius:9px;overflow:hidden;aspect-ratio:16/9}
+.walls img{width:100%;height:100%;object-fit:cover;display:block;animation:drift 14s ease-in-out infinite alternate}
+.walls figure:nth-child(2) img{animation-delay:-4s}.walls figure:nth-child(3) img{animation-delay:-8s}.walls figure:nth-child(4) img{animation-delay:-11s}
+.walls figcaption{position:absolute;left:8px;bottom:6px;font-size:.8rem;font-weight:600;text-shadow:0 1px 4px #000}
+@keyframes drift{from{transform:scale(1.04) translate(0,0)}to{transform:scale(1.14) translate(-3%,-2%)}}
+@media (prefers-reduced-motion:reduce){.walls img{animation:none}}
+.themes{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:8px}
+.theme{border-radius:9px;padding:12px;min-height:84px;display:flex;flex-direction:column;justify-content:space-between;border:1px solid rgba(255,255,255,.06)}
+.theme i{display:block;height:6px;width:46%;border-radius:4px;background:var(--accent)}
+.theme span{font-size:.82rem;font-weight:600}
+.theme small{color:rgba(255,255,255,.55);font-size:.72rem}
+.meter{padding:22px;font-variant-numeric:tabular-nums}
+.osd{display:inline-block;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px 14px;font:600 .82rem/1.6 ui-monospace,SFMono-Regular,Menlo,monospace}
+.osd .k{color:#9fd3ff;display:inline-block;width:52px}.osd .v{color:#fff}
+.gm{padding:22px}
+.gm table{width:100%;border-collapse:collapse;font-size:.9rem}
+.gm th,.gm td{text-align:left;padding:9px 6px;border-bottom:1px solid var(--line)}
+.gm th{color:var(--mute);font-weight:600;font-size:.78rem;letter-spacing:.06em;text-transform:uppercase}
+.gm td:first-child{color:var(--text)}
+.gm td{color:var(--dim)}
+.gm .on{color:var(--accent);font-weight:600}
+.badge{padding:28px;display:flex;align-items:center;justify-content:center;gap:14px}
+.avatar{width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,#3ddc6b,#1d8f4a);display:grid;place-items:center;font-weight:800;font-size:1.4rem;color:#06210f}
+.badge b{display:block;font-size:1.1rem}
+.chip{display:inline-block;font-size:.72rem;font-weight:700;letter-spacing:.06em;color:var(--accent-ink);background:var(--accent);border-radius:20px;padding:2px 9px;margin-top:4px}
+.compare{width:100%;border-collapse:collapse;margin-top:12px;font-size:.95rem}
+.compare th,.compare td{padding:12px 10px;border-bottom:1px solid var(--line);text-align:left}
+.compare th{color:var(--mute);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase}
+.compare td:not(:first-child),.compare th:not(:first-child){text-align:center;width:120px}
+.yes{color:var(--accent);font-weight:700}.no{color:var(--mute)}
+
+/* get it */
+.paths{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.paths .card ol{margin:10px 0 0;padding-left:20px;color:var(--dim);font-size:.94rem}
+.paths .card li{margin:6px 0}
+.paths .tag{font-size:.75rem;color:var(--accent);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.callout{background:var(--panel2);border:1px solid var(--line2);border-left:3px solid var(--accent);border-radius:10px;padding:14px 18px;color:var(--dim);font-size:.94rem;margin:22px 0 0}
+.callout b{color:var(--text)}
+.reqs{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:14px}
+code{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:.88em;color:var(--text)}
+
+/* faq */
+details{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:0 18px;margin:10px 0}
+summary{cursor:pointer;font-weight:600;padding:15px 0;list-style:none;display:flex;justify-content:space-between;gap:12px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";color:var(--mute);font-weight:400;font-size:1.3rem;line-height:1}
+details[open] summary::after{content:"−"}
+details p{margin:0 0 16px;color:var(--dim)}
+.faqcols{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+
+footer{border-top:1px solid var(--line);padding:28px 0 44px;color:var(--mute);font-size:.86rem}
 footer p{margin:6px 0}
-code{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:.92em}
+
+@media (max-width:820px){
+  .hero,.feature,.pro-head{grid-template-columns:1fr}
+  .feature.flip .media{order:0}
+  .how,.paths,.reqs,.faqcols{grid-template-columns:1fr}
+  .facts{grid-template-columns:1fr}
+  .reqs{grid-template-columns:1fr 1fr}
+  .price{min-width:0}
+  .compare td:not(:first-child),.compare th:not(:first-child){width:70px}
+}
 </style>
 </head>
 <body>
-<header><div class="wrap"><nav>
-  <a class="brand" href="#"><img src="assets/launchos-icon.png" alt="">LaunchOS</a>
-  <a href="#features">Features</a>
-  <a href="#pro">Pro</a>
-  <a href="#get">Get it</a>
-  <a href="#faq">FAQ</a>
-  <a href="#" data-link="repo">GitHub</a>
-</nav></div></header>
-
-<main>
-<div class="wrap">
-<div class="hero">
-  <h1>Your PC, like a console.</h1>
-  <p class="lead">LaunchOS starts with a rocket lift-off, then a Home screen built for a controller. Steam, Windows programs, real apps like Discord and Spotify, Files, a Store and a Terminal. Run it from a USB stick, in VirtualBox, or install it.</p>
-  <div class="btns">
-    <a class="btn primary" href="#get" data-link="download">Download free</a>
-    <a class="btn" href="#pro">See LaunchOS Pro</a>
-  </div>
-  <div class="shot"><img src="assets/boot-preview.gif" alt="The LaunchOS start-up screen: a rocket climbing through the stars"></div>
-</div>
-</div>
-
-<section id="features"><div class="wrap">
-  <h2>Everything is free</h2>
-  <div class="grid">
-    <div class="card"><h3>Steam</h3><p>With Proton for Windows games. Steam downloads itself from Valve the first time you open it.</p></div>
-    <div class="card"><h3>Windows programs</h3><p>Run .exe and .msi files with Wine, straight from a folder or USB drive.</p></div>
-    <div class="card"><h3>Store</h3><p>Thousands of free apps from Flathub: Discord, VLC, OBS, Heroic, Prism Launcher and more.</p></div>
-    <div class="card"><h3>Files</h3><p>Copy, move and format drives, eject USB safely, look at pictures and play videos.</p></div>
-    <div class="card"><h3>Terminal</h3><p>A full Linux terminal. Set an admin password in Settings to use sudo.</p></div>
-    <div class="card"><h3>Updates</h3><p>Small updates for LaunchOS, your apps and the system, from Settings.</p></div>
-    <div class="card"><h3>Saves your stuff</h3><p>Settings, sign-ins and games are kept on your USB stick or installed drive.</p></div>
-    <div class="card"><h3>Built on Debian</h3><p>A stable base with security updates, for BIOS and UEFI PCs.</p></div>
-    <div class="card"><h3>Real apps in Setup</h3><p>Pick Discord, Spotify, FreeTube, Roblox, Minecraft, Heroic, OBS or VLC and they download as real apps.</p></div>
-    <div class="card"><h3>LaunchOS Flasher</h3><p>A small Windows program that puts the newest LaunchOS on a USB drive, and offers to update an old one.</p></div>
-    <div class="card"><h3>Wallpapers</h3><p>Painted space, aurora, dunes and synthwave wallpapers, plus a sign-in screen with your name and color.</p></div>
-    <div class="card"><h3>Made for controllers</h3><p>Everything works with a controller, including typing, with the on-screen keyboard.</p></div>
-  </div>
-</div></section>
-
-<section id="pro"><div class="wrap">
-  <h2>LaunchOS Pro</h2>
-  <p style="color:var(--dim);margin-top:-8px">Pay once. Covers every future version and up to 5 of your PCs. Nothing in the free edition is taken away.</p>
-  <div class="cols">
-    <div class="plan">
-      <h3>LaunchOS</h3>
-      <div class="price">Free</div>
-      <ul>
-        <li>Home, Files, Store, Terminal, Browser</li>
-        <li>Steam and Windows programs</li>
-        <li>Saving, USB boot, install, updates</li>
-      </ul>
-      <a class="btn" href="#get" data-link="download">Download</a>
+<header>
+  <div class="wrap">
+    <div class="bar">
+      <a class="brand" href="#overview" data-tab="overview"><img src="assets/launchos-icon.png" alt="">LaunchOS</a>
+      <a class="gh" href="#" data-link="repo">GitHub</a>
+      <a class="btn primary" href="#get" data-tab="get" style="padding:8px 16px;font-size:.92rem">Download</a>
     </div>
-    <div class="plan pro">
-      <h3>LaunchOS Pro</h3>
-      <div class="price">$5 <small>one time</small></div>
-      <ul>
-        <li>Everything in free</li>
-        <li>Live backgrounds that move, and five color themes</li>
-        <li>Gaming mode: full speed and top priority while a game runs</li>
-        <li>An FPS counter in games</li>
-        <li>Early access to new versions</li>
-        <li>A supporter badge on Home and the sign-in screen</li>
-      </ul>
-      <a class="btn primary" href="#" data-link="buy" aria-disabled="true">Get Pro</a>
-      <p style="color:var(--dim);font-size:.85rem;margin:10px 0 0" id="buy-note">Pro goes on sale soon.</p>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button class="tab" role="tab" id="t-overview" aria-controls="overview" data-tab="overview">Overview</button>
+      <button class="tab" role="tab" id="t-features" aria-controls="features" data-tab="features">Features</button>
+      <button class="tab" role="tab" id="t-pro" aria-controls="pro" data-tab="pro">Pro<span class="pill">$5</span></button>
+      <button class="tab" role="tab" id="t-get" aria-controls="get" data-tab="get">Get it</button>
+      <button class="tab" role="tab" id="t-faq" aria-controls="faq" data-tab="faq">FAQ</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ============ OVERVIEW ============ -->
+<section class="panel" id="overview" role="tabpanel" aria-labelledby="t-overview">
+  <div class="hero">
+    <div>
+      <p class="eyebrow">Free · Built on Debian</p>
+      <h1>Your PC, like a console.</h1>
+      <p class="lead">Plug in a USB stick, switch on, and you're at a Home screen made for a controller. Steam, Windows programs, Discord, Spotify and thousands of other apps are a button press away.</p>
+      <div class="btns">
+        <a class="btn primary" href="#get" data-tab="get">Get LaunchOS free</a>
+        <a class="btn" href="#pro" data-tab="pro">What's in Pro</a>
+      </div>
+    </div>
+    <div class="shot"><img src="assets/boot-preview.gif" alt="LaunchOS starting up: a rocket climbing through the stars" width="720" height="405"></div>
+  </div>
+
+  <div class="facts">
+    <div class="fact"><b>~20 s</b><span>from switching on to the sign-in screen in our tests</span></div>
+    <div class="fact"><b>0 installs</b><span>runs straight from a USB stick and keeps your saves on it</span></div>
+    <div class="fact"><b>$0</b><span>for everything except a few optional extras</span></div>
+  </div>
+
+  <div class="how">
+    <div class="card"><span class="n">1</span><h3>Write it to a stick</h3><p>LaunchOS Flasher for Windows downloads the newest version, checks it and puts it on any USB stick of 8 GB or more.</p></div>
+    <div class="card"><span class="n">2</span><h3>Start your PC from it</h3><p>Pick the stick in your PC's boot menu. Windows stays exactly as it was: LaunchOS never touches your drives unless you ask.</p></div>
+    <div class="card"><span class="n">3</span><h3>Play</h3><p>Sign in to Steam, add your apps in Setup, and everything you do is saved on the stick for next time.</p></div>
+  </div>
+</section>
+
+<!-- ============ FEATURES ============ -->
+<section class="panel" id="features" role="tabpanel" aria-labelledby="t-features" hidden>
+  <p class="eyebrow">Everything here is free</p>
+  <h2>A whole system, built for the couch</h2>
+  <p class="sub">Every screen works with a controller, a keyboard or a mouse. Nothing is locked, trial-limited or ad-supported.</p>
+
+  <div class="group">
+    <h3>Games and apps</h3>
+    <div class="grid">
+      <div class="card"><h3>Steam</h3><p>With Proton, so most Windows games in your library just run. Steam installs itself from Valve the first time you open it.</p></div>
+      <div class="card"><h3>Windows programs</h3><p>Open an .exe or .msi from a folder or USB drive and it runs with Wine. No setup.</p></div>
+      <div class="card"><h3>Store</h3><p>Thousands of free apps from Flathub, including Discord, Spotify, VLC, OBS, Heroic and Prism Launcher.</p></div>
+      <div class="card"><h3>Apps pick up where you left off</h3><p>Go Home and the app keeps running. Resume, restart or end it from its tile, like on a console.</p></div>
     </div>
   </div>
-  <p style="color:var(--dim);margin-top:18px">Just want to help? <a href="#" data-link="support">Support LaunchOS</a> with any amount. No Pro needed.</p>
-</div></section>
 
-<section id="get"><div class="wrap">
-  <h2>Get it</h2>
-  <ol class="steps">
-    <li><strong>USB stick (8 GB or more), on Windows:</strong> run <strong>LaunchOS Flasher</strong> (<code>LaunchOS-Flasher.exe</code>). It downloads the newest LaunchOS, checks it and writes it. The first time, Windows may say &ldquo;Windows protected your PC&rdquo;: choose <strong>More info</strong>, then <strong>Run anyway</strong>. (Or write <code>LaunchOS.iso</code> with <a href="https://etcher.balena.io">balenaEtcher</a>, or <a href="https://rufus.ie">Rufus</a> in <strong>DD mode</strong>.) Turn off Secure Boot, then start the PC from the stick.</li>
-    <li><strong>VirtualBox:</strong> download <strong>LaunchOS.zip</strong>, unzip it, then Machine &rarr; Add&hellip; and pick <code>LaunchOS.vbox</code>.</li>
-    <li><strong>Install:</strong> from the USB stick, open Settings &rarr; Install LaunchOS and pick a drive (16 GB or more). This erases that drive.</li>
-  </ol>
-  <div class="btns" style="justify-content:flex-start;margin-top:16px"><a class="btn primary" href="#" data-link="download">Download LaunchOS (free)</a></div>
-  <h3 style="margin-top:34px">Unlock Pro</h3>
-  <ol class="steps">
-    <li>Buy Pro. You get a license key by email.</li>
-    <li>In LaunchOS, open Settings &rarr; LaunchOS Pro &rarr; Enter key.</li>
-    <li>LaunchOS checks the key and installs the Pro extras. On a new PC, enter the same key again.</li>
-  </ol>
-</div></section>
+  <div class="group">
+    <h3>Everyday tools</h3>
+    <div class="grid">
+      <div class="card"><h3>Files</h3><p>Browse, copy, move and rename. Format and safely eject USB drives. View pictures and play music and video.</p></div>
+      <div class="card"><h3>Browser</h3><p>A light web browser that opens next to your game without closing it.</p></div>
+      <div class="card"><h3>Terminal</h3><p>A full Linux terminal for when you want one. Set a password in Settings to use <code>sudo</code>.</p></div>
+      <div class="card"><h3>On-screen keyboard</h3><p>Type Wi-Fi passwords, searches and file names with the controller. A real keyboard works too.</p></div>
+    </div>
+  </div>
 
-<section id="faq"><div class="wrap">
+  <div class="group">
+    <h3>The system</h3>
+    <div class="grid">
+      <div class="card"><h3>Fast start</h3><p>A rocket lifts off while LaunchOS starts, and the sign-in screen is up in about 20 seconds.</p></div>
+      <div class="card"><h3>Keeps your stuff</h3><p>Settings, sign-ins, downloads and games are saved on the USB stick, or on the drive you install to.</p></div>
+      <div class="card"><h3>Updates</h3><p>LaunchOS, your apps and the system update from Settings, in small downloads.</p></div>
+      <div class="card"><h3>Built on Debian 13</h3><p>A stable base with security updates. Works on BIOS and UEFI PCs.</p></div>
+      <div class="card"><h3>Wallpapers</h3><p>Seven painted backgrounds, from a lift-off at dawn to an aurora over the mountains, plus your own highlight color.</p></div>
+      <div class="card"><h3>Sign-in and lock</h3><p>An optional password. Lock the screen and your game waits behind it.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRO ============ -->
+<section class="panel" id="pro" role="tabpanel" aria-labelledby="t-pro" hidden>
+  <div class="pro-head">
+    <div>
+      <p class="eyebrow">LaunchOS Pro</p>
+      <h2>A few extras, and a way to say thanks</h2>
+      <p class="sub" style="margin:0">Pro is a one-time $5 unlock for people who want a bit more from their games and their Home screen. It's built into LaunchOS: enter a key in Settings and the extras switch on. The free edition stays complete; nothing in it will ever move behind Pro.</p>
+    </div>
+    <div class="price">
+      <div class="amt">$5 <small>once</small></div>
+      <ul>
+        <li>Up to 5 of your PCs</li>
+        <li>Every future version included</li>
+        <li>Works offline once unlocked</li>
+      </ul>
+      <a class="btn primary" href="#" data-link="buy" aria-disabled="true" style="width:100%;justify-content:center">Get Pro</a>
+      <p class="note" id="buy-note" style="text-align:center">Pro goes on sale soon.</p>
+    </div>
+  </div>
+
+  <div class="feature">
+    <div>
+      <h3>Gaming mode</h3>
+      <p>Most PCs save power by slowing the processor down between bursts of work. That's fine for a web page, but in a game it shows up as stutter and uneven frame times. Gaming mode switches all of that off while you play, and switches it back the moment you stop.</p>
+      <ul>
+        <li><b>Full-speed processor:</b> the performance setting and the highest energy preference, on every core.</li>
+        <li><b>Your game comes first:</b> the game and everything it starts get priority over background tasks.</li>
+        <li><b>Fewer slowdowns in Windows games:</b> some of them keep doing something (a “split lock”) that Linux normally punishes with a deliberate pause; gaming mode lifts that penalty while they run.</li>
+        <li><b>Automatic:</b> it starts when you open a game from Home and undoes every change when the game closes. Nothing stays changed after a restart.</li>
+      </ul>
+      <p class="note">It makes your PC run at its best, not beyond it: a slow graphics card stays a slow graphics card.</p>
+    </div>
+    <div class="media gm">
+      <table>
+        <tr><th></th><th>Normal</th><th>Gaming mode</th></tr>
+        <tr><td>Processor speed</td><td>Power saving</td><td class="on">Full speed</td></tr>
+        <tr><td>Game priority</td><td>Same as others</td><td class="on">First</td></tr>
+        <tr><td>Split-lock penalty</td><td>On</td><td class="on">Off</td></tr>
+        <tr><td>When</td><td>Always</td><td class="on">Only while you play</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="feature flip">
+    <div>
+      <h3>FPS counter</h3>
+      <p>See how smoothly a game really runs. Turn it on in Settings → Gaming and pick how much it shows:</p>
+      <ul>
+        <li><b>Just the FPS</b> in a corner, small enough to leave on.</li>
+        <li><b>Detailed:</b> FPS plus processor, graphics and memory use, for when you're tuning settings.</li>
+      </ul>
+      <p style="margin-top:12px">It works in Steam games and Windows programs.</p>
+    </div>
+    <div class="media meter">
+      <div class="osd">
+        <div><span class="k">FPS</span><span class="v">144</span></div>
+        <div><span class="k">CPU</span><span class="v">38%  62°C</span></div>
+        <div><span class="k">GPU</span><span class="v">91%  71°C</span></div>
+        <div><span class="k">RAM</span><span class="v">6.2 GB</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="feature">
+    <div>
+      <h3>Live backgrounds</h3>
+      <p>Four backgrounds that move behind your Home screen, drawn live by your graphics card rather than played from a video:</p>
+      <ul>
+        <li><b>Warp speed:</b> stars streaming past.</li>
+        <li><b>Nebula drift:</b> clouds of color slowly turning.</li>
+        <li><b>Living aurora:</b> northern lights rippling over the mountains.</li>
+        <li><b>Launch day:</b> the LaunchOS rocket on its way up.</li>
+      </ul>
+      <p style="margin-top:12px">They pause while a game is running, so they never cost you frames.</p>
+    </div>
+    <div class="media">
+      <div class="walls">
+        <figure><img src="assets/walls/orbit.webp" alt="" loading="lazy"><figcaption>Warp speed</figcaption></figure>
+        <figure><img src="assets/walls/nebula.webp" alt="" loading="lazy"><figcaption>Nebula drift</figcaption></figure>
+        <figure><img src="assets/walls/aurora.webp" alt="" loading="lazy"><figcaption>Living aurora</figcaption></figure>
+        <figure><img src="assets/walls/liftoff.webp" alt="" loading="lazy"><figcaption>Launch day</figcaption></figure>
+      </div>
+    </div>
+  </div>
+
+  <div class="feature flip">
+    <div>
+      <h3>Color themes</h3>
+      <p>Midnight blue is the standard look. Pro adds five more that recolor every screen, from Home and Settings to Files and the Store, and work with any highlight color.</p>
+      <ul>
+        <li><b>Carbon</b> and <b>Pure black</b> for a darker room (Pure black looks great on OLED TVs).</li>
+        <li><b>Deep sea</b>, <b>Royal</b> and <b>Ember</b> for something warmer or bolder.</li>
+      </ul>
+    </div>
+    <div class="media">
+      <div class="themes">
+        <div class="theme" style="background:#122235"><i></i><span>Midnight<br><small>Free</small></span></div>
+        <div class="theme" style="background:#1a1c20"><i></i><span>Carbon</span></div>
+        <div class="theme" style="background:#000"><i></i><span>Pure black</span></div>
+        <div class="theme" style="background:#0d2a30"><i></i><span>Deep sea</span></div>
+        <div class="theme" style="background:#1d1637"><i></i><span>Royal</span></div>
+        <div class="theme" style="background:#281814"><i></i><span>Ember</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="feature">
+    <div>
+      <h3>Early access and a supporter badge</h3>
+      <p><b style="color:var(--text)">Early access:</b> new versions of LaunchOS reach Pro PCs through Settings → Updates before everyone else. When the public release of that version comes out, your PC simply moves onto it.</p>
+      <p><b style="color:var(--text)">Supporter badge:</b> a small Pro mark next to your name on Home and the sign-in screen. Mostly it's a thank-you: Pro is what keeps LaunchOS free for everyone else.</p>
+    </div>
+    <div class="media badge">
+      <div class="avatar">A</div>
+      <div><b>Alex</b><span class="chip">PRO</span></div>
+    </div>
+  </div>
+
+  <div class="feature" style="display:block">
+    <h3>Free and Pro side by side</h3>
+    <table class="compare">
+      <tr><th>What you get</th><th>Free</th><th>Pro</th></tr>
+      <tr><td>Home, Store, Files, Browser, Terminal</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr><td>Steam, Windows programs and Flathub apps</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr><td>Saving, installing to a drive, updates</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr><td>Seven painted wallpapers and highlight colors</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr><td>Gaming mode</td><td class="no">–</td><td class="yes">✓</td></tr>
+      <tr><td>FPS counter</td><td class="no">–</td><td class="yes">✓</td></tr>
+      <tr><td>Four live backgrounds</td><td class="no">–</td><td class="yes">✓</td></tr>
+      <tr><td>Five color themes</td><td class="no">–</td><td class="yes">✓</td></tr>
+      <tr><td>Early access to new versions</td><td class="no">–</td><td class="yes">✓</td></tr>
+      <tr><td>Supporter badge</td><td class="no">–</td><td class="yes">✓</td></tr>
+    </table>
+  </div>
+
+  <div class="feature" style="display:block">
+    <h3>How unlocking works</h3>
+    <div class="how" style="margin-top:14px">
+      <div class="card"><span class="n">1</span><h3>Buy once</h3><p>Checkout is handled by our store. Your license key arrives by email.</p></div>
+      <div class="card"><span class="n">2</span><h3>Enter the key</h3><p>On LaunchOS, open Settings → LaunchOS Pro → Enter your key. The on-screen keyboard works here too.</p></div>
+      <div class="card"><span class="n">3</span><h3>That's it</h3><p>The extras download and switch on. On another PC, enter the same key. Rewriting your stick keeps the PC's slot.</p></div>
+    </div>
+    <p class="note">Just want to chip in? <a href="#" data-link="support">Support LaunchOS</a> with any amount, no Pro needed.</p>
+  </div>
+</section>
+
+<!-- ============ GET IT ============ -->
+<section class="panel" id="get" role="tabpanel" aria-labelledby="t-get" hidden>
+  <p class="eyebrow">Free download</p>
+  <h2>Three ways to run LaunchOS</h2>
+  <p class="sub">Start with a USB stick: it's the quickest way to try LaunchOS, and it doesn't change anything on your PC.</p>
+
+  <div class="paths">
+    <div class="card">
+      <span class="tag">Recommended</span>
+      <h3>From a USB stick</h3>
+      <ol>
+        <li>On Windows, run <strong>LaunchOS Flasher</strong>. It downloads the newest LaunchOS and checks it.</li>
+        <li>Pick a USB stick of 8 GB or more and choose <strong>Write LaunchOS</strong>. This erases the stick.</li>
+        <li>Turn off Secure Boot in your PC's settings, then start the PC from the stick (usually F8, F12 or Esc at power-on).</li>
+      </ol>
+    </div>
+    <div class="card">
+      <span class="tag">Try it in a window</span>
+      <h3>In VirtualBox</h3>
+      <ol>
+        <li>Download <strong>LaunchOS.zip</strong> and unzip it.</li>
+        <li>In VirtualBox, choose Machine → Add… and pick <code>LaunchOS.vbox</code>.</li>
+        <li>Start it. Games are slow in a virtual machine; use a stick for playing.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <span class="tag">Make it permanent</span>
+      <h3>Install on a drive</h3>
+      <ol>
+        <li>Start LaunchOS from a USB stick.</li>
+        <li>Open Settings → Install LaunchOS and pick a drive of 16 GB or more.</li>
+        <li>That drive is erased, so use a spare one. LaunchOS asks twice first.</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="btns" style="margin-top:24px">
+    <a class="btn primary" href="#" data-link="download">Download LaunchOS</a>
+  </div>
+
+  <div class="callout"><b>“Windows protected your PC”?</b> LaunchOS Flasher isn't signed with a paid certificate, so Windows may warn you the first time. Choose <b>More info</b>, then <b>Run anyway</b>. Not on Windows? Write <code>LaunchOS.iso</code> with <a href="https://etcher.balena.io">balenaEtcher</a>, or <a href="https://rufus.ie">Rufus</a> in DD mode.</div>
+
+  <div class="group">
+    <h3>What you need</h3>
+    <div class="reqs">
+      <div class="card"><h3>64-bit PC</h3><p>Intel or AMD, BIOS or UEFI.</p></div>
+      <div class="card"><h3>4 GB memory</h3><p>8 GB or more for bigger games.</p></div>
+      <div class="card"><h3>USB stick</h3><p>8 GB or more; a faster stick starts faster.</p></div>
+      <div class="card"><h3>Internet</h3><p>For Steam, the Store and updates. Wired or Wi-Fi.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section class="panel" id="faq" role="tabpanel" aria-labelledby="t-faq" hidden>
   <h2>Questions</h2>
-  <details><summary>Is the free edition complete?</summary><p>Yes. Pro only adds extras on top.</p></details>
-  <details><summary>How many PCs can I use Pro on?</summary><p>One key works on up to 5 PCs. To free a slot from a PC you no longer use, email us.</p></details>
-  <details><summary>Does Pro need internet?</summary><p>Only to unlock and to get Pro updates. Once unlocked, Pro stays unlocked offline. LaunchOS rechecks the key about once a month when online, and never locks anything because you are offline.</p></details>
-  <details><summary>What do you collect?</summary><p>Only the license key and a PC id when you unlock: a scrambled code made from the PC, so the same PC keeps its one slot. It can&rsquo;t be turned back into anything about your PC. Never your name, email or hardware serial. Payments are handled by the store; LaunchOS never sees card details.</p></details>
-  <details><summary>What is your refund policy?</summary><p>All Pro sales are final. If something is wrong with your purchase, email us and we will sort it out. Your legal rights where you live are not affected.</p></details>
-  <details><summary>Is it open source?</summary><p>LaunchOS is built from open-source parts (Linux, Debian, sway, GTK, Wine, Flatpak) and lists them under Settings &rarr; About &rarr; Open-source credits. Source code for the GPL parts is available on request and through Debian's source packages.</p></details>
-</div></section>
+  <p class="sub">Something not covered here? <a href="#" data-link="email">Get in touch</a>.</p>
+  <div class="faqcols">
+    <div>
+      <details><summary>Is LaunchOS really free?</summary><p>Yes. Everything on the Features tab is free, with no ads, trials or time limits. Pro only adds the extras on the Pro tab.</p></details>
+      <details><summary>Will it change anything on my PC?</summary><p>Not when you run it from a USB stick: your Windows drive isn't touched, and your saves live on the stick. Only installing LaunchOS erases a drive, and only the one you pick.</p></details>
+      <details><summary>Will my games run?</summary><p>Most Steam games do, through Proton. Games with anti-cheat that blocks Linux (some online shooters) won't. Check a game on ProtonDB before you count on it.</p></details>
+      <details><summary>How do I update?</summary><p>Settings → Updates. A USB stick needs saving on to keep updates. For a fresh copy, plug your stick in with LaunchOS Flasher open and it offers to update it (that erases the saves on it).</p></details>
+      <details><summary>Is it open source?</summary><p>LaunchOS is built from open-source parts (Linux, Debian, sway, GTK, Wine, Flatpak) and lists them in Settings → About → Open-source credits. Source for the GPL parts is available on request and from Debian.</p></details>
+    </div>
+    <div>
+      <details><summary>How many PCs can I use Pro on?</summary><p>Five. Each PC keeps its slot, even if you rewrite the stick or reinstall. To free a slot from a PC you no longer use, email us.</p></details>
+      <details><summary>Does Pro need the internet?</summary><p>Only to unlock and to download Pro updates. Once unlocked, Pro works offline. LaunchOS rechecks the key about once a month when it's online, and never switches Pro off because you're offline.</p></details>
+      <details><summary>What do you collect?</summary><p>When you unlock Pro: your license key and a PC id, a scrambled code made from the PC so it keeps its one slot. It can't be turned back into anything about your PC. Never your name, email or serial numbers. Payment is handled by the store; LaunchOS never sees card details.</p></details>
+      <details><summary>Are Pro downloads safe?</summary><p>Every Pro download is signed, and LaunchOS checks the signature before installing anything. A file that doesn't match is refused.</p></details>
+      <details><summary>Can I get a refund?</summary><p>Pro sales are final, but if something's wrong with your purchase, email us and we'll sort it out. Your legal rights where you live aren't affected.</p></details>
+    </div>
+  </div>
+</section>
 </main>
 
 <footer><div class="wrap">
-  <p>LaunchOS is an independent project, based on Debian. It is not made by or endorsed by Debian, Valve, Microsoft or any game or app maker. All product names belong to their owners.</p>
-  <p>Steam is a trademark of Valve Corporation. Steam downloads from Valve when you first open it.</p>
-  <p><a href="#" data-link="repo">GitHub</a> &middot; <a href="#" data-link="support">Support LaunchOS</a> &middot; <a href="#" data-link="email">Contact</a></p>
+  <p>LaunchOS is an independent project based on Debian. It isn't made or endorsed by Debian, Valve, Microsoft or any game or app maker. Steam is a trademark of Valve Corporation; all other product names belong to their owners.</p>
+  <p><a href="#" data-link="repo">GitHub</a> · <a href="#" data-link="support">Support LaunchOS</a> · <a href="#" data-link="email">Contact</a></p>
 </div></footer>
 
 <script>
@@ -171,11 +478,50 @@ document.querySelectorAll("[data-link]").forEach(function (a) {
   var u = LINKS[a.getAttribute("data-link")];
   if (u) {
     a.href = u; a.removeAttribute("aria-disabled");
-    if (a.getAttribute("data-link") === "buy") { var n = document.getElementById("buy-note"); if (n) n.textContent = "One time. Covers up to 5 PCs."; }
-  } else if (a.getAttribute("data-link") !== "download") {
+    if (a.getAttribute("data-link") === "buy") { var n = document.getElementById("buy-note"); if (n) n.textContent = "One payment. No subscription."; }
+  } else if (a.getAttribute("data-link") === "download") {
+    a.href = "#get";   // (until downloads are public, it points at the instructions)
+  } else {
     a.setAttribute("aria-disabled", "true"); a.removeAttribute("href");
   }
 });
+
+// Tabs: one section at a time, and the address (#pro) opens that tab directly.
+(function () {
+  document.documentElement.classList.add("js");
+  var names = ["overview", "features", "pro", "get", "faq"];
+  var tabs = [].slice.call(document.querySelectorAll(".tab"));
+  function show(name, push) {
+    if (names.indexOf(name) < 0) name = "overview";
+    names.forEach(function (n) { document.getElementById(n).hidden = n !== name; });
+    tabs.forEach(function (t) {
+      var on = t.dataset.tab === name;
+      t.setAttribute("aria-selected", on ? "true" : "false");
+      t.tabIndex = on ? 0 : -1;
+      if (on) { var bar = t.parentNode; if (t.offsetLeft < bar.scrollLeft || t.offsetLeft + t.offsetWidth > bar.scrollLeft + bar.clientWidth) bar.scrollLeft = t.offsetLeft - 20; }
+    });
+    if (push && location.hash !== "#" + name) history.pushState(null, "", "#" + name);
+    window.scrollTo(0, 0);
+  }
+  document.addEventListener("click", function (e) {
+    var el = e.target.closest("[data-tab]");
+    if (!el) return;
+    e.preventDefault(); show(el.dataset.tab, true);
+    if (el.classList.contains("tab")) el.focus();
+  });
+  document.querySelector(".tabs").addEventListener("keydown", function (e) {
+    var i = tabs.indexOf(document.activeElement);
+    if (i < 0) return;
+    var j = e.key === "ArrowRight" ? (i + 1) % tabs.length : e.key === "ArrowLeft" ? (i + tabs.length - 1) % tabs.length : e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : -1;
+    if (j < 0) return;
+    e.preventDefault(); tabs[j].focus(); show(tabs[j].dataset.tab, true);
+  });
+  window.addEventListener("popstate", function () { show(location.hash.slice(1), false); });
+  show(location.hash.slice(1), false);
+  // (the address names a section, so the browser would jump down to it: start at the top instead)
+  if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+  addEventListener("load", function () { setTimeout(function () { window.scrollTo(0, 0); }, 0); });
+})();
 </script>
 </body>
 </html>
