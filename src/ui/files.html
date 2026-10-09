@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Files</title>
 <link rel="stylesheet" href="los.css">
+<script src="look.js"></script>
 <style>
 #head { position: absolute; left: 56px; right: 48px; top: 26px; height: 40px; display: flex; align-items: center; gap: 18px; }
 #head h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -.01em; }
@@ -595,7 +596,7 @@ function up() {
   const from = baseName(cur.path);
   openFolder(dirName(cur.path), rootOf, from);
 }
-const home = () => { saveState(); location.href = 'index.html'; };
+const home = () => { saveState(); LOS.backTo(); };   // (Home, or Settings if opened from there)
 function mv(d) {
   if (mode === 'panel') { if (P.rows.length) { P.i = Math.max(0, Math.min(P.rows.length - 1, P.i + d)); rp(); } return; }
   if (focus === 'side') { si = Math.max(0, Math.min(sideRows.length - 1, si + d)); paintSide(); return; }
@@ -714,10 +715,11 @@ $('#clipclear').onclick = () => { if (clip) { clip = null; drawRows(true); saveS
 
 /* ---------- start ---------- */
 (async function start() {
+  LOS.holdReady();   // (shown once the places and the folder are drawn)
   const st = loadState();
   if (st && st.clip) clip = st.clip;
   for (let i = 0; i < 20 && !(await loadPlaces()); i++) await new Promise(r => setTimeout(r, 1000));
-  if (!places.length) { $('#empty').style.display = 'block'; $('#empty').innerHTML = '<b>Files couldn’t start</b>Go back to Home and try again.'; return; }
+  if (!places.length) { $('#empty').style.display = 'block'; $('#empty').innerHTML = '<b>Files couldn’t start</b>Go back to Home and try again.'; LOS.ready(); return; }
   let ok = false;
   if (st && st.path && st.root) {
     si = Math.max(0, sideRows.findIndex(r => sideRoot(r) === st.root));
@@ -726,6 +728,7 @@ $('#clipclear').onclick = () => { if (clip) { clip = null; drawRows(true); saveS
   }
   if (!ok) { si = 0; await openFolder(places[0].path, places[0].path); setFocus('side'); }
   paintSide();
+  LOS.ready();
   // drives come and go: check every few seconds while Files is on screen
   let slowTick = 0;
   setInterval(async () => {

@@ -14,7 +14,7 @@
  *   than a click, and a panel or menu that Escape doesn't close.
  * The on-screen keyboard is driven with a pretend controller (a real key press closes it, by design),
  * and sliders are clicked a quarter of the way along and must move there.
- * Pages: index.html (plain, ?onsale, ?pro), login (plain, with a password), setup (whole flow,
+ * Pages: index.html (plain, ?onsale, ?pro), settings (plain, ?onsale, ?pro), login (plain, with a password), setup (whole flow,
  * ?pro#look, #controller), files, store (+ an installed app's page), monitor, view (picture, text,
  * song, video) and start, each at 1280x720 and 1024x768. The keyboard pass runs at the first size
  * (the stage is drawn at 1280x720 and scaled, so keys behave the same at both); --kbd-all for both.
@@ -110,6 +110,11 @@ const PAGES = [
   { file: 'setup.html', depth: 12, cap: 400, variants: [{ q: '', name: 'whole flow' }, { q: '?pro#look', local: { 'launchos.prefs': '{"proOn":true}' } }, { q: '#controller' }],
     layers: [osk, { name: 'step', when: 'true', head: '#title', box: '#stage',
       groups: [{ sel: '#content [data-f]', kb: 'nav', name: 'choice', max: 30 }, { sel: '#nav [data-f]', kb: 'nav', name: 'step button' }, hints] }] },
+  { file: 'settings.html', depth: 5, cap: 700, variants: [{ q: '' }, { q: '?onsale' }, { q: '?pro' }],
+    layers: [osk, bye,
+      { name: 'settings', when: 'true', head: '#ph', box: '#stage', navOrder: 'cols', typingLeave: 'Escape',
+        groups: [{ sel: '#cats > .it', kb: 'nav', name: 'setting' }, { sel: '#pl > [data-k]', kb: 'nav', name: 'row', padKeys: TYPE_ROWS },
+          { sel: '#pbody input', kb: 'input', name: 'text box' }, { sel: '#pbody button, #panel label.pw button', kb: 'none', name: 'panel button' }, hints] }] },
   { file: 'files.html', depth: 6, cap: 900, variants: [{ q: '' }],
     layers: [osk,
       panelLayer({ groups: [{ sel: '#pl > [data-k]', kb: 'nav', name: 'panel row', padKeys: TYPE_ROWS }, { sel: '#panel input', kb: 'input', name: 'text box' }, outside] }),
@@ -356,7 +361,8 @@ function INPAGE() {
     const where = L.name + (L.head ? ' “' + first((document.querySelector(L.head) || {}).innerText) + '”' : '');
     const at = cur ? pair(cur.el, it.el) : { t: pos(it.el) };
     return { found: true, where, reached, tgt: at.t, cur: cur ? Object.assign({ key: cur.key }, at.c) : null, axis: g.kb === 'tab' ? 'x' : '', cols: L.navOrder === 'cols',
-      slider: it.el.classList.contains('slider'), active: desc(ae), typing: !!ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA') };
+      slider: it.el.classList.contains('slider'), active: desc(ae), typing: !!ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA'),
+      leave: L.typingLeave || '', tgtTyping: g.kb === 'input' };
   };
 }
 const INPAGE_SRC = '(' + INPAGE.toString() + ')();';
@@ -454,6 +460,9 @@ async function kbdReach(pg, t, st, press) {
     for (let w = 0; n === 0 && w < 8 && s && !s.found; w++) { await sleep(200); s = await kstate(pg, t, st); }
     if (!s || !s.found) return { err: s ? s.why : 'the page went away', trail };
     if (s.reached) return { ok: true, trail, slider: s.slider };
+    // typing in a text box, the arrows move in the text: a layer that says so is left with its key first
+    // (Settings: B / Escape goes from an open setting back to the list)
+    if (s.typing && s.leave && !s.tgtTyping && !trail.includes(s.leave)) { await press(s.leave); trail.push(s.leave); await settle(pg, t, { min: 80, cap: 1500 }); continue; }
     if (!s.cur) return { err: 'nothing is selected to start from', trail, nofocus: s.where };
     seen[s.cur.key] = (seen[s.cur.key] || 0) + 1;
     if (seen[s.cur.key] > 4) return { err: 'the arrows go round in circles near “' + s.cur.key + '”', trail };
@@ -496,7 +505,10 @@ async function kbdAct(pg, t, st) {
   if (kb === 'nav' && g.padKeys && new RegExp(g.padKeys).test(st.key)) kb = 'pad';
   if (kb === 'hint') { if (!HINT_KEYS[st.id]) return { skip: 'no key for #' + st.id }; kb = { key: HINT_KEYS[st.id] }; }
   if (kb && kb.key) {
-    if (kb.key.length === 1) { const s = await kstate(pg, t, st); if (s && s.typing) return { skip: 'a text box has focus, so “' + kb.key + '” is typed into it' }; }
+    if (kb.key.length === 1 || (g.kb === 'hint' && kb.key === 'Enter')) {
+      const s = await kstate(pg, t, st);
+      if (s && s.typing) return { skip: kb.key === 'Enter' ? 'a text box has focus, so Enter is for it (the A button on screen is for the controller)' : 'a text box has focus, so “' + kb.key + '” is typed into it' };
+    }
     await pg.keyboard.press(kb.key); return { ok: true, how: kb.key };
   }
   if (kb === 'none') return { skip: 'mouse only' };

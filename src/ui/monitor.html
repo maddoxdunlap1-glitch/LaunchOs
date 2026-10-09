@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>System monitor</title>
 <link rel="stylesheet" href="los.css">
+<script src="look.js"></script>
 <style>
 :root { --down: #3987e5; --up: #d95926; --grid: #22344a; }
 #head { position: absolute; left: 56px; right: 56px; top: 30px; display: flex; align-items: baseline; gap: 18px; }
@@ -181,7 +182,7 @@ async function tick() {
 }
 function loop() { if (!paused) tick(); timer = setTimeout(loop, 1000); }
 function togglePause() { paused = !paused; $('#live').classList.toggle('paused', paused); txt('#livetxt', paused ? 'Paused' : 'Live, every second'); txt('#hat', paused ? 'Resume' : 'Pause'); }
-const home = () => { location.href = 'index.html'; };
+const home = () => LOS.backTo();   // (Home, or Settings if opened from there)
 LOS.onNav(a => { if (a === 'ok') togglePause(); else if (a === 'back' || a === 'menu') home(); return true; });
 $('#ha').onclick = togglePause; $('#hb').onclick = home;
 tick().then(() => setTimeout(loop, 1000));

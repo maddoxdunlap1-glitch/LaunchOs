@@ -18,9 +18,10 @@ A console-style Linux system, based on Debian, with a controller-friendly Home s
 - **Terminal**: a full Linux terminal. Set a **password** in Settings to use `sudo`.
 - **Updates** (Settings → Updates): update LaunchOS straight from its GitHub releases, update your Store apps, and install Debian's security fixes.
 - **System monitor**: live CPU, memory, network and storage, one-minute charts, the busiest processes and per-core load.
+- **Settings**: a full-screen app with everything in one place: Wi-Fi, network, sound, screen size, your look, name, time zone, apps on Home, controllers, gaming, password, saving, drives, install, updates, LaunchOS Pro, about and power.
 - **Setup**: your name and color, time zone, network, sound, screen size, controller test, look, and your apps.
-- **Side menu** (`M`, Super, or the controller's Menu or Home button): running apps, Discord, devices, notifications, and Settings (screen size, sound, network, Wi-Fi, time zone, apps on Home, password, saving, install, updates, power).
-- **Apps keep running** when you go Home. **Ctrl+click** (or right-click) an app for Resume, Restart, End task and Move.
+- **Side menu** (`M`, Super, or the controller's Menu or Home button): running apps, Discord, devices, notifications, and quick settings.
+- **Apps keep running** when you go Home, each on its own screen: switching between Home and your apps is instant, with no flicker. **Ctrl+click** (or right-click) an app for Resume, Restart, End task and Move. The **Windows key** or the controller's **Xbox button** always takes you Home.
 - **Wallpapers**: painted Liftoff, Nebula, Aurora, Orbit, Dunes, Waves and Grid wallpapers, the classic contour lines, or plain (Setup → Look).
 - **On-screen keyboard**: every text box (passwords, Wi-Fi, search, file names) can be typed with a controller.
 - **LaunchOS Flasher** for Windows: puts the newest LaunchOS on a USB drive, and offers to update a drive that has an older one.

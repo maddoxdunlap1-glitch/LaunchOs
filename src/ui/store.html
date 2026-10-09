@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Store</title>
 <link rel="stylesheet" href="los.css">
+<script src="look.js"></script>
 <style>
 #head { position: absolute; left: 56px; right: 48px; top: 24px; height: 46px; display: flex; align-items: center; gap: 18px; }
 #head h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -.01em; }
@@ -340,11 +341,13 @@ $('#ha').onclick = () => nav('ok'); $('#hb').onclick = () => nav('back'); $('#hm
 
 /* start */
 (async function start() {
+  LOS.holdReady();   // (shown once the shelves are drawn)
   for (let i = 0; i < 10 && !(await load()); i++) await new Promise(r => setTimeout(r, 1000));
   render();
   if (job.step && !job.done) watchJob();
   const want = decodeURIComponent(location.hash.slice(1));
   if (/^[A-Za-z][\w-]*(\.[\w-]+){2,}$/.test(want)) openDetail(want);
+  LOS.ready();
 })();
 </script>
 </body>

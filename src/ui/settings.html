@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings</title>
+<link rel="stylesheet" href="los.css">
+<script src="look.js"></script>
+<style>
+#head { position: absolute; left: 56px; right: 48px; top: 26px; height: 40px; display: flex; align-items: center; gap: 18px; }
+#head h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -.01em; }
+#note { font-size: 14px; color: var(--ink-2); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#clock { font-size: 19px; color: #dce6f0; }
+/* the settings, on the left */
+#cats { position: absolute; left: 40px; top: 84px; width: 344px; bottom: 64px; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; padding: 6px 8px; }
+#cats::-webkit-scrollbar { display: none; }
+#cats .it { padding: 10px 12px; margin-bottom: 6px; }
+#cats .it .glyph, #cats .it .glyph .pic { width: 34px; height: 34px; }
+#cats .it .txt span { font-size: 16px; }
+#cats .it.cur:not(.f) { border-color: rgba(var(--accent-glow), .45); }
+/* the open setting, on the right */
+#panel { position: absolute; left: 404px; right: 40px; top: 84px; bottom: 64px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 26px 30px 18px; display: flex; flex-direction: column; }
+#panel.focus { border-color: #2f4a68; }
+#ph { margin: 0 0 6px; font-size: 24px; font-weight: 600; flex: none; }
+#pp { margin: 0 0 16px; color: var(--ink-2); font-size: 15px; line-height: 1.5; flex: none; max-width: 720px; }
+#pp:empty { display: none; }
+#pbody { flex: none; max-width: 720px; }
+#pl { position: relative; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; padding: 6px 8px; margin: -6px -8px; max-width: 736px; }
+#pl::-webkit-scrollbar { display: none; }
+#intro { color: var(--mute); font-size: 15px; margin-top: 8px; }
+.meterbar { height: 10px; border-radius: 5px; background: var(--chip); overflow: hidden; margin: 6px 0 10px; }
+.meterbar i { display: block; height: 100%; background: var(--accent); border-radius: 5px; transition: width .4s; }
+.pnote { font-size: 14px !important; color: var(--ink-2); margin: 0 0 14px !important; }
+label.pw { display: flex; gap: 8px; margin-bottom: 14px; }
+label.pw input { flex: 1; font-size: 17px; padding: 11px 14px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel-2); color: var(--ink); outline: none; }
+label.pw input:focus { border-color: var(--accent); }
+label.pw button { padding: 0 14px; border-radius: 10px; background: var(--chip); font-size: 14px; }
+.feats { margin: 0 0 14px; padding: 0; list-style: none; font-size: 15px; color: var(--ink-2); display: grid; gap: 6px; }
+.feats li { display: flex; gap: 10px; align-items: center; }
+.feats li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #e6b84a; flex: none; }
+.buy { display: flex; gap: 16px; align-items: center; margin: 0 0 14px; font-size: 14px; color: var(--ink-2); }
+.buy .qr { width: 104px; height: 104px; border-radius: 10px; background: #fff; padding: 6px; flex: none; }
+.buy .qr svg { width: 100%; height: 100%; display: block; }
+#hints { position: absolute; right: 44px; bottom: 16px; }
+#bye { position: absolute; inset: 0; background: #000; display: none; align-items: center; justify-content: center; font-size: 20px; color: var(--mute); z-index: 40; }
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+<div id="head"><h1>Settings</h1><span id="note"></span><span id="clock"></span></div>
+<nav id="cats" aria-label="Settings"></nav>
+<section id="panel" aria-live="polite"><h2 id="ph"></h2><p id="pp"></p><div id="pbody"></div><div id="pl"></div></section>
+<div id="hints" class="hints"><button id="ha"><u style="background:#3ddc6b">A</u><span id="hat">Open</span></button><button id="hb"><u style="background:#e0443e">B</u><span id="hbt">Home</span></button><button id="hm"><u style="background:#cfe6ff">&#8801;</u>Home</button></div>
+<div id="bye"></div>
+<div id="toast"></div>
+</div></div>
+<script src="los.js"></script>
+<script src="settings.js"></script>
+<script>
+/* The Settings app: every setting in one place, full screen. The settings are on the left; A (or
+   Right) opens one on the right, B goes back to the list, and B again goes Home. The settings
+   themselves are in settings.js, shared with Home's side menu. */
+const { $, call, toast, icon, pic, appPic, esc } = LOS;
+call('session_state').then(s => { if (s && s.signed_in === false) location.href = 'login.html'; });
+
+let mode = 'cats';   // cats: the list on the left has the focus; panel: the open setting does
+let ci = 0, open = -1, running = {};
+let P = null;        // the open setting: { rows, i, ... } (see settings.js)
+const goSetup = hash => () => LOS.openFrom('setup.html' + (hash ? '#' + hash : ''));
+const files = () => LOS.openFrom('files.html');
+const monitor = () => LOS.openFrom('monitor.html');
+const home = () => { location.href = 'index.html'; };
+
+/* the settings, with what they're set to now */
+function cats() {
+  const ip = net && net.connected ? ((net.links || []).find(l => l.ipv4.length) || {}).ipv4 : null;
+  return [
+    row('Wi-Fi', 'Find and join networks', 'wifi', () => wifiPanel(), { pic: 'wifi' }),
+    row('Network', net ? (net.connected ? 'Connected' + (ip ? ', ' + ip[0] : '') : 'Not connected') : 'Checking…', 'wifi', () => netPanel(), { pic: 'network' }),
+    row('Sound', vol ? (vol.available ? (vol.muted ? 'Muted' : 'Volume ' + vol.value + '%') : 'No sound device found') : 'Checking…', 'sound', () => volPanel(), { pic: 'sound' }),
+    row('Screen size', LOS.SIZE_NAMES[LOS.prefs.size] || 'Fill screen', 'display', () => sizePanel(), { pic: 'display' }),
+    row('Customize your Home', 'Colors, background and theme', 'palette', goSetup('look'), { pic: 'look' }),
+    row('Name and color', LOS.prefs.name, 'user', goSetup('name'), { pic: 'user' }),
+    row('Time zone', (LOS.prefs.timezone || zone || 'UTC').replace(/^Etc\//, '').replace(/_/g, ' '), 'clock', goSetup('timezone'), { pic: 'time' }),
+    row('Apps on Home', 'Pick apps like Discord and Steam', 'grid', goSetup('apps'), { pic: 'games' }),
+    row('Controllers', 'Test every button and stick', 'pad', goSetup('controller'), { pic: 'controller' }),
+    row('Gaming', pro && pro.active ? 'Performance mode and FPS counter' : 'Gaming mode, with LaunchOS Pro', 'pad', () => gamingPanel(), { pic: 'controller' }),
+    row('Password', adminSet ? (session && session.ask ? 'Set · asked at sign-in and for sudo' : 'Set · used for sudo') : 'Not set', 'user', () => adminPanel(), { pic: 'password' }),
+    row('Saving', storage ? (storage.installed ? 'Installed on a drive' : storage.saving ? 'On' : 'Off · changes reset at shut down') : 'Checking…', 'usb', () => savingPanel(), { pic: 'saving' }),
+    row('Drives', 'Open, eject or format them in Files', 'drive', files, { pic: 'drive' }),
+    ...(storage && storage.installed ? [] : [row('Install LaunchOS', 'Put it on a drive in this PC', 'usb', () => installPanel(), { pic: 'install' })]),
+    row('Updates', 'LaunchOS, your apps and the system', 'refresh', () => updatesPanel(), { pic: 'updates' }),
+    row('LaunchOS Pro', pro && pro.active ? 'On · thanks for supporting LaunchOS' : pro && pro.on_sale ? 'Extras for $5, once' : 'Coming soon', 'info', () => proPanel(), { pic: 'pro' }),
+    row('System monitor', 'CPU, memory, network and apps', 'chart', monitor, { pic: 'monitor' }),
+    row('About LaunchOS', info ? 'Version ' + info.version : 'Version', 'info', () => aboutPanel(), { img: '/opt/launcher/img/launchos-icon.png' }),
+    row('Power', adminSet ? 'Lock, sign out, shut down or restart' : 'Sign out, shut down or restart', 'power', () => powerPanel(), { pic: 'power' }),
+  ];
+}
+function keepVisible(list) {
+  const f = list.querySelector('.f'); if (!f) return;
+  const pad = 8;
+  if (f.offsetTop - pad < list.scrollTop) list.scrollTop = f.offsetTop - pad;
+  else if (f.offsetTop + f.offsetHeight + pad > list.scrollTop + list.clientHeight) list.scrollTop = f.offsetTop + f.offsetHeight + pad - list.clientHeight;
+}
+function rg() {   // (the settings call this when what they show may have changed)
+  const L = cats();
+  ci = Math.max(0, Math.min(ci, L.length - 1));
+  $('#cats').innerHTML = L.map((o, k) => `<div class="it${k === ci && mode === 'cats' ? ' f' : ''}${k === open ? ' cur' : ''}" data-k="${k}">${rowIcon(o)}<span class="txt"><span>${esc(o.t)}</span><small>${esc(o.s)}</small></span></div>`).join('');
+  keepVisible($('#cats'));
+  $('#panel').classList.toggle('focus', mode === 'panel');
+  $('#hat').textContent = mode === 'cats' ? 'Open' : 'Select';
+  $('#hbt').textContent = mode === 'cats' ? 'Home' : 'Back';
+  if (!P) intro();
+}
+/* nothing open: what the highlighted setting is about */
+const ABOUT = {
+  'Wi-Fi': 'See the Wi-Fi networks nearby and join one. Networks you joined before connect by themselves.',
+  'Network': 'Your connection: wired or Wi-Fi, your address, and a test to check the internet works.',
+  'Sound': 'The volume, and a test sound to check your speakers or headphones.',
+  'Screen size': 'If the edges of the picture are cut off on your TV, pick TV safe area.',
+  'Customize your Home': 'Your highlight color, the background picture (or a live one with LaunchOS Pro) and the color theme.',
+  'Name and color': 'The name and color on Home and the sign-in screen.',
+  'Time zone': 'Sets the clock to where you are.',
+  'Apps on Home': 'Pick the apps that get a tile on Home. Ones you don’t have yet download from Flathub.',
+  'Controllers': 'Press every button and move every stick to check your controller works.',
+  'Gaming': 'Gaming mode (full speed and top priority while a game runs) and the FPS counter. With LaunchOS Pro.',
+  'Password': 'A password for signing in and for admin commands (sudo) in the Terminal.',
+  'Saving': 'Keeps your settings, sign-ins, downloads and games between restarts.',
+  'Drives': 'USB drives and the drives in this PC, in Files: open, eject or format them.',
+  'Install LaunchOS': 'Put LaunchOS on a drive in this PC, so it starts without the USB stick.',
+  'Updates': 'New versions of LaunchOS, updates for your apps, and security fixes for the system.',
+  'LaunchOS Pro': 'Extras for $5, once: live backgrounds, color themes, gaming mode, an FPS counter and early access.',
+  'System monitor': 'How busy the processor, memory and network are, and what’s running.',
+  'About LaunchOS': 'The version of LaunchOS, this PC’s processor, memory and screen, and the open-source credits.',
+  'Power': 'Lock, sign out, shut down or restart.',
+};
+function intro() {
+  const o = cats()[ci];
+  $('#ph').textContent = o ? o.t : 'Settings';
+  $('#pp').textContent = o ? ABOUT[o.t] || o.s : '';
+  $('#pbody').innerHTML = '';
+  $('#pl').innerHTML = `<p id="intro">Press A to open it, or B to go back Home.</p>`;
+}
+
+/* ---------- the open setting (settings.js calls these) ---------- */
+function panel(title, text, rows, opts) {
+  LOS.osk.hide();
+  P = Object.assign({ rows, i: 0 }, opts || {});
+  mode = 'panel';
+  $('#ph').textContent = title; $('#pp').textContent = text || '';
+  $('#pbody').innerHTML = P.body || '';
+  rp(); rg();
+}
+function rp() {
+  $('#pl').innerHTML = P.rows.map((o, k) => o.slider != null
+    ? `<div class="slider${k === P.i && mode === 'panel' ? ' f' : ''}" data-k="${k}" role="slider" aria-label="${esc(o.t || 'Volume')}" aria-valuenow="${o.slider}"><i style="width:${o.slider}%"></i><b style="left:${o.slider}%"></b></div>`
+    : `<div class="it${k === P.i && mode === 'panel' ? ' f' : ''}" data-k="${k}">${rowIcon(o)}<span class="txt"><span>${esc(o.t)}</span>${o.s ? `<small>${esc(o.s)}</small>` : ''}</span></div>`).join('');
+  keepVisible($('#pl'));
+}
+function closePanel() {
+  LOS.osk.hide();   // (its Done must never act for a setting that's gone)
+  dropInput();
+  P = null; open = -1; mode = 'cats';
+  rg();
+  refreshAll();
+}
+const closeAll = closePanel;
+function renderHome() {}
+function pact(dir) {
+  const o = P && P.rows[P.i];
+  if (!o) return;   // a "please wait" setting has no choices yet
+  if (dir && o.slider != null) { o.adjust(dir); return; }
+  if (!dir && o.a) o.a();
+}
+async function refreshNet() { net = await call('network'); return net; }
+async function refreshTasks() { const t = await call('tasks'); running = {}; (Array.isArray(t) ? t : []).forEach(x => { running[x.id] = x; }); }
+async function refreshAll() {
+  const [p, a, s, v, i, st, z] = await Promise.all([call('pro_state'), call('admin_set'), call('session_state'), call('volume_get'), call('info'), call('storage'), call('timezone_get'), refreshNet(), refreshTasks()]);
+  if (p && !p.error) pro = p;
+  adminSet = !!(a && a.set); session = s; vol = v; info = i; storage = st; zone = z && z.zone;
+  $('#note').textContent = info ? 'LaunchOS ' + info.version + (net ? ' · ' + (net.connected ? 'Online' : 'Offline') : '') : '';
+  rg();
+}
+function openCat(k) {
+  const o = cats()[k]; if (!o) return;
+  ci = k; open = k;
+  try { sessionStorage.setItem('launchos.settings', o.t); } catch (e) { /* no storage */ }   // (back from Setup or Files: the same one)
+  o.a();
+}
+
+/* ---------- moving around ---------- */
+function mv(d) {
+  if (mode === 'cats') { ci = Math.max(0, Math.min(cats().length - 1, ci + d)); rg(); return; }
+  if (P && P.rows.length) { P.i = Math.max(0, Math.min(P.rows.length - 1, P.i + d)); rp(); }
+}
+function nav(a, e) {
+  // Enter in a text box does the setting's main thing, unless another choice (like Cancel) was picked with the arrows
+  if (a === 'ok' && e && e.target && e.target.tagName === 'INPUT' && mode === 'panel' && P && P.enter) {
+    const o = P.rows[P.i];
+    if (o && !o.typing && o.a !== P.enter) { o.a(); return true; }
+    P.enter(); return true;
+  }
+  if (P && P.busy && a !== 'menu' && a !== 'guide') return true;   // (saving a password: wait)
+  switch (a) {
+    case 'up': mv(-1); break;
+    case 'down': mv(1); break;
+    case 'right':
+      if (mode === 'cats') openCat(ci);
+      else if (P && P.rows[P.i] && P.rows[P.i].slider != null) pact(1);
+      break;
+    case 'left':
+      if (mode === 'panel') { if (P && P.rows[P.i] && P.rows[P.i].slider != null) pact(-1); else closePanel(); }
+      break;
+    case 'ok': if (mode === 'cats') openCat(ci); else pact(); break;
+    case 'back': if (mode === 'panel') closePanel(); else home(); break;
+    case 'menu': case 'guide': home(); break;
+  }
+  return true;
+}
+LOS.onNav(nav, { guide: true });
+
+/* ---------- mouse ---------- */
+$('#cats').onclick = e => { const b = e.target.closest('[data-k]'); if (!b || (P && P.busy)) return; LOS.osk.hide(); P = null; mode = 'cats'; openCat(+b.dataset.k); };
+$('#cats').addEventListener('mousemove', e => {
+  const b = e.target.closest('[data-k]'); if (!b || mode !== 'cats' || !LOS.mouseRecent() || +b.dataset.k === ci) return;
+  ci = +b.dataset.k; rg();
+});
+$('#pl').onclick = e => {
+  const b = e.target.closest('[data-k]'); if (!b || !P) return;
+  mode = 'panel'; P.i = +b.dataset.k;
+  const o = P.rows[P.i];
+  if (o.slider != null) {   // a click on the slider sets it there
+    const r = b.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(100, Math.round((e.clientX - r.left) / r.width * 20) * 5));
+    o.adjust((pct - o.slider) / 10);
+    return;
+  }
+  rp(); rg(); pact();
+};
+$('#pl').addEventListener('mousemove', e => {
+  const b = e.target.closest('[data-k]'); if (!b || !P || !LOS.mouseRecent() || +b.dataset.k === P.i) return;
+  mode = 'panel'; P.i = +b.dataset.k; rp(); rg();
+});
+$('#ha').onclick = () => nav('ok');
+$('#hb').onclick = () => nav('back');
+$('#hm').onclick = home;
+
+/* ---------- start ---------- */
+LOS.holdReady();   // (shown once the settings are filled in)
+function tick() { $('#clock').textContent = LOS.clockText(); }
+tick(); setInterval(tick, 10000);
+rg();
+refreshAll().then(LOS.ready, LOS.ready);
+// back from Setup, Files or the system monitor: the setting that opened them stays highlighted
+let was = '';
+try { was = sessionStorage.getItem('launchos.settings') || ''; } catch (e) { /* no storage */ }
+if (was && document.referrer && !/settings\.html/.test(document.referrer) && !/index\.html/.test(document.referrer)) {
+  const k = cats().findIndex(o => o.t === was); if (k >= 0) { ci = k; rg(); }
+}
+</script>
+</body>
+</html>

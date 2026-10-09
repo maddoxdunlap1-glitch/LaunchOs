@@ -1,28 +1,17 @@
-LaunchOS 1.0: **a rocket start**, **LaunchOS Flasher**, **new wallpapers** and an **on-screen keyboard**, with **LaunchOS Pro** built in (coming soon).
+LaunchOS 1.0.1: **no more flicker**, a **Settings app**, and apps that **can't freeze** when minimized.
 
-**A rocket, and a faster start**
-- LaunchOS now starts with a rocket climbing through the stars, and the sign-in screen appears as it lifts off.
-- Starting is much quicker: a much smaller start-up image, faster-to-read system files, and Home no longer waits for the network or sound. In our start-up tests LaunchOS reaches the sign-in screen in 10 to 20 seconds, from a disc or a USB stick, on BIOS and UEFI PCs.
-- With two LaunchOS sticks plugged in, a PC now always starts from the one you picked.
+**Smooth switching**
+- Every app now has a screen of its own. Going Home, coming back to an app, and opening or closing one is an instant switch: nothing blanks, redraws or flickers any more.
+- Moving between Home, Files, the Store, Setup and Settings no longer shows a half-drawn screen: the background stays put and the new page appears once it's ready.
+- When an app closes (or closes to the tray, like Discord), Home comes back right away instead of leaving an empty screen. Opening it again brings its window back.
+- Apps in the background can't jump in front of what you're doing.
 
-**LaunchOS Flasher (Windows)**
-- `LaunchOS-Flasher.exe` puts LaunchOS on a USB drive: it downloads the newest release, checks it, writes it and reads it back to check every byte.
-- Plug in a stick with an older LaunchOS and it offers to update it. Pick an older LaunchOS file and it offers the newest.
-- It only lists USB drives and memory cards (never the drive Windows is on; USB hard drives only if you ask), and checks it's still the same drive right before writing.
-- It isn't signed: the first time, Windows may say "Windows protected your PC". Choose **More info**, then **Run anyway**.
-
-**Wallpapers and looks**
-- Seven new painted wallpapers: Liftoff (the new default), Nebula, Aurora, Orbit, Dunes, Waves and Grid, plus the classic contour lines. Pick them in Setup → Look.
-
-**Type with a controller**
-- An on-screen keyboard for every text box: the password at sign-in, Wi-Fi passwords, the Store's search, file names in Files and your name in Setup.
-
-**LaunchOS Pro (coming soon)**
-- Settings → LaunchOS Pro: a $5, one-time unlock for up to 5 PCs, with live backgrounds, five color themes, gaming mode (full speed and top priority while a game runs), an FPS counter, early access to new versions and a supporter badge. It isn't on sale yet; everything LaunchOS did before stays free.
+**Settings app**
+- The Settings tile now opens a full-screen Settings app: every setting on the left, the one you open on the right. B goes back, and B again goes Home. Setup, Files and the system monitor opened from Settings come back to it.
+- The side menu still has quick settings, plus "All settings".
 
 **Fixes**
-- Many fixes from a full bug hunt and a test that presses every button on every screen, among them: Enter in a box with a Cancel choice did the wrong thing, Files could get stuck in an empty folder or open the wrong drive after ejecting one, a time zone in Setup couldn't be reached with the mouse, and the Setup volume slider ignored clicks.
-- Each PC now gets its own network identity (two LaunchOS PCs on the same network no longer get the same address).
-- Under the hood: safer system files and updates, and LaunchOS's own scripts stay working after an update.
+- Discord, Spotify and other apps from Flathub could freeze when their own minimize button was pressed. They now run in a mode where minimize can't freeze them. If anything ever looks stuck, the Windows key (or the controller's Xbox button) always takes you Home.
+- Pressing A on Home before its tiles were filled in did nothing useful.
 
-**Coming from 0.9 or older?** 1.0 is a fresh download: write it to your USB stick with LaunchOS Flasher (it erases the stick, including saves), or in VirtualBox remove the old machine (Machine > Remove > Remove only) and add the new **LaunchOS.vbox** from **LaunchOS.zip**. From 1.0 on, most updates come through Settings → Updates. Check the version in Settings > About LaunchOS.
+**Updating:** from LaunchOS 1.0, use Settings → Updates (needs saving on), or write LaunchOS 1.0.1 to your USB stick with LaunchOS Flasher.

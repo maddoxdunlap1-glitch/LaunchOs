@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LaunchOS Setup</title>
 <link rel="stylesheet" href="los.css">
+<script src="look.js"></script>
 <style>
 #head { position: absolute; left: 80px; right: 80px; top: 44px; display: flex; align-items: center; gap: 18px; }
 #head h1 { font-size: 20px; font-weight: 600; margin: 0; color: var(--ink-2); flex: 1; }
@@ -342,6 +343,7 @@ async function show(i) {
   if (tok !== showSeq) return;
   loading = false;
   collect();
+  LOS.ready();
   const primary = F.findIndex(e => e.dataset.nav === 'next' || e.dataset.nav === 'finish' || e.dataset.nav === 'done');
   fi = F.findIndex(e => e.closest('#content'));
   if (fi < 0 || s.id === 'welcome' || s.id === 'controls' || s.id === 'network') fi = primary >= 0 ? primary : 0;
@@ -351,7 +353,7 @@ function collect() { F = [...document.querySelectorAll('#content [data-f], #nav 
 function paint() { F.forEach((e, k) => e.classList.toggle('f', k === fi)); const e = F[fi]; if (!e) return; if (e.tagName === 'INPUT') e.focus(); else if (document.activeElement && document.activeElement.tagName === 'INPUT') document.activeElement.blur(); e.scrollIntoView && e.scrollIntoView({ block: 'nearest' }); }
 function focusAt(key) { collect(); const k = F.findIndex(e => e.dataset.z === key || e.dataset.k === key); if (k >= 0) { fi = k; paint(); } }
 function next() { if (only >= 0) return finish(); if (cur < STEPS.length - 1) show(cur + 1); }
-function finish(early, forward) { const s = STEPS[cur]; if (s.leave) s.leave(!!forward); if (only < 0 && !early) LOS.save({ setupDone: true }); location.href = 'index.html'; }
+function finish(early, forward) { const s = STEPS[cur]; if (s.leave) s.leave(!!forward); if (only < 0 && !early) LOS.save({ setupDone: true }); LOS.backTo(); }
 function navAct(k) {
   if (k === 'next') next();
   else if (k === 'back') { if (cur > 0) show(cur - 1); }
@@ -424,6 +426,7 @@ document.addEventListener('mousemove', e => { const t = e.target.closest('[data-
 $('#ha').onclick = () => activate();
 $('#hm').onclick = () => finish(true);
 $('#hb').onclick = () => { if (only >= 0) finish(); else if (cur > 0) show(cur - 1); else location.href = 'index.html'; };
+LOS.holdReady();   // (shown once the first step is drawn)
 show(cur);
 </script>
 </body>

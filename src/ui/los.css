@@ -26,8 +26,11 @@ body.nocur, body.nocur * { cursor: none !important; }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
 input { font: inherit; }
 
-#wrap { position: absolute; left: 50%; top: 50%; width: 1280px; height: 720px; }
-#stage { position: absolute; inset: 0; background: var(--bg); overflow: hidden; user-select: none; }
+#wrap { position: absolute; left: 50%; top: 50%; width: 1280px; height: 720px; transform-origin: 50% 50%; transform: translate(-50%, -50%) scale(var(--fit, 1)); }
+/* the background picture is there from the very first frame (look.js); #wall draws the same over it */
+#stage { position: absolute; inset: 0; background: var(--wallshade, none), var(--wallimg, none) center / cover no-repeat, var(--bg); overflow: hidden; user-select: none; }
+/* until the page is ready (los.js), only the background shows: never a half-drawn screen */
+body:not(.losready) #stage > :not(#wall) { visibility: hidden !important; }
 .bgsvg { position: absolute; inset: 0; pointer-events: none; }
 body:not(.wall-contour) .bgsvg { display: none; }
 /* the background picture (or live background) behind Home, the sign-in screen and Setup */

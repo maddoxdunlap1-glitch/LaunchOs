@@ -214,15 +214,8 @@
   addEventListener('unhandledrejection', e => report(e.reason && (e.reason.stack || e.reason.message) || e.reason, 'promise'));
 
   /* ---------- saved preferences ---------- */
-  const DEFAULTS = { name: 'Player 1', avatar: '#e0793a', accent: 'green', size: 'fill', pattern: true, timezone: '', setupDone: false, apps: [], order: [],
-    wall: '', theme: 'midnight', proOn: false };
-  function load() {
-    let p;
-    try { p = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('launchos.prefs') || '{}')); }
-    catch (e) { p = Object.assign({}, DEFAULTS); }
-    if (!p.wall) p.wall = p.pattern === false ? 'plain' : 'liftoff';   // (before 1.0 there was only the line pattern, on or off)
-    return p;
-  }
+  const L = window.LOSLOOK;   // (look.js, loaded in the page's head)
+  const load = L.loadPrefs;
   let prefs = load();
   function save(patch) {
     prefs = Object.assign(prefs, patch || {});
@@ -231,44 +224,14 @@
     return prefs;
   }
 
-  const ACCENTS = {
-    green: ['#3ddc6b', '61, 220, 107', '#0b1726'],
-    blue: ['#5fb8ff', '95, 184, 255', '#0b1726'],
-    purple: ['#9d8cff', '157, 140, 255', '#0b1726'],
-    orange: ['#ff9a4d', '255, 154, 77', '#0b1726'],
-    pink: ['#ff6fae', '255, 111, 174', '#0b1726'],
-  };
-  // Screen size: how much of the screen the interface uses. "TV safe area" leaves
-  // a border for TVs that crop the edges of the picture.
-  const SIZES = { fill: 1, tv: 0.93, compact: 0.85 };
-  const SIZE_NAMES = { fill: 'Fill screen', tv: 'TV safe area', compact: 'Compact' };
-
-  /* Backgrounds: pictures for everyone, live (moving) ones with LaunchOS Pro. */
-  const WALLS = [['liftoff', 'Liftoff'], ['nebula', 'Nebula'], ['aurora', 'Aurora'], ['orbit', 'Orbit'], ['dunes', 'Dunes'], ['waves', 'Waves'],
-    ['grid', 'Retro'], ['contour', 'Contour lines'], ['plain', 'Plain']].map(([id, name]) => ({ id, name }));
-  const LIVE = [['warp', 'Warp speed', 'nebula'], ['drift', 'Nebula drift', 'nebula'], ['sky', 'Living aurora', 'aurora'], ['launch', 'Launch day', 'liftoff']]
-    .map(([id, name, still]) => ({ id: 'live:' + id, live: id, name, still, pro: true }));
-  /* Color themes: Midnight for everyone, the rest with LaunchOS Pro. */
-  const THEMES = {
-    midnight: ['Midnight', '#0b1726 #0f1b2a #122235 #1a2b40 #22344a #1d3550 #11233a #16273b #1f3550 #2a4260'],
-    carbon: ['Carbon', '#0d0e10 #141518 #1a1c20 #23262b #2c3036 #25282e #17191c #1c1e22 #262a30 #353a42'],
-    ocean: ['Deep sea', '#05181c #0a2025 #0d2a30 #13363d #1b444c #134049 #0b2a30 #10313a #164049 #22535c'],
-    royal: ['Royal', '#110b22 #170f2c #1d1637 #261d46 #312857 #2c2152 #1a1335 #21183f #2b2150 #3b3170'],
-    ember: ['Ember', '#170d0b #1f1210 #281814 #33201a #422a22 #3a241c #241612 #2c1b16 #3a2219 #52352a'],
-    oled: ['Pure black', '#000000 #0a0a0b #111214 #1a1b1e #26282c #1b1c20 #0f1012 #141518 #1d1f23 #303238'],
-  };
-  const THEME_VARS = ['--bg', '--panel', '--panel-2', '--chip', '--line', '--tile1', '--tile2', '--tb', '--glyph', '--line2'];
+  const { ACCENTS, SIZE_NAMES, WALLS, LIVE, THEMES } = L;
   const proOK = () => !!prefs.proOn;
   let liveStop = null, liveId = '';
   function applyWall() {
     const st = $('#stage'); if (!st || !document.body) return;
     let w = $('#wall');
     if (!w) { w = document.createElement('div'); w.id = 'wall'; w.setAttribute('aria-hidden', 'true'); st.prepend(w); }
-    let id = prefs.wall;
-    const live = LIVE.find(x => x.id === id);
-    if (live && !proOK()) id = live.still;
-    if (!live && !WALLS.some(x => x.id === id)) id = 'liftoff';
-    const still = live && proOK() ? live.still : id;
+    const { still, live } = L.wallOf(prefs, proOK());
     document.body.classList.toggle('wall-contour', still === 'contour');
     document.body.classList.toggle('wall-plain', still === 'plain' || still === 'contour');
     w.style.backgroundImage = still === 'contour' || still === 'plain' ? 'none' : `url("walls/${still}.webp")`;
@@ -277,7 +240,7 @@
     // would only cost processor time. Never when reduced motion is asked for.
     const moving = document.body.hasAttribute('data-live') &&
       !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
-    const want = live && proOK() && moving ? live.live : '';
+    const want = live && moving ? live : '';
     if (want === liveId) return;
     if (liveStop) { try { liveStop(); } catch (e) { /* already gone */ } liveStop = null; }
     w.querySelectorAll('canvas').forEach(c => c.remove());
@@ -305,11 +268,7 @@
     next();
   }
   function applyLook() {
-    const a = ACCENTS[prefs.accent] || ACCENTS.green;
-    const r = document.documentElement.style;
-    r.setProperty('--accent', a[0]); r.setProperty('--accent-glow', a[1]); r.setProperty('--accent-ink', a[2]);
-    const th = (prefs.theme !== 'midnight' && proOK() && THEMES[prefs.theme]) || THEMES.midnight;
-    th[1].split(' ').forEach((c, i) => r.setProperty(THEME_VARS[i], c));
+    L.paint(prefs, proOK());
     document.body && document.body.classList.toggle('nopattern', !prefs.pattern);
     applyWall();
     fit();
@@ -330,9 +289,7 @@
   function fit() {
     const wr = $('#wrap');
     if (!wr) return;
-    const s = Math.min(innerWidth / 1280, innerHeight / 720) * (SIZES[prefs.size] || 1);
-    wr.style.transformOrigin = '50% 50%';
-    wr.style.transform = `translate(-50%,-50%) scale(${s})`;
+    document.documentElement.style.setProperty('--fit', String(L.scaleOf(prefs)));   // (los.css scales #wrap with it)
   }
   addEventListener('resize', fit);
 
@@ -602,7 +559,29 @@
 
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+  /* A page's content shows once it's ready (los.css hides it until then, over the background
+     picture): moving between pages never shows a half-drawn screen. Pages that fill themselves in
+     from the system (Home's apps) call holdReady() first and ready() once drawn. */
+  let holding = false;
+  function ready() { if (document.body) document.body.classList.add('losready'); }
+  function holdReady() { holding = true; setTimeout(ready, 900); }   // (never longer than that)
+  document.addEventListener('DOMContentLoaded', () => { if (!holding) setTimeout(ready, 0); });
+
+  /* Pages opened from another page that should come back to it (Setup, Files and the system
+     monitor opened from Settings): openFrom() remembers where to come back to, backTo() goes there
+     (Home if nothing was remembered). Home forgets it. */
+  function openFrom(url) {
+    try { sessionStorage.setItem('launchos.return', location.pathname.split('/').pop()); } catch (e) { /* no storage: back goes Home */ }
+    location.href = url;
+  }
+  function backTo() {
+    let u = '';
+    try { u = sessionStorage.getItem('launchos.return') || ''; sessionStorage.removeItem('launchos.return'); } catch (e) { /* no storage */ }
+    location.href = /^[a-z]+\.html$/.test(u) ? u : 'index.html';
+  }
+
   window.LOS = {
+    ready, holdReady, openFrom, backTo,
     $, call, native, toast, icon, pic, appPic, fileUrl, esc, fit, clockText, mouseRecent,
     get prefs() { return prefs; }, save, ACCENTS, SIZE_NAMES, WALLS, LIVE, THEMES, get pro() { return proOK(); }, checkPro,
     osk: { show: (el, o) => osk.show(el, o), hide: () => osk.hide(), get open() { return osk.open; } },
