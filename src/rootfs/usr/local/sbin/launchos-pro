@@ -1,0 +1,412 @@
+#!/usr/bin/python3
+"""LaunchOS Pro, run as root by launchos-helper.
+
+  launchos-pro activate   the key is in /run/launchos-status/.pro-request (root only)
+  launchos-pro check      re-checks the key now and then (never turns Pro off for being offline)
+  launchos-pro install    downloads and installs the Pro extras (or a newer version of them)
+  launchos-pro remove     frees this PC's slot on the key and removes the Pro extras
+
+The Pro server (its address is url= in /etc/launchos/pro.conf) checks keys with the store and
+hands out download links that expire after 10 minutes. Progress goes to
+/run/launchos-status/pro.json; what's known about Pro on this PC to /var/lib/launchos/pro.json
+(readable by everyone, without the key) and the key itself to /var/lib/launchos/pro-key (root only).
+"""
+import fcntl
+import hashlib
+import json
+import os
+import re
+import secrets
+import shutil
+import ssl
+import sys
+import tarfile
+import tempfile
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+sys.path.insert(0, '/usr/local/lib/launchos')
+import signed  # noqa: E402
+
+CONF = '/etc/launchos/pro.conf'
+STATE_DIR = '/var/lib/launchos'
+STATE = STATE_DIR + '/pro.json'
+KEYFILE = STATE_DIR + '/pro-key'
+PCID = STATE_DIR + '/pc-id'
+STATUS = '/run/launchos-status/pro.json'
+REQUEST = '/run/launchos-status/.pro-request'
+LOCK = STATE_DIR + '/.pro.lock'
+PRO_DIR = '/opt/launchos-pro'
+KEY_RE = re.compile(r'[A-Za-z0-9-]{8,64}')
+INSTANCE_RE = re.compile(r'[A-Za-z0-9-]{8,64}')
+MAX_PACKAGE = 200 * 1024 * 1024
+USER_AGENT = 'LaunchOS-Pro/1'
+
+MESSAGES = {
+    'invalid_key': 'That key isn’t right. Check it against the email from your purchase.',
+    'pc_limit': 'This key is already used on 5 PCs. Remove Pro from a PC you no longer use, or email us to free a slot.',
+    'revoked': 'This key was refunded, so it no longer works.',
+    'unavailable': 'The Pro server isn’t answering right now. Try again in a few minutes.',
+    'bad_request': 'Something went wrong. Try again.',
+}
+
+
+def say(step, percent, done=False, error='', **extra):
+    os.makedirs(os.path.dirname(STATUS), exist_ok=True)
+    tmp = STATUS + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(dict({'step': step, 'percent': percent, 'done': done, 'error': error}, **extra), f)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, STATUS)
+
+
+def conf():
+    out = {}
+    try:
+        for line in open(CONF):
+            if '=' in line and not line.lstrip().startswith('#'):
+                k, v = line.split('=', 1)
+                out[k.strip()] = v.strip()
+    except OSError:
+        pass
+    return out
+
+
+def server():
+    url = conf().get('url', '').rstrip('/')
+    return url if re.fullmatch(r'https://[A-Za-z0-9.-]+(:\d+)?(/[A-Za-z0-9._/-]*)?|http://(10\.0\.2\.2|127\.0\.0\.1|localhost)(:\d+)?', url) else ''
+
+
+def load_state():
+    try:
+        s = json.load(open(STATE))
+        return s if isinstance(s, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def locked(wait=True):
+    """One Pro job at a time (the daily check must not undo an activation that's going on)."""
+    os.makedirs(STATE_DIR, exist_ok=True)
+    fd = os.open(LOCK, os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX if wait else fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        os.close(fd)
+        return None
+    return fd
+
+
+def save_state(s):
+    os.makedirs(STATE_DIR, exist_ok=True)
+    tmp = STATE + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(s, f)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, STATE)
+
+
+def read_key():
+    try:
+        k = open(KEYFILE).read().strip()
+        return k if KEY_RE.fullmatch(k) else ''
+    except OSError:
+        return ''
+
+
+def write_key(key):
+    os.makedirs(STATE_DIR, exist_ok=True)
+    fd = os.open(KEYFILE + '.tmp', os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, 'w') as f:
+        f.write(key + '\n')
+    os.replace(KEYFILE + '.tmp', KEYFILE)
+
+
+# made-up ids some boards report for every PC (they'd make all such PCs look like one)
+BAD_UUIDS = {'03000200-0400-0500-0006-000700080009', '00000000-0000-0000-0000-000000000000',
+             'ffffffff-ffff-ffff-ffff-ffffffffffff', '00020003-0004-0005-0006-000700080009'}
+
+
+def pc_id():
+    """This PC's id for the store (it tells this PC from your others). It comes from the PC itself
+    (scrambled, so it says nothing about the PC), so it stays the same when LaunchOS is
+    rewritten or installed again, and the PC keeps its one slot on the key."""
+    try:
+        v = open(PCID).read().strip()
+        if re.fullmatch(r'[a-f0-9]{32}', v):
+            return v
+    except OSError:
+        pass
+    v = ''
+    try:
+        u = open('/sys/class/dmi/id/product_uuid').read().strip().lower()
+        if re.fullmatch(r'[0-9a-f-]{32,36}', u) and u not in BAD_UUIDS:
+            v = hashlib.sha256(('launchos-pro|' + u).encode()).hexdigest()[:32]
+    except OSError:
+        pass
+    v = v or secrets.token_hex(16)
+    os.makedirs(STATE_DIR, exist_ok=True)
+    with open(PCID, 'w') as f:
+        f.write(v + '\n')
+    return v
+
+
+def post(path, body, timeout=20):
+    """POST to the Pro server. Returns (http status, answer); status 0 when it can't be reached."""
+    req = urllib.request.Request(server() + path, data=json.dumps(body).encode(), method='POST',
+                                 headers={'content-type': 'application/json', 'user-agent': USER_AGENT})
+    def obj(raw):
+        a = json.loads(raw or b'{}')
+        return a if isinstance(a, dict) else {}
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=ssl.create_default_context()) as r:
+            return r.status, obj(r.read(65536))
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, obj(e.read(65536))
+        except ValueError:
+            return e.code, {}
+    except (OSError, ValueError):
+        return 0, {}
+
+
+def download(url, limit, progress):
+    req = urllib.request.Request(url, headers={'user-agent': USER_AGENT})
+    with urllib.request.urlopen(req, timeout=30, context=ssl.create_default_context()) as r:
+        total = int(r.headers.get('content-length') or 0)
+        if total > limit:
+            raise ValueError('too big')
+        data, got = bytearray(), 0
+        while True:
+            chunk = r.read(256 * 1024)
+            if not chunk:
+                break
+            data += chunk
+            got += len(chunk)
+            if got > limit:
+                raise ValueError('too big')
+            if total:
+                progress(got, total)
+        return bytes(data)
+
+
+def hint(key):
+    return key[:4] + '…' + key[-4:] if len(key) > 8 else key
+
+
+def activate():
+    try:
+        with open(REQUEST) as f:
+            r = json.load(f)
+            key = str(r.get('key', '')).strip() if isinstance(r, dict) else ''
+    except (OSError, ValueError):
+        key = ''
+    finally:
+        try:
+            os.unlink(REQUEST)
+        except OSError:
+            pass
+    if not server():
+        say('', 100, True, 'LaunchOS Pro isn’t on sale yet.')
+        return
+    if not KEY_RE.fullmatch(key):
+        say('', 100, True, MESSAGES['invalid_key'])
+        return
+    say('Checking your key', 20)
+    s = load_state()
+    instance = ''
+    if read_key() == key and INSTANCE_RE.fullmatch(str(s.get('instance_id', ''))):
+        # this PC already has a slot on this key: use it again instead of taking another one
+        code, a = post('/v1/check', {'key': key, 'instance_id': s['instance_id']})
+        if a.get('ok'):
+            instance = s['instance_id']
+    if not instance:
+        code, a = post('/v1/activate', {'key': key, 'pc_id': pc_id()})
+        if code == 0:
+            say('', 100, True, 'Couldn’t reach the Pro server. Check your internet connection and try again.')
+            return
+        if not a.get('ok') or not INSTANCE_RE.fullmatch(str(a.get('instance_id', ''))):
+            say('', 100, True, MESSAGES.get(a.get('error'), MESSAGES['bad_request']))
+            return
+        instance = a['instance_id']
+    write_key(key)
+    now = time.strftime('%Y-%m-%d')
+    s.update({'status': 'active', 'instance_id': instance, 'key_hint': hint(key),
+              'since': s.get('since') if s.get('status') == 'active' and s.get('since') else now, 'checked': now})
+    s.pop('doubt', None)
+    save_state(s)
+    install(after_activate=True)
+
+
+def check(force=False):
+    """About once a month when online (the timer runs this daily; it skips if checked lately).
+    Pro only turns off for a refund, or when the key is reported wrong on two different days
+    (one odd answer from the store never turns it off), and never for being offline."""
+    key, s = read_key(), load_state()
+    if not key or not s.get('instance_id') or not server():
+        return
+    today = time.strftime('%Y-%m-%d')
+    recent = s.get('checked', '') > time.strftime('%Y-%m-%d', time.localtime(time.time() - 30 * 86400))
+    if not force and recent and not s.get('doubt'):
+        return
+    if not force and s.get('doubt') == today:
+        return   # asked today already
+    code, a = post('/v1/check', {'key': key, 'instance_id': s['instance_id']})
+    if code == 0 or a.get('error') not in (None, 'revoked', 'invalid_key'):
+        return   # offline, or the server or the store is busy: Pro stays as it is
+    if a.get('ok'):
+        s.update({'status': 'active', 'checked': today})
+        s.pop('doubt', None)
+    elif a.get('error') == 'revoked':
+        s['status'] = 'revoked'   # refunded (nothing is deleted from the PC)
+    elif a.get('error') == 'invalid_key':
+        if s.get('doubt') and s['doubt'] != today:
+            s['status'] = 'invalid_key'
+            s.pop('doubt', None)
+        else:
+            s['doubt'] = today   # ask again tomorrow before believing it
+    else:
+        return
+    save_state(s)
+
+
+def safe_members(tar):
+    """Only plain files and folders under opt/launchos-pro/ may come out of the package."""
+    for m in tar.getmembers():
+        name = (m.name[2:] if m.name.startswith('./') else m.name).rstrip('/')
+        if name in ('opt', '.', '') and m.isdir():
+            continue
+        parts = name.split('/')
+        if name.startswith('/') or '..' in parts or not (name == 'opt/launchos-pro' or name.startswith('opt/launchos-pro/')):
+            raise ValueError('unexpected file in the package: ' + m.name[:80])
+        if not (m.isfile() or m.isdir()):
+            raise ValueError('unexpected link in the package: ' + m.name[:80])
+        m.name = name
+        m.mode = 0o755 if m.isdir() else 0o644
+        m.uid = m.gid = 0
+        m.uname = m.gname = 'root'
+        yield m
+
+
+def installed_version():
+    try:
+        m = json.load(open(PRO_DIR + '/manifest.json'))
+        v = str(m.get('version', '')) if isinstance(m, dict) else ''
+        return v if re.fullmatch(r'[0-9]+(\.[0-9]+){0,3}', v) else ''
+    except (OSError, ValueError):
+        return ''
+
+
+def vtuple(v):
+    return tuple(int(x) for x in re.findall(r'\d+', str(v))[:4])
+
+
+def install(after_activate=False):
+    key, s = read_key(), load_state()
+    if not key or s.get('status') != 'active' or not s.get('instance_id'):
+        say('', 100, True, 'Enter your Pro key first.')
+        return
+    say('Getting the Pro extras', 35)
+
+    def link(name):
+        code, a = post('/v1/download', {'key': key, 'instance_id': s['instance_id'], 'file': name})
+        u, base = urllib.parse.urlsplit(str(a.get('url', ''))), urllib.parse.urlsplit(server())
+        if not a.get('ok') or (u.scheme, u.netloc) != (base.scheme, base.netloc):   # links only to the Pro server itself
+            raise RuntimeError(MESSAGES.get(a.get('error'), 'Couldn’t reach the Pro server. Check your internet connection and try again.'))
+        return a['url']
+
+    try:
+        try:   # signed with the Pro signing key (see signed.py): only those are installed
+            info = signed.verify(download(link('pro-update.json'), 65536, lambda g, t: None))
+        except ValueError:
+            raise RuntimeError('The Pro download isn’t signed by LaunchOS, so it wasn’t installed. Try again later.')
+        version, sha = str(info.get('version', '')), str(info.get('sha256', '')).lower()
+        if not re.fullmatch(r'[0-9a-f]{64}', sha) or not re.fullmatch(r'[0-9]+(\.[0-9]+){0,3}', version):
+            raise RuntimeError('The Pro download isn’t right. Try again later.')
+        if installed_version() and vtuple(installed_version()) >= vtuple(version):
+            say('LaunchOS Pro is on' if after_activate else 'The Pro extras are up to date', 100, True)
+            return
+        data = download(link('pro-package.tar.gz'), MAX_PACKAGE,
+                        lambda g, t: say('Downloading the Pro extras', 40 + 45 * g // t))
+        if hashlib.sha256(data).hexdigest() != sha:
+            raise RuntimeError('The download was damaged. Try again.')
+        say('Installing', 90)
+        tmp = tempfile.mkdtemp(prefix='launchos-pro.', dir='/opt')
+        try:
+            with tempfile.TemporaryFile() as f:
+                f.write(data)
+                f.seek(0)
+                with tarfile.open(fileobj=f, mode='r:gz') as t:
+                    t.extractall(tmp, members=list(safe_members(t)), filter='data')
+            new = os.path.join(tmp, 'opt', 'launchos-pro')
+            try:
+                ok = isinstance(json.load(open(os.path.join(new, 'manifest.json'))), dict)
+            except (OSError, ValueError):
+                ok = False
+            if not ok:
+                raise RuntimeError('The Pro download isn’t right. Try again later.')
+            os.chmod(tmp, 0o755)
+            old = PRO_DIR + '.old'
+            shutil.rmtree(old, ignore_errors=True)
+            if os.path.isdir(PRO_DIR):
+                os.rename(PRO_DIR, old)
+            os.rename(new, PRO_DIR)
+            shutil.rmtree(old, ignore_errors=True)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+        s = load_state()
+        s['version'] = version
+        save_state(s)
+        say('LaunchOS Pro is on' if after_activate else 'Updated the Pro extras', 100, True)
+    except RuntimeError as e:
+        say('', 100, True, str(e))
+    except (OSError, ValueError, tarfile.TarError):
+        say('', 100, True, 'Couldn’t download the Pro extras. Check your internet connection and try again.')
+
+
+def remove():
+    key, s = read_key(), load_state()
+    say('Removing LaunchOS Pro from this PC', 40)
+    freed = False
+    if key and s.get('instance_id') and server():
+        code, a = post('/v1/deactivate', {'key': key, 'instance_id': s['instance_id']})   # frees this PC's slot
+        freed = bool(a.get('ok'))
+    shutil.rmtree(PRO_DIR, ignore_errors=True)
+    for p in (KEYFILE, STATE):
+        try:
+            os.unlink(p)
+        except OSError:
+            pass
+    if freed or not key:
+        say('Removed LaunchOS Pro from this PC', 100, True)
+    else:
+        say('Removed LaunchOS Pro from this PC, but couldn’t reach the Pro server to free its slot on your key. '
+            'Entering the key on this PC again uses the same slot.', 100, True)
+
+
+def main():
+    what = sys.argv[1] if len(sys.argv) > 1 else ''
+    if what not in ('activate', 'check', 'install', 'remove'):
+        return
+    lock = locked(wait=what != 'check')
+    if lock is None:
+        return   # (the daily check skips while another Pro job runs)
+    try:
+        if what == 'activate':
+            activate()
+        elif what == 'check':
+            check(force='--now' in sys.argv)
+        elif what == 'install':
+            install()
+        elif what == 'remove':
+            remove()
+    finally:
+        os.close(lock)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as e:   # never leave the screen waiting
+        say('', 100, True, 'Something went wrong: ' + str(e)[:160])

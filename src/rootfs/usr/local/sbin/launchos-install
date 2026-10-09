@@ -19,10 +19,11 @@ flock 9
 step "Checking the drive" 1
 [ -b "$DISK" ] || fail "That drive isn't there any more."
 [ "$(lsblk -dno TYPE "$DISK")" = disk ] || fail "That isn't a whole drive."
-boot=$(findmnt -no SOURCE /cdrom 2>/dev/null)
+LIVE=/run/live/medium   # the LaunchOS USB stick or disc
+boot=$(findmnt -no SOURCE $LIVE 2>/dev/null)
 bootdisk=$( [ -b "$boot" ] && echo /dev/$(lsblk -no PKNAME "$boot" | head -1) )
 [ "$DISK" = "$bootdisk" ] && fail "That's the drive LaunchOS is running from."
-for cowdev in $(lsblk -rnpo NAME,LABEL | awk '$2 == "casper-rw" || $2 == "writable" {print $1}'); do
+for cowdev in $(lsblk -rnpo NAME,LABEL | awk '$2 == "persistence" {print $1}'); do
   lsblk -nsrpo NAME "$cowdev" | grep -qx "$DISK" && fail "That drive holds your LaunchOS saves."
 done
 [ -n "$boot" ] && lsblk -nsrpo NAME "$boot" 2>/dev/null | grep -qx "$DISK" && fail "That's the drive LaunchOS is running from."
@@ -38,7 +39,7 @@ size=$(lsblk -bdno SIZE "$DISK")
 [ "$size" -ge 16000000000 ] || fail "That drive is too small. LaunchOS needs at least 16 GB."
 case "$DISK" in *nvme*|*mmcblk*) P="${DISK}p" ;; *) P="$DISK" ;; esac
 KVER=$(ls /lib/modules | sort -V | tail -1)
-[ -f /cdrom/casper/filesystem.squashfs ] || fail "Can't find the LaunchOS system files."
+[ -f $LIVE/live/filesystem.squashfs ] || fail "Can't find the LaunchOS system files."
 
 step "Erasing the drive" 4
 wipefs -af "$DISK" >/dev/null 2>&1
@@ -55,31 +56,50 @@ mount "${P}3" $T || fail "Couldn't open the new drive."
 # One pass through the system image (each compressed block unpacked once, on every core),
 # much faster than copying file by file.
 last=-1
-unsquashfs -f -d $T -percentage /cdrom/casper/filesystem.squashfs 2>/dev/null | while read -r p; do
+unsquashfs -f -d $T -percentage $LIVE/live/filesystem.squashfs 2>/dev/null | while read -r p; do
   case "$p" in ''|*[!0-9]*) continue ;; esac
   # only when the number changes
   [ "$p" != "$last" ] && { last=$p; status install "Copying LaunchOS" $((8 + p * 70 / 100)) false ""; }
 done
 [ -x $T/usr/bin/python3 ] || fail "Copying didn't finish. The drive may be failing."
-# keep what you set up in this session (name, colors, apps you signed in to)
+# keep what you set up in this session: name, colors, sign-ins, apps from the Store, your password
 rsync -aHAX /home/player/ $T/home/player/ 2>/dev/null
-cp /cdrom/casper/vmlinuz $T/boot/vmlinuz-$KVER
+step "Copying your apps" 78
+rsync -aHAX /var/lib/flatpak/ $T/var/lib/flatpak/ 2>/dev/null
+# LaunchOS Pro stays on (same PC, same slot on the key): its key, state and extras
+if [ -f /var/lib/launchos/pro.json ]; then
+  mkdir -p $T/var/lib/launchos
+  for f in pro.json pro-key pc-id; do [ -f /var/lib/launchos/$f ] && cp -a /var/lib/launchos/$f $T/var/lib/launchos/; done
+  [ -d /opt/launchos-pro ] && rsync -a /opt/launchos-pro/ $T/opt/launchos-pro/ 2>/dev/null
+fi
+# this PC makes its own machine id on the drive's first start (never the live system's)
+: > $T/etc/machine-id
+hash=$(getent shadow player | cut -d: -f2)
+if [ -f /etc/launchos/admin-set ] && [ -n "$hash" ] && usermod -R $T -p "$hash" player 2>/dev/null; then
+  # (only once the password is really there: otherwise sign-in would ask for one that can't match)
+  mkdir -p $T/etc/launchos $T/etc/sudoers.d
+  [ -f /etc/sudoers.d/launchos-player ] && cp -a /etc/sudoers.d/launchos-player $T/etc/sudoers.d/
+  cp -a /etc/launchos/admin-set $T/etc/launchos/
+fi
+[ -f $T/boot/vmlinuz-$KVER ] || cp $LIVE/live/vmlinuz $T/boot/vmlinuz-$KVER
 
 step "Setting up the drive" 80
 ROOT_UUID=$(blkid -s UUID -o value "${P}3")
 EFI_UUID=$(blkid -s UUID -o value "${P}2")
 cat > $T/etc/fstab <<EOF
 UUID=$ROOT_UUID / ext4 defaults,noatime 0 1
-UUID=$EFI_UUID /boot/efi vfat umask=0077 0 2
+UUID=$EFI_UUID /boot/efi vfat umask=0077,nofail,x-systemd.device-timeout=10s 0 2
 EOF
 mkdir -p $T/boot/efi $T/etc/launchos
 mount "${P}2" $T/boot/efi
 for m in dev dev/pts proc sys run; do mount --bind /$m $T/$m; done
 echo launchos > $T/etc/hostname
 date -u +%F > $T/etc/launchos/installed
-chroot $T dpkg --purge casper >/dev/null 2>&1
-rm -f $T/etc/casper.conf
+# a normal start from the drive, without the live system's start-up parts
+chroot $T dpkg --purge live-boot live-boot-initramfs-tools >/dev/null 2>&1
+rm -f $T/etc/initramfs-tools/scripts/live-premount/launchos-saving $T/etc/initramfs-tools/hooks/launchos-saving
 step "Setting up startup" 86
+rm -f $T/boot/initrd.img-$KVER   # the live system's: replaced by one for starting from this drive
 chroot $T update-initramfs -c -k "$KVER" >/dev/null 2>&1 || fail "Couldn't set up startup files."
 step "Installing the boot loader" 92
 chroot $T grub-install --target=i386-pc --boot-directory=/boot "$DISK" >/dev/null 2>&1 || fail "Couldn't install the boot loader."

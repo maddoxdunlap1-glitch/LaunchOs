@@ -2,8 +2,10 @@
 Description=Keep LaunchOS's own files in step with the LaunchOS image
 DefaultDependencies=no
 After=local-fs.target
-Before=launcher.service launchos-helper.path sysinit.target systemd-tmpfiles-setup.service systemd-udevd.service systemd-udev-trigger.service
-ConditionPathExists=/rofs/etc/launchos-release
+# (not ordered before udev: local-fs.target can need udev, e.g. for /boot/efi on an installed drive;
+# udev picks up a changed LaunchOS rule by itself)
+Before=launcher.service launchos-helper.path sysinit.target systemd-tmpfiles-setup.service
+ConditionPathExists=/run/live/rootfs/filesystem.squashfs/etc/launchos-release
 
 [Service]
 Type=oneshot

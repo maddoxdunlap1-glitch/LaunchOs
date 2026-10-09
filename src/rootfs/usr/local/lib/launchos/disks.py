@@ -51,15 +51,24 @@ def ancestors(dev):
     return set(sh("lsblk", "-nsrpo", "NAME", dev, timeout=10).stdout.split()) | {dev}
 
 
+SAVE_LABELS = ("persistence",)   # the save area Debian's live system uses
+
+
 def system_disks():
     """Drives (and their parts) LaunchOS runs from, keeps its saves on, or is installed on."""
     out = set()
-    devs = [source(t) for t in ("/cdrom", "/", "/boot/efi", "/var/log", "/home")]
+    devs = [source(t) for t in ("/run/live/medium", "/", "/boot/efi", "/var/log", "/home")]
+    # the live system's own disks: the LaunchOS stick or disc and the save area
+    try:
+        with open("/proc/self/mounts") as f:
+            devs += [l.split()[0] for l in f if len(l.split()) > 1 and l.split()[1].startswith("/run/live/")]
+    except OSError:
+        pass
     # every drive labelled for saves (a second stick may carry the same label); lsblk reads the
     # labels the system already knows, without probing every drive again
     for line in sh("lsblk", "-rnpo", "NAME,LABEL", timeout=10).stdout.splitlines():
         p = line.split(" ", 1)
-        if len(p) == 2 and p[1] in ("casper-rw", "writable"):
+        if len(p) == 2 and p[1] in SAVE_LABELS:
             devs.append(p[0])
     for d in devs:
         if d.startswith("/dev/"):
@@ -233,7 +242,7 @@ def usable(node, sysdisks):
     """Can this partition (or whole-drive file system) be opened?"""
     return (node.get("fstype") in FS and node.get("name") not in sysdisks
             and (node.get("parttype") or "").lower() not in SYSTEM_PARTTYPES
-            and node.get("label") not in ("casper-rw", "writable"))
+            and node.get("label") not in SAVE_LABELS)
 
 
 def wait_for(path, seconds=10):

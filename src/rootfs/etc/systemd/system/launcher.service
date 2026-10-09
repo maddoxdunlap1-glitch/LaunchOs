@@ -1,6 +1,8 @@
 [Unit]
 Description=Launcher session
-After=systemd-user-sessions.service seatd.service plymouth-start.service plymouth-quit.service
+# (not after the network or user sessions: Home starts as soon as the seat is ready)
+Wants=seatd.service
+After=seatd.service plymouth-start.service plymouth-quit.service launchos-reconcile.service
 Conflicts=plymouth-quit.service
 StartLimitIntervalSec=0
 [Service]
@@ -13,7 +15,10 @@ StandardOutput=journal
 TTYReset=yes
 TTYVHangup=yes
 ExecStartPre=+-/usr/bin/plymouth quit --retain-splash
+# gaming mode never outlives the launcher (if it crashed while a game ran)
+ExecStartPre=+-/usr/local/sbin/launchos-game off 0
 ExecStart=/usr/local/bin/launchos-session
+ExecStopPost=+-/usr/local/sbin/launchos-game off 0
 KillMode=control-group
 Restart=always
 RestartSec=2

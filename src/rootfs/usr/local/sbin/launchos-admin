@@ -90,10 +90,7 @@ def main():
         return
     current = player_hash()
     if current and current[0] not in "!*":   # changing it: the current password must match
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            import crypt
-        if crypt.crypt(old, current) != current:
+        if not hash_matches(old, current):
             fails = {"n": fails["n"] + 1, "t": time.time()}
             with open(FAILS, "w") as f:
                 json.dump(fails, f)
@@ -127,6 +124,17 @@ def main():
     except OSError:
         pass
     say("Saved", 100, True)
+
+
+def hash_matches(password, stored):
+    """Checks a password against a shadow hash with the system's libcrypt (Python 3.13 has
+    no crypt module any more)."""
+    import ctypes
+    lib = ctypes.CDLL("libcrypt.so.1")
+    lib.crypt.restype = ctypes.c_char_p
+    lib.crypt.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+    out = lib.crypt(password.encode(), stored.encode())
+    return out is not None and out.decode() == stored
 
 
 if __name__ == "__main__":

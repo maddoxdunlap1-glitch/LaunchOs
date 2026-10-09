@@ -1,0 +1,39 @@
+name: Build Debian base
+
+# Builds the Debian 13 base system for LaunchOS (Debian, every package and Flathub's catalog)
+# and publishes it as the prerelease "build-debian-base", which make-image.sh starts from.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["src/build/debian/base.sh", "src/build/debian/packages.txt"]
+
+permissions:
+  contents: write
+
+jobs:
+  base:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq debootstrap squashfs-tools zstd
+      - name: Build the base system
+        run: |
+          sudo mkdir -p /mnt/build && sudo chown "$USER" /mnt/build
+          sudo src/build/debian/base.sh /mnt/build 2>&1 | tee /mnt/build/build.log
+          test -s /mnt/build/base.squashfs
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd /mnt/build
+          sha256sum base.squashfs | cut -d' ' -f1 > base.squashfs.sha256
+          # release files can be at most 2 GB each
+          split -b 1900M -d -a 2 base.squashfs base.squashfs.part
+          ls -l
+          gh release delete build-debian-base --yes --cleanup-tag -R "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh release create build-debian-base base.squashfs.part* base.squashfs.sha256 packages.lst build.log \
+            -R "$GITHUB_REPOSITORY" --prerelease --title "Debian base (build input)" \
+            --notes "Debian 13 base for LaunchOS, built from $GITHUB_SHA. Not a LaunchOS release."

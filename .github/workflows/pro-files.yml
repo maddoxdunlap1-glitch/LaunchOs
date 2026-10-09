@@ -1,0 +1,61 @@
+name: Pro files
+
+# Makes the files the LaunchOS Pro server hands out (the Pro extras, and optionally an early-access
+# LaunchOS update), signed with the Pro signing key from the PRO_SIGNING_KEY secret. They're kept
+# as a download ("pro-files") on the run's page for 7 days. If the CLOUDFLARE_API_TOKEN and
+# CLOUDFLARE_ACCOUNT_ID secrets are set, they're also uploaded to the Pro server's private bucket.
+# See pro-server/SETUP.md.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version of the Pro extras
+        default: "1.0"
+      early:
+        description: "Also an early-access LaunchOS update from this code, as this version (e.g. 1.1). Empty: none"
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  pro:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make and sign
+        env:
+          PRO_SIGNING_KEY: ${{ secrets.PRO_SIGNING_KEY }}
+          VERSION: ${{ inputs.version }}
+          EARLY: ${{ inputs.early }}
+        run: |
+          [ -n "$PRO_SIGNING_KEY" ] || { echo "::error::Add the PRO_SIGNING_KEY secret first (pro-server/SETUP.md)"; exit 1; }
+          echo "$VERSION" | grep -Eq '^[0-9]+(\.[0-9]+){0,3}$' || { echo "::error::bad version"; exit 1; }
+          set -- out --version "$VERSION"
+          if [ -n "$EARLY" ]; then
+            echo "$EARLY" | grep -Eq '^[0-9]+(\.[0-9]+){0,3}$' || { echo "::error::bad early version"; exit 1; }
+            src/build/debian/make-update.sh "$EARLY" /tmp/early
+            set -- "$@" --early /tmp/early/launchos-update.tar.gz "$EARLY"
+          fi
+          python3 pro-server/make-pro-files.py "$@"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pro-files
+          path: out/
+          retention-days: 7
+
+      - name: Upload to the Pro server's bucket
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "No Cloudflare secrets: download the pro-files artifact and upload it by hand (pro-server/SETUP.md)."
+            exit 0
+          fi
+          cd pro-server && npm install --no-audit --no-fund >/dev/null
+          for f in ../out/*; do
+            npx wrangler r2 object put "launchos-pro-files/$(basename "$f")" --file "$f" --remote
+          done

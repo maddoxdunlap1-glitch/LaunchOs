@@ -3,12 +3,30 @@
 # display server starts: VMs without 3D (VirtualBox VMSVGA, plain VGA) get software
 # drawing; real AMD, Intel or NVIDIA (nouveau) graphics get full acceleration.
 gpu=software
+# A graphics card's driver may still be loading (AMD and NVIDIA drivers load after start-up):
+# wait until every display device has its driver, up to 6 seconds.
+for i in $(seq 1 30); do
+  waiting=0
+  for dev in /sys/bus/pci/devices/*; do
+    case "$(cat "$dev/class" 2>/dev/null)" in 0x03*) [ -e "$dev/driver" ] || waiting=1 ;; esac
+  done
+  [ "$waiting" = 0 ] && break
+  sleep 0.2
+done
 for d in /sys/class/drm/card[0-9]*/device/driver; do
   [ -e "$d" ] || continue
   case "$(basename "$(readlink -f "$d")")" in
     amdgpu|radeon|i915|xe|nouveau|nvidia) gpu=hardware ;;
   esac
 done
+# No display driver at all (a graphics card newer than this Linux knows): sway can't start, so
+# say so on the screen instead of a black screen that keeps restarting
+if ! ls /dev/dri/card* >/dev/null 2>&1; then
+  printf '\033c\n  LaunchOS couldn'"'"'t start the graphics on this PC: no driver for its graphics card.\n\n  Try another USB port or PC, or press Ctrl+Alt+F2 for a text screen.\n  (It tries again in 30 seconds.)\n' >&0 2>/dev/null
+  echo "LaunchOS session: no display device (/dev/dri/card*)"
+  sleep 30
+  exit 1
+fi
 [ -f /etc/launchos/force-software ] && gpu=software
 export LAUNCHOS_GPU=$gpu
 export GDK_BACKEND=wayland XDG_RUNTIME_DIR=/run/player HOME=/home/player LIBSEAT_BACKEND=seatd GTK_A11Y=none

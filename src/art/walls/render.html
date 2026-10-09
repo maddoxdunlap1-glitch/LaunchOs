@@ -1,0 +1,28 @@
+<!DOCTYPE html><html><body style="margin:0;background:#000"><canvas id="c"></canvas>
+<script>
+// Renders one wallpaper shader into the canvas: window.draw(source, width, height, time, samples)
+window.draw = (src, W, H, T, SS) => {
+  const c = document.getElementById('c'); c.width = W; c.height = H;
+  const gl = c.getContext('webgl2', { preserveDrawingBuffer: true, antialias: false });
+  const vs = `#version 300 es\nin vec2 a; void main(){ gl_Position = vec4(a, 0., 1.); }`;
+  const fs = `#version 300 es\n#define SS ${SS}\n` + src + `
+void main() {
+  vec3 c = vec3(0);
+  for (int i = 0; i < SS; i++) for (int j = 0; j < SS; j++) c += scene(gl_FragCoord.xy + (vec2(i, j) + .5) / float(SS) - .5);
+  c /= float(SS * SS);
+  fragColor = vec4(dither(max(c, 0.), gl_FragCoord.xy), 1.);
+}`;
+  const sh = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; };
+  const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(pr);
+  if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
+  gl.useProgram(pr);
+  const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(pr, 'a'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  gl.uniform2f(gl.getUniformLocation(pr, 'R'), W, H); gl.uniform1f(gl.getUniformLocation(pr, 'T'), T);
+  // draw in horizontal strips so no single draw takes too long
+  gl.enable(gl.SCISSOR_TEST);
+  const strip = 60;
+  for (let y = 0; y < H; y += strip) { gl.scissor(0, y, W, strip); gl.drawArrays(gl.TRIANGLES, 0, 3); gl.finish(); }
+  return c.toDataURL('image/png');
+};
+</script></body></html>

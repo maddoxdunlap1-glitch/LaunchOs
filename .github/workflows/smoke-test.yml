@@ -1,0 +1,59 @@
+name: Smoke test (app installs)
+
+# Checks, on a machine with internet, that LaunchOS's Store job really installs apps from
+# Flathub on the Debian base: several apps in one go, the way Setup does it.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  installs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get the Debian base
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq squashfs-tools
+          mkdir -p "$RUNNER_TEMP/t" && cd "$RUNNER_TEMP/t"
+          gh release download build-debian-base -R "$GITHUB_REPOSITORY" -p 'base.squashfs.part*'
+          cat base.squashfs.part* > base.squashfs
+          sudo unsquashfs -q -d root base.squashfs && ls root | head -3 && df -h .
+      - name: Install Discord and VLC with the Store job
+        shell: bash
+        run: |
+          R=$RUNNER_TEMP/t/root
+          {
+            set -x
+            sudo cp -a src/rootfs/. $R/
+            sudo chmod 755 $R/usr/local/sbin/launchos-*
+            for m in dev dev/pts proc sys; do sudo mount --bind /$m $R/$m; done
+            sudo mount -t tmpfs tmpfs $R/run
+            sudo mkdir -p $R/run/systemd/resolve
+            sudo cp /etc/resolv.conf $R/run/systemd/resolve/stub-resolv.conf
+            sudo chroot $R getent hosts dl.flathub.org
+            df -h $R
+            sudo chroot $R /usr/local/sbin/launchos-store install com.discordapp.Discord,org.videolan.VLC "Discord and VLC"
+            echo "exit code $?"
+            echo "--- result"; sudo cat $R/run/launchos-status/store.json; echo
+            sudo chroot $R flatpak list --app --system
+            ls $R/var/lib/flatpak/exports/share/icons/hicolor/*/apps/ | head -20
+            df -h $R
+          } > /tmp/smoke.log 2>&1 || true
+          grep -q '"done": true' $R/run/launchos-status/store.json && grep -q '"error": ""' $R/run/launchos-status/store.json
+      - name: Show the log as annotations
+        if: always()
+        shell: bash
+        run: |
+          f=/tmp/smoke.log
+          [ -f "$f" ] || { echo "::warning title=log::no log file"; exit 0; }
+          # annotations are readable through the API: the last part of the log, in pieces
+          tail -c 12000 "$f" | sed 's/\x1b\[[0-9;]*[A-Za-z]//g' | tr -d '\r' | split -b 3500 - /tmp/piece.
+          for p in /tmp/piece.*; do
+            body=$(sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g' "$p")
+            echo "::notice title=log $(basename $p)::$body"
+          done

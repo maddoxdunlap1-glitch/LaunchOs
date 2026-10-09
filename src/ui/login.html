@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in to LaunchOS</title>
+<link rel="stylesheet" href="los.css">
+<style>
+#status { position: absolute; right: 56px; top: 38px; display: flex; align-items: center; gap: 14px; font-size: 19px; color: #dce6f0; text-shadow: 0 1px 8px rgba(0, 0, 0, .7); }
+#net { color: #cfe6ff; display: flex; }
+#net.off { color: #e0443e; }
+#when { position: absolute; left: 0; right: 0; top: 96px; text-align: center; text-shadow: 0 2px 14px rgba(0, 0, 0, .55); }
+#time { font-size: 84px; font-weight: 300; letter-spacing: -.02em; line-height: 1; }
+#date { font-size: 20px; color: var(--ink-2); margin-top: 10px; }
+#card { position: absolute; left: 50%; top: 300px; width: 420px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 18px; }
+#av { width: 120px; height: 120px; border-radius: 50%; position: relative; box-shadow: 0 0 0 6px rgba(255, 255, 255, .06), 0 0 60px 10px rgba(95, 184, 255, .12); }
+#av:after { content: ""; position: absolute; left: 39px; top: 26px; width: 42px; height: 42px; border-radius: 50%; background: #1b3a5a; }
+#av:before { content: ""; position: absolute; left: 24px; bottom: 18px; width: 72px; height: 34px; border-radius: 36px 36px 10px 10px; background: #1b3a5a; }
+#nm { font-size: 30px; font-weight: 600; text-shadow: 0 1px 10px rgba(0, 0, 0, .6); }
+.probadge { display: inline-block; margin-left: 10px; padding: 3px 9px; border-radius: 10px; font-size: 12px; font-weight: 800; letter-spacing: .06em; color: #1a1406; background: linear-gradient(180deg, #ffe08a, #e0a52e); vertical-align: 5px; text-shadow: none; }
+#av.pro { box-shadow: 0 0 0 4px #e6b84a, 0 0 0 10px rgba(230, 184, 74, .12), 0 0 60px 10px rgba(230, 184, 74, .2); }
+.pw { display: flex; width: 100%; gap: 10px; }
+.pw input { flex: 1; font-size: 19px; padding: 13px 16px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel-2); color: var(--ink); outline: none; min-width: 0; }
+.pw input.f { border-color: var(--accent); }
+.pw button { padding: 0 16px; border-radius: 12px; background: var(--chip); font-size: 14px; }
+.go { min-width: 220px; padding: 14px 30px; border-radius: 28px; background: var(--accent); color: var(--accent-ink); font-size: 18px; font-weight: 700; border: 2px solid transparent; transition: transform .16s ease, box-shadow .16s; }
+.go.f { transform: scale(1.06); }
+#msg { min-height: 22px; font-size: 15px; color: var(--ink-2); text-align: center; text-shadow: 0 1px 6px rgba(0, 0, 0, .8); }
+#msg.bad { color: #ff8a84; }
+#note { font-size: 14px; color: var(--ink-2); text-align: center; text-shadow: 0 1px 6px rgba(0, 0, 0, .8); }
+#bottom { position: absolute; left: 48px; bottom: 34px; display: flex; gap: 14px; }
+.sq { display: flex; align-items: center; gap: 10px; padding: 9px 16px 9px 10px; border-radius: 24px; background: var(--tb); font-size: 15px; border: 2px solid transparent; transition: transform .16s ease, box-shadow .16s; }
+.sq .pic { width: 28px; height: 28px; }
+.sq.f { transform: scale(1.06); }
+#hints { position: absolute; right: 44px; bottom: 12px; z-index: 4; }
+/* the boot animation's rocket takes off, and the sign-in screen appears behind it */
+#intro { position: absolute; inset: 0; z-index: 50; background: radial-gradient(70% 80% at 50% 46%, #11253c, #050b15); transition: opacity .55s ease; overflow: hidden; }
+#intro.out { opacity: 0; pointer-events: none; }
+#intro img { position: absolute; display: block; will-change: transform; }
+#intro i { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: #e1eeff; box-shadow: 0 0 4px 1px rgba(200, 225, 255, .5); }
+#bye { position: absolute; inset: 0; background: #000; display: none; align-items: center; justify-content: center; font-size: 20px; color: var(--mute); z-index: 40; }
+</style>
+</head>
+<body data-live>
+<div id="wrap"><div id="stage">
+<svg class="bgsvg" viewBox="0 0 1280 720" aria-hidden="true"><defs><path id="c" d="M-210 30 C-150 -110 120 -130 220 -10 C300 95 85 165 -50 130 C-170 100 -250 95 -210 30 Z" fill="none" stroke="#cfe6ff"/></defs><g transform="translate(640 470)"><use href="#c" transform="scale(.7)" opacity=".16" stroke-width="2"/><use href="#c" transform="scale(1.1)" opacity=".13" stroke-width="1.3"/><use href="#c" transform="scale(1.6)" opacity=".1" stroke-width="1"/><use href="#c" transform="scale(2.3)" opacity=".08" stroke-width=".8"/><use href="#c" transform="scale(3.1)" opacity=".06" stroke-width=".6"/></g></svg>
+<div id="status"><span id="net" title="Network"></span><span id="clock"></span></div>
+<div id="when"><div id="time"></div><div id="date"></div></div>
+<div id="card">
+  <div id="av"></div>
+  <div id="nm"></div>
+  <div id="form" style="width:100%;display:flex;flex-direction:column;align-items:center;gap:14px"></div>
+  <div id="msg" aria-live="polite"></div>
+  <div id="note"></div>
+</div>
+<div id="bottom"><button class="sq" id="pwr" data-f></button></div>
+<div id="hints" class="hints"><button id="ha"><u style="background:#3ddc6b">A</u>Select</button><button id="hm"><u style="background:#cfe6ff">&#8801;</u>Power</button></div>
+<div class="dim" id="dim"></div>
+<section class="panel" id="panel" aria-live="polite"><h2 id="ph"></h2><p id="pp"></p><div id="pl"></div></section>
+<div id="bye"></div>
+<div id="toast"></div>
+<div id="intro" aria-hidden="true"><img id="iglow" src="img/glow.png" alt=""><img id="iflame" src="img/flame0.png" alt=""><img id="irocket" src="img/rocket.png" alt=""></div>
+</div></div>
+<script src="los.js"></script>
+<script>
+const { $, call, icon, pic, esc } = LOS;
+let state = null, F = [], fi = 0, busy = false, P = null;
+
+/* ---------- clock, date and network ---------- */
+function tick() {
+  $('#clock').textContent = LOS.clockText();
+  $('#time').textContent = LOS.clockText().replace(/\s?[ap]m$/, '');
+  const o = { weekday: 'long', month: 'long', day: 'numeric' };
+  if (LOS.prefs.timezone) o.timeZone = LOS.prefs.timezone;
+  try { $('#date').textContent = new Intl.DateTimeFormat('en-US', o).format(new Date()); } catch (e) { delete o.timeZone; $('#date').textContent = new Intl.DateTimeFormat('en-US', o).format(new Date()); }
+}
+async function refreshNet() {
+  const n = await call('network');
+  $('#net').innerHTML = icon('wifi');
+  $('#net').classList.toggle('off', !(n && n.connected));
+}
+
+/* ---------- the sign-in card ---------- */
+function paintMe() {
+  $('#nm').innerHTML = esc(LOS.prefs.name) + (LOS.pro ? '<span class="probadge" title="LaunchOS Pro supporter">PRO</span>' : '');
+  $('#av').style.background = LOS.prefs.avatar;
+  $('#av').classList.toggle('pro', LOS.pro);
+}
+document.addEventListener('los:pro', () => paintMe());   // (Pro was turned on or off: the badge follows)
+async function draw(msg, bad) {
+  state = await call('session_state');
+  if (state && state.signed_in && !msg) { location.href = 'index.html'; return; }
+  paintMe();
+  if (state && state.password) {
+    $('#form').innerHTML = `<label class="pw"><input id="pw" type="password" maxlength="128" autocomplete="off" spellcheck="false" placeholder="Password" data-f aria-label="Password"><button id="show" type="button">Show</button></label><button class="go" data-f data-go>Sign in</button>`;
+    $('#show').onclick = () => { const i = $('#pw'); i.type = i.type === 'password' ? 'text' : 'password'; i.focus(); };
+  } else {
+    $('#form').innerHTML = `<button class="go" data-f data-go>Sign in</button>`;
+  }
+  $('#form [data-go]').onclick = () => go();
+  $('#msg').textContent = msg || ''; $('#msg').classList.toggle('bad', !!bad);
+  const run = state && state.running;
+  $('#note').textContent = run ? (run === 1 ? '1 app is still running.' : run + ' apps are still running.')
+    : state && state.password ? 'Type your password, then press Enter. On a controller, press A to type.' : '';
+  $('#pwr').innerHTML = pic('power') + 'Power';
+  collect(); fi = 0; paint();
+}
+function collect() { F = [...document.querySelectorAll('#form [data-f], #bottom [data-f]')]; }
+function paint() {
+  F.forEach((e, k) => e.classList.toggle('f', k === fi));
+  const e = F[fi];
+  if (e && e.tagName === 'INPUT') e.focus();
+  else if (document.activeElement && document.activeElement.tagName === 'INPUT') document.activeElement.blur();
+}
+async function go() {
+  if (busy) return;
+  const i = $('#pw');
+  if (i && !i.value) { $('#msg').textContent = 'Type your password first.'; $('#msg').classList.add('bad'); fi = 0; paint(); return; }
+  busy = true; $('#msg').textContent = 'Signing in…'; $('#msg').classList.remove('bad');
+  const r = await call('sign_in', { password: i ? i.value : '' });
+  busy = false;
+  if (r && r.ok) { location.href = 'index.html'; return; }
+  await draw((r && r.error) || 'Couldn’t sign in. Try again.', true);
+}
+
+/* ---------- power ---------- */
+function panel(title, text, rows) {
+  P = { rows, i: 0 };
+  $('#ph').textContent = title; $('#pp').textContent = text;
+  rp(); $('#dim').classList.add('on'); $('#panel').classList.add('on');
+}
+function rp() { $('#pl').innerHTML = P.rows.map((o, k) => `<div class="it${k === P.i ? ' f' : ''}" data-k="${k}"><span class="glyph p">${o.pic ? pic(o.pic) : icon(o.glyph)}</span><span class="txt"><span>${esc(o.t)}</span>${o.s ? `<small>${esc(o.s)}</small>` : ''}</span></div>`).join(''); }
+function closePanel() { P = null; $('#panel').classList.remove('on'); $('#dim').classList.remove('on'); paint(); }
+function powerPanel() {
+  const off = a => async () => {
+    const b = $('#bye'); b.textContent = a === 'poweroff' ? 'Shutting down' : 'Restarting'; b.style.display = 'flex';
+    const r = await call('power', a);
+    if (!r || !r.ok) setTimeout(() => { b.style.display = 'none'; LOS.toast('Power controls work when running as LaunchOS'); }, 1200);
+  };
+  panel('Power', 'Turn off or restart your console.', [{ t: 'Shut down', s: 'Turn off the console', pic: 'power', a: off('poweroff') },
+    { t: 'Restart', s: 'Turn it off and back on', pic: 'restart', a: off('reboot') }, { t: 'Cancel', glyph: 'check', a: closePanel }]);
+}
+$('#pwr').onclick = () => powerPanel();
+$('#hm').onclick = () => nav('menu');
+$('#ha').onclick = () => nav('ok');
+$('#dim').onclick = () => { if (P) closePanel(); };
+$('#pl').onclick = e => { const b = e.target.closest('[data-k]'); if (!b || !P) return; P.i = +b.dataset.k; P.rows[P.i].a(); };
+document.addEventListener('click', e => { const t = e.target.closest('[data-f]'); if (t && !P) { const k = F.indexOf(t); if (k >= 0) { fi = k; paint(); } } });
+
+/* ---------- navigation ---------- */
+function nav(a) {
+  if (introUp) { endIntro(); return; }
+  if (P) {
+    if (a === 'up' || a === 'down') { P.i = Math.max(0, Math.min(P.rows.length - 1, P.i + (a === 'up' ? -1 : 1))); rp(); }
+    else if (a === 'ok') P.rows[P.i].a();
+    else if (a === 'back' || a === 'menu' || a === 'guide') closePanel();
+    return;
+  }
+  if (a === 'menu') { powerPanel(); return; }
+  if (a === 'up' || a === 'left') { fi = Math.max(0, fi - 1); paint(); return; }
+  if (a === 'down' || a === 'right') { fi = Math.min(F.length - 1, fi + 1); paint(); return; }
+  if (a === 'ok') {
+    const e = F[fi];
+    if (!e) return;
+    if (e.tagName === 'INPUT' || e.dataset.go != null) go(); else e.click();
+  }
+}
+LOS.onNav((a, ev) => {
+  const typing = ev && ev.target && ev.target.tagName === 'INPUT';
+  if (typing && a === 'back' && ev.key === 'Backspace') return false;   // Backspace edits the password
+  if (typing && (a === 'menu' || a === 'ok') && ev.key !== 'Enter' && ev.key !== 'Tab') return false;   // letters like m and space are typed
+  nav(a);
+  return true;
+}, { guide: true });
+document.addEventListener('mousemove', e => { const t = e.target.closest('[data-f]'); if (!t || P || !LOS.mouseRecent()) return; const k = F.indexOf(t); if (k >= 0 && k !== fi && F[fi] && F[fi].tagName !== 'INPUT') { fi = k; paint(); } });
+
+/* ---------- the rocket takes off (once per start, right after the boot animation) ---------- */
+let introUp = false, endIntro = () => {};
+(function () {
+  const it = $('#intro');
+  let seen = false;
+  try { seen = sessionStorage.getItem('launchos.intro') === '1'; sessionStorage.setItem('launchos.intro', '1'); } catch (e) { /* no storage */ }
+  if (seen || matchMedia('(prefers-reduced-motion: reduce)').matches) { it.remove(); return; }
+  introUp = true;
+  // same place and size as on the boot screen (drawn for 1080 lines; the stage has 720)
+  const k = 720 / 1080, cx = 640, top = 360 - 300 * k, rw = 210 * k, rh = 350 * k, noz = 320 * k;
+  const rocket = $('#irocket'), flame = $('#iflame'), glow = $('#iglow');
+  const put = (el, w, h, x, y) => Object.assign(el.style, { width: w + 'px', height: h + 'px', left: x + 'px', top: y + 'px' });
+  put(rocket, rw, rh, cx - rw / 2, top);
+  put(flame, 128 * k, 260 * k, cx - 64 * k, top + noz - 8 * k);
+  put(glow, 440 * k, 440 * k, cx - 220 * k, top + noz - 220 * k + 40 * k);
+  flame.style.transformOrigin = '50% 0';
+  const frames = [];
+  for (let i = 0; i < 12; i++) { const im = new Image(); im.src = 'img/flame' + i + '.png'; frames.push(im.src); }
+  const stars = [];
+  for (let i = 0; i < 46; i++) {
+    const d = document.createElement('i'), z = i % 3;
+    d.style.left = (Math.random() * 1280).toFixed(1) + 'px';
+    d.style.opacity = String(1 - z * 0.25);
+    it.prepend(d);
+    stars.push({ d, y: Math.random() * 720, v: (2.6 - z * 0.9) * (0.6 + Math.random() * 0.8) });
+  }
+  let ok = true, t0 = null, last = null, done = false, fi = 0;
+  it.querySelectorAll('img').forEach(i => i.onerror = () => { ok = false; });
+  endIntro = () => { if (done) return; done = true; introUp = false; it.classList.add('out'); setTimeout(() => { it.remove(); paint(); }, 600); };
+  function step(t) {
+    if (!ok) { it.remove(); introUp = false; return; }
+    if (!rocket.isConnected) return;
+    if (t0 == null) t0 = last = t;
+    const el = (t - t0) / 1000, dt = Math.min(50, t - last) / 16.7;
+    last = t;
+    // hover for a moment, then lift off: faster and faster, flame growing
+    const lift = Math.max(0, el - 0.3);
+    const y = Math.sin(el * 2.7) * 4 * k - 900 * lift * lift * lift - 120 * lift * lift;
+    const boost = 1 + Math.min(0.9, lift * 1.6);
+    rocket.style.transform = `translateY(${y.toFixed(1)}px)`;
+    flame.style.transform = `translateY(${y.toFixed(1)}px) scaleY(${boost.toFixed(3)})`;
+    glow.style.transform = `translateY(${y.toFixed(1)}px)`;
+    glow.style.opacity = String(Math.max(0, 1 - lift * 1.4));
+    if ((fi = (fi + 1) % 24) % 2 === 0) flame.src = frames[fi / 2];
+    const speed = 1 + lift * 14;
+    for (const s of stars) { s.y += s.v * speed * dt; if (s.y > 724) s.y -= 728; s.d.style.transform = `translateY(${s.y.toFixed(1)}px) scaleY(${Math.min(9, 1 + lift * 10).toFixed(2)})`; }
+    if (el > 0.75 && !done) endIntro();
+    if (el < 1.6) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+  setTimeout(endIntro, 1400);   // (if animations don't run, never keep the sign-in screen waiting)
+  addEventListener('mousedown', endIntro, { once: true });
+})();
+
+tick(); setInterval(tick, 10000);
+refreshNet(); setInterval(refreshNet, 15000);
+draw();
+</script>
+</body>
+</html>

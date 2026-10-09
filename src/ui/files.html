@@ -36,8 +36,10 @@
 #list { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 4px 10px 10px; position: relative; scrollbar-width: thin; scrollbar-color: #2a4260 transparent; }
 .fr { display: grid; grid-template-columns: 38px 1fr 110px 150px; gap: 12px; align-items: center; height: 46px; padding: 0 14px 0 10px; border-radius: 8px; border: 2px solid transparent; cursor: pointer; font-size: 15px; }
 .fr:hover { background: rgba(255, 255, 255, .03); }
-.fr .ico { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: #1f3550; color: #cfe6ff; position: relative; }
+.fr .ico { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: var(--glyph); color: #cfe6ff; position: relative; }
 .fr .ico .ic { width: 18px; height: 18px; }
+.fr .ico.p { background: none !important; }
+.fr .ico .pic { width: 32px; height: 32px; }
 .fr .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fr .sz, .fr .dt { text-align: right; color: var(--ink-2); font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .fr.f { border-color: var(--accent); background: rgba(var(--accent-glow), .07); box-shadow: 0 0 0 4px rgba(var(--accent-glow), .08); }
@@ -47,8 +49,10 @@
 .k-folder { background: #3a5a2a !important; color: #e6f5c8 !important; }
 .k-image { background: #2c4c74 !important; } .k-video { background: #5a2f6e !important; } .k-audio { background: #6e4a1f !important; }
 .k-program { background: #2b5797 !important; } .k-archive { background: #5c4a33 !important; } .k-doc { background: #7a2e2e !important; }
-#empty { position: absolute; inset: 150px 20px auto; text-align: center; color: var(--mute); font-size: 16px; line-height: 1.6; display: none; }
+#empty { position: absolute; top: 150px; left: 50%; transform: translateX(-50%); width: min(520px, calc(100% - 40px)); box-sizing: border-box; padding: 20px 18px; border: 1px solid transparent; border-radius: 14px; text-align: center; color: var(--mute); font-size: 16px; line-height: 1.6; display: none; }
 #empty b { display: block; color: var(--ink-2); font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+/* an empty folder that has the focus (B goes back, X has New folder and Paste here) */
+#empty.f { border-color: var(--accent); background: rgba(var(--accent-glow), .07); box-shadow: 0 0 0 4px rgba(var(--accent-glow), .08); }
 #main.focus { border-color: #2f4a68; }
 
 #clip { position: absolute; left: 56px; bottom: 18px; font-size: 14px; color: var(--ink-2); display: none; align-items: center; gap: 10px; max-width: 640px; }
@@ -94,7 +98,9 @@ label.pw input:focus { border-color: var(--accent); }
 </div></div>
 <script src="los.js"></script>
 <script>
-const { $, call, toast, icon, esc } = LOS;
+const { $, call, toast, icon, pic, esc } = LOS;
+/* full-color icons for each kind of file */
+const PICS = { folder: 'folder', image: 'file-image', video: 'file-video', audio: 'file-audio', program: 'file-program', archive: 'file-archive', doc: 'file-doc', text: 'file-text', web: 'browser', other: 'file-other' };
 
 /* ---------- state ---------- */
 let places = [], drives = [], sideRows = [], si = 0;      // left column
@@ -154,22 +160,28 @@ function driveSub(d) {
   return (d.removable ? 'USB drive' : 'Inside this PC') + ' · ' + gb(d.size);
 }
 function renderSide() {
+  // the selection stays on the same place or drive (by what it is, not by its row number: a drive
+  // that went away mustn't leave it on whatever moved up into its row)
+  const ident = r => !r ? '' : r.kind === 'place' ? 'p:' + r.p.id : 'd:' + (r.d.dev || r.d.mount || r.d.name);
+  const was = ident(sideRows[si]);
   sideRows = [];
   let h = '<h3>Your folders</h3>';
-  const glyph = { downloads: 'download', documents: 'doc', pictures: 'image', videos: 'film', music: 'music' };
-  places.forEach(p => { sideRows.push({ kind: 'place', p }); h += sideRow(sideRows.length - 1, glyph[p.id] || 'folder', p.name, p.id === 'downloads' ? 'Browser downloads go here' : ''); });
+  places.forEach(p => { sideRows.push({ kind: 'place', p }); h += sideRow(sideRows.length - 1, '@folder-' + p.id.replace('downloads', 'download'), p.name, p.id === 'downloads' ? 'Browser downloads go here' : ''); });
   h += '<h3>Drives</h3>';
   drives.forEach(d => {
     sideRows.push({ kind: 'drive', d });
     const pct = d.total ? 100 * (1 - d.free / d.total) : 0;
-    h += sideRow(sideRows.length - 1, d.removable ? 'usb' : 'drive', d.name, driveSub(d), d.mount ? `<div class="dm"><i class="${level(pct)}" style="width:${pct.toFixed(1)}%"></i></div>` : '');
+    h += sideRow(sideRows.length - 1, d.removable ? '@drive' : '@saving', d.name, driveSub(d), d.mount ? `<div class="dm"><i class="${level(pct)}" style="width:${pct.toFixed(1)}%"></i></div>` : '');
   });
   if (!drives.length) h += '<div style="color:var(--mute);font-size:14px;padding:4px 6px 0">Plug in a USB drive and it shows up here.</div>';
   $('#side').innerHTML = h;
-  si = Math.max(0, Math.min(si, sideRows.length - 1));
+  let k = sideRows.findIndex(r => ident(r) === was);
+  if (k < 0) k = sideRows.findIndex(r => sideRoot(r) && sideRoot(r) === rootOf);   // gone: the open folder's place
+  si = Math.max(0, Math.min(k < 0 ? 0 : k, sideRows.length - 1));
   paintSide();
 }
-const sideRow = (k, g, t, s, extra) => `<div class="it" data-k="${k}"><span class="glyph">${icon(g)}</span><span class="txt"><span>${esc(t)}</span>${s ? `<small>${esc(s)}</small>` : ''}${extra || ''}</span></div>`;
+// g: a glyph name, or "@name" for a full-color icon
+const sideRow = (k, g, t, s, extra) => `<div class="it" data-k="${k}"><span class="glyph${g[0] === '@' ? ' p' : ''}">${g[0] === '@' ? pic(g.slice(1)) : icon(g)}</span><span class="txt"><span>${esc(t)}</span>${s ? `<small>${esc(s)}</small>` : ''}${extra || ''}</span></div>`;
 function sideRoot(row) { return row.kind === 'place' ? row.p.path : row.d.mount; }
 function paintSide() {
   document.querySelectorAll('#side .it').forEach(el => {
@@ -251,7 +263,7 @@ function drawRows(force) {
   for (let k = from; k < to; k++) {
     const e = entries[k];
     const cls = ['fr', e.dir ? 'dir' : '', sel.has(e.name) ? 'sel' : '', cutting && cutting.has(pjoin(cur.path, e.name)) ? 'cutting' : ''].join(' ');
-    h += `<div class="${cls}" data-k="${k}" role="option" style="position:absolute;left:0;right:0;top:${k * ROW}px"><span class="ico k-${e.kind}">${icon(ICONS[e.kind] || 'file')}</span><span class="nm">${esc(e.name)}</span><span class="sz">${e.dir ? '' : size(e.size)}</span><span class="dt">${when(e.mtime)}</span></div>`;
+    h += `<div class="${cls}" data-k="${k}" role="option" style="position:absolute;left:0;right:0;top:${k * ROW}px"><span class="ico p">${pic(PICS[e.kind] || 'file-other')}</span><span class="nm">${esc(e.name)}</span><span class="sz">${e.dir ? '' : size(e.size)}</span><span class="dt">${when(e.mtime)}</span></div>`;
   }
   sp.innerHTML = h;
   paintList();
@@ -263,6 +275,7 @@ function paintList() {
     el.classList.toggle('sel', !!e && sel.has(e.name));
   });
   $('#main').classList.toggle('focus', focus === 'list');
+  $('#empty').classList.toggle('f', focus === 'list' && mode !== 'panel' && !entries.length);
   hints();
 }
 function showRow() {
@@ -282,6 +295,8 @@ function keepVisible(box, el) {
 function hints() {
   const sel0 = mode === 'select';
   $('#hat').textContent = sel0 ? 'Select' : 'Open';
+  // an empty folder has nothing to open: no A hint (B goes back, X pastes)
+  $('#hat').parentElement.style.visibility = focus === 'list' && !entries.length && !sel0 ? 'hidden' : '';
   $('#hbt').textContent = sel0 ? 'Done selecting' : focus === 'side' ? 'Home' : (cur && cur.path !== rootOf ? 'Up' : 'Back');
   $('#hx').hidden = false;
   const c = $('#clip');
@@ -362,6 +377,7 @@ function rp() {
 }
 function closePanel() {
   $('#panel').classList.remove('on'); $('#dim').classList.remove('on');
+  LOS.osk.hide();   // (its Done must never act for a panel that's gone)
   dropInput();
   if (!P) return;
   mode = P.from === 'select' && sel.size ? 'select' : 'browse'; P = null;
@@ -473,15 +489,19 @@ function deletePanel(t) {
     })]);
 }
 function inputPanel(title, text, value, action, label, onDone) {
-  const body = `<label class="pw"><input id="nin" type="text" maxlength="200" autocomplete="off" spellcheck="false"></label>`;
-  panel(title, text, [row(label, 'Or press Enter', 'check', async () => {
+  const body = `<label class="pw"><input id="nin" type="text" maxlength="200" autocomplete="off" spellcheck="false" aria-label="${esc(title)}"></label>`;
+  const go = async () => {
     const v = $('#nin').value;
     const r = await action(v);
     if (r && r.ok) { closePanel(); onDone(r); }
     else { $('#pp').textContent = (r && r.error) || 'That didn’t work.'; $('#pp').style.display = ''; $('#nin').focus(); }
-  }), row('Cancel', '', 'close', () => closePanel())], { body });
+  };
+  const type = () => LOS.osk.show($('#nin'), { onDone: go });   // typing with a controller
+  panel(title, text, [row('Type with the controller', 'The on-screen keyboard', 'edit', type), row(label, 'Or press Enter', 'check', go), row('Cancel', '', 'close', () => closePanel())], { body });
+  P.i = 1; P.enter = go;
+  rp();
   const i = $('#nin'); i.value = value;
-  setTimeout(() => { i.focus(); const dot = value.lastIndexOf('.'); i.setSelectionRange(0, dot > 0 ? dot : value.length); }, 60);
+  setTimeout(() => { i.focus(); const dot = value.lastIndexOf('.'); i.setSelectionRange(0, dot > 0 ? dot : value.length); if (LOS.padRecent()) type(); }, 60);
 }
 function renamePanel(e) {
   const base = cur.path;
@@ -518,7 +538,7 @@ async function eject(d) {
   } else panel('Couldn’t eject', (r && r.error) || 'Try again.', [row('OK', '', 'check', () => closePanel())]);
 }
 const FORMATS = [
-  ['exfat', 'exFAT', 'Best for USB drives. Works on Windows, Mac, consoles and TVs, and fits big files'],
+  ['exfat', 'exFAT', 'Best for USB drives: works on Windows, Mac and TVs'],
   ['fat32', 'FAT32', 'For older devices. Files must be under 4 GB'],
   ['ntfs', 'NTFS', 'For Windows PCs'],
   ['ext4', 'ext4', 'For Linux and LaunchOS only'],
@@ -585,12 +605,14 @@ function mv(d) {
 function nav(a, e) {
   if (mode === 'panel') {
     if (a === 'up') mv(-1); else if (a === 'down') mv(1);
-    else if (a === 'ok') { if (e && e.target && e.target.id === 'nin') P.i = 0; pact(); }   // Enter in a name box does the first choice
+    else if (a === 'ok') {   // Enter in a name box: Rename / Make it, unless Cancel was picked with the arrows
+      if (e && e.target && e.target.id === 'nin' && P.enter && (P.i === 0 || P.rows[P.i].a === P.enter)) P.enter(); else pact();
+    }
     else if ((a === 'back' || a === 'menu' || a === 'opts') && !P.busy) { if (P.job) { jobShown = false; } closePanel(); }
     return true;
   }
   switch (a) {
-    case 'up': mv(-1); break;
+    case 'up': if (focus === 'list' && !entries.length) setFocus('side'); else mv(-1); break;   // (an empty folder: back to the places)
     case 'down': mv(1); break;
     case 'left': if (focus === 'list') setFocus('side'); break;
     case 'right': if (focus === 'side') { if (cur && sideRoot(sideRows[si] || {}) === rootOf) setFocus('list'); else openSide(si, true); } break;

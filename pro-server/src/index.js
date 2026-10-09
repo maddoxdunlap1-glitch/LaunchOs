@@ -10,7 +10,8 @@ import * as accounts from "./accounts.js";
 const LS = "https://api.lemonsqueezy.com/v1/licenses";
 const LINK_SECONDS = 600;
 const MAX_BODY = 4096;
-const FILES = new Set(["pro-package.tar.gz", "pro-update.json"]);
+// the Pro extras, and early-access LaunchOS updates
+const FILES = new Set(["pro-package.tar.gz", "pro-update.json", "early-update.json", "early-update.tar.gz"]);
 const KEY_RE = /^[A-Za-z0-9-]{8,64}$/;
 const PC_RE = /^[a-f0-9]{32}$/; // random PC id made by LaunchOS (16 random bytes, hex)
 const INSTANCE_RE = /^[A-Za-z0-9-]{8,64}$/;
@@ -50,24 +51,38 @@ async function readJson(request) {
 }
 
 async function lemon(path, fields) {
-  const res = await fetch(`${LS}/${path}`, {
-    method: "POST",
-    headers: { accept: "application/json", "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(fields).toString(),
-  });
+  let res;
+  try {
+    res = await fetch(`${LS}/${path}`, {
+      method: "POST",
+      headers: { accept: "application/json", "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(fields).toString(),
+    });
+  } catch {
+    return { status: 0, body: {} }; // Lemon Squeezy can't be reached
+  }
   let body = null;
   try {
     body = await res.json();
   } catch {}
-  return { status: res.status, body: body || {} };
+  return { status: res.status, body: body && typeof body === "object" ? body : {} };
 }
+
+// Lemon Squeezy's own answer about a key: these statuses mean it looked at the key. Anything else
+// (rate limits, outages, API trouble) means "ask again later", never "the key is wrong".
+const ANSWERED = new Set([200, 400, 404, 422]);
+
+// Set up? Without the store and product IDs no key can be checked properly, so none is accepted.
+const configured = (env) => !!(env.LS_STORE_ID && env.LS_PRODUCT_ID && env.LINK_SECRET);
 
 // The key must belong to our store and product (a key from someone else's Lemon Squeezy store is refused).
 function ours(env, meta) {
-  if (!meta) return false;
-  if (env.LS_STORE_ID && String(meta.store_id) !== String(env.LS_STORE_ID)) return false;
-  if (env.LS_PRODUCT_ID && String(meta.product_id) !== String(env.LS_PRODUCT_ID)) return false;
-  return true;
+  if (!meta || !configured(env)) return false;
+  return String(meta.store_id) === String(env.LS_STORE_ID) && String(meta.product_id) === String(env.LS_PRODUCT_ID);
+}
+
+async function sha256Hex(text) {
+  return toHex(await crypto.subtle.digest("SHA-256", enc.encode(text)));
 }
 
 async function revoked(env, meta) {
@@ -77,21 +92,35 @@ async function revoked(env, meta) {
 
 // Check a key + PC. Returns { ok, ... } or { error, status }.
 async function checkKey(env, key, instanceId) {
+  if (!configured(env)) return { error: "unavailable", status: 503 };
   const r = await lemon("validate", { license_key: key, instance_id: instanceId });
-  if (r.status >= 500 || r.status === 0) return { error: "unavailable", status: 503 };
+  if (!ANSWERED.has(r.status)) return { error: "unavailable", status: 503 };
   const lk = r.body.license_key;
-  if (!r.body.valid || !lk || !ours(env, r.body.meta)) return { error: "invalid_key", status: 403 };
+  if (r.status === 200 && r.body.valid && lk && !ours(env, r.body.meta)) return { error: "invalid_key", status: 403 };
+  if (!r.body.valid || !lk) return { error: "invalid_key", status: 403 };
   if (lk.status !== "active" && lk.status !== "inactive") return { error: "invalid_key", status: 403 };
   if (await revoked(env, r.body.meta)) return { error: "revoked", status: 403 };
   return { ok: true, meta: r.body.meta };
 }
 
+// The slot a PC already has on a key (so entering the key again on the same PC doesn't use up another one).
+const slotName = async (key, pc) => `inst:${await sha256Hex(key)}:${pc}`;
+
 async function activate(request, env) {
   const b = await readJson(request);
   if (!b || !KEY_RE.test(b.key || "") || !PC_RE.test(b.pc_id || "")) return fail(400, "bad_request");
+  if (!configured(env)) return fail(503, "unavailable");
+  const slot = await slotName(b.key, b.pc_id);
+  const known = await env.REVOKED.get(slot);
+  if (known && INSTANCE_RE.test(known)) {
+    const c = await checkKey(env, b.key, known);
+    if (c.ok) return json({ ok: true, instance_id: known });
+    if (c.error === "revoked" || c.error === "unavailable") return fail(c.status, c.error);
+    // (that slot was freed: take a new one)
+  }
   const r = await lemon("activate", { license_key: b.key, instance_name: b.pc_id });
-  if (r.status >= 500) return fail(503, "unavailable");
-  const ok = r.body.activated && ours(env, r.body.meta);
+  if (!ANSWERED.has(r.status)) return fail(503, "unavailable");
+  const ok = r.body.activated && r.body.instance && ours(env, r.body.meta);
   if (!ok) {
     // Lemon Squeezy says when all 5 slots are used; pass that on in plain terms.
     const msg = String(r.body.error || "").toLowerCase();
@@ -101,6 +130,7 @@ async function activate(request, env) {
     await lemon("deactivate", { license_key: b.key, instance_id: r.body.instance.id });
     return fail(403, "revoked");
   }
+  await env.REVOKED.put(slot, String(r.body.instance.id));
   return json({ ok: true, instance_id: r.body.instance.id });
 }
 
@@ -164,6 +194,17 @@ async function webhook(request, env) {
   return json({ ok: true });
 }
 
+// "Remove Pro from this PC" in LaunchOS: frees that PC's slot, so the key can be used on another one.
+async function deactivate(request, env) {
+  const b = await readJson(request);
+  if (!b || !KEY_RE.test(b.key || "") || !INSTANCE_RE.test(b.instance_id || "")) return fail(400, "bad_request");
+  if (!configured(env)) return fail(503, "unavailable");
+  const r = await lemon("deactivate", { license_key: b.key, instance_id: b.instance_id });
+  if (!ANSWERED.has(r.status)) return fail(503, "unavailable");
+  if (!r.body.deactivated || !ours(env, r.body.meta)) return fail(403, "invalid_key");
+  return json({ ok: true });
+}
+
 // You use this one by hand (see README) to free a PC slot when a buyer emails you.
 async function adminDeactivate(request, env) {
   const auth = request.headers.get("authorization") || "";
@@ -224,6 +265,7 @@ export default {
       if (pathname === "/v1/activate") return await activate(request, env);
       if (pathname === "/v1/check") return await check(request, env);
       if (pathname === "/v1/download") return await download(request, env);
+      if (pathname === "/v1/deactivate") return await deactivate(request, env);
       if (pathname === "/webhook/lemonsqueezy") return await webhook(request, env);
       if (pathname === "/admin/grant-pro") return await adminPro(request, env, true);
       if (pathname === "/admin/revoke-pro") return await adminPro(request, env, false);

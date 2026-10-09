@@ -1,10 +1,8 @@
 {
- "version": "0.8",
- "sha256": "3c52167765a751df4d9258b778c672fb09cd8314ad556ffdef3a2e2b4d5f5792",
+ "version": "0.9",
+ "sha256": "357caa4b833beee9a722cbbaffc8f5899ccb5318f33b021b0dd7168231170d55",
  "file": "launchos-update.tar.gz",
- "apt": [
-  "gir1.2-vte-3.91"
- ],
- "full": false,
- "notes": "Store, Terminal, Updates and an admin password for sudo."
+ "apt": [],
+ "full": true,
+ "notes": "Now based on Debian 13, with a sign-in screen, real app icons and real apps from Setup. Needs a fresh download."
 }

@@ -31,7 +31,7 @@
 .aicon { width: 64px; height: 64px; border-radius: 14px; flex: none; display: grid; place-items: center; font-size: 28px; font-weight: 700; color: #fff; background: #2a4260; overflow: hidden; }
 .aicon img { width: 100%; height: 100%; object-fit: contain; }
 .card .txt { min-width: 0; flex: 1; }
-.card b { display: block; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 16px; font-weight: 600; line-height: 1.2; overflow: hidden; }
 .card small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; color: var(--mute); margin-top: 4px; line-height: 1.35; }
 .card em { position: absolute; top: 10px; right: 12px; font-style: normal; font-size: 11px; font-weight: 600; background: var(--accent); color: var(--accent-ink); border-radius: 9px; padding: 1px 8px; }
 .card.more { justify-content: center; color: var(--ink-2); font-size: 15px; }
@@ -83,6 +83,7 @@
 <script src="los.js"></script>
 <script>
 const { $, call, toast, icon, esc } = LOS;
+const jobHas = id => String(job.app || '').split(',').includes(id);   // (Setup installs several apps in one job)
 
 /* Picks for the Featured shelf. Names and descriptions here are used until Flathub's own list has arrived. */
 const FEATURED = [
@@ -205,7 +206,7 @@ function closeDetail() {
 }
 function buttons() {
   const a = app(detail), inst = !!installed[detail], busy = job.step && !job.done;
-  const mine = busy && job.app === detail;
+  const mine = busy && jobHas(detail);
   const b = [];
   if (mine) b.push(['Working…', 'refresh', () => {}, true]);
   else if (inst) { b.push(['Open', 'play', () => openApp(a), true]); b.push(['Uninstall', 'trash', () => confirmRemove(a)]); }
@@ -219,10 +220,10 @@ function drawDetail() {
   $('#dhead').innerHTML = iconHtml(a) + `<div><h2>${esc(a.name)}</h2>${a.dev ? `<div class="dev">${esc(a.dev)}</div>` : ''}<div class="sum">${esc(a.summary || '')}</div></div>`;
   const b = buttons();
   dbtn = Math.min(dbtn, b.length - 1);
-  const mine = job.step && !job.done && job.app === detail;
+  const mine = job.step && !job.done && jobHas(detail);
   $('#dbtns').innerHTML = b.map((x, k) => `<button class="btn${x[3] ? ' main' : ''}${k === dbtn ? ' f' : ''}" data-k="${k}">${icon(x[1])}${esc(x[0])}</button>`).join('')
     + `<div id="dprog" class="${mine ? 'on' : ''}"><div class="meterbar"><i style="width:${mine ? job.percent || 0 : 0}%"></i></div><p>${mine ? esc(job.step) + ' · ' + (job.percent || 0) + '%' : ''}</p></div>`
-    + (job.done && job.error && job.app === detail && !mine ? `<span style="color:#ffb3ae;font-size:14px;max-width:420px">${esc(job.error)}</span>` : '')
+    + (job.done && job.error && jobHas(detail) && !mine ? `<span style="color:#ffb3ae;font-size:14px;max-width:420px">${esc(job.error)}</span>` : '')
     + (inst ? `<span style="color:var(--mute);font-size:14px">Installed${inst.version ? ' · version ' + esc(inst.version) : ''}</span>` : `<span style="color:var(--mute);font-size:14px">Free from Flathub · ${size(free)} free on this PC</span>`);
   $('#ddesc').textContent = a.desc || a.summary || '';
   const shot = (a.shots || [])[0];
@@ -296,7 +297,8 @@ function nav(a, e) {
       if (confirming) { const c = confirming; if (dbtn === 1) remove(c); else { confirming = null; drawDetail(); } return true; }
       const b = buttons()[dbtn]; if (b) b[2]();
       return true;
-    } else if (a === 'back' || a === 'menu') { if (confirming) { confirming = null; drawDetail(); } else if (a === 'menu') home(); else closeDetail(); return true; }
+    } else if (a === 'menu') { home(); return true; }   // (≡ goes Home from anywhere, like its button; nothing is uninstalled)
+    else if (a === 'back') { if (confirming) { confirming = null; drawDetail(); } else closeDetail(); return true; }
     else if (a === 'up' || a === 'down') { const d = $('#ddesc'); d.style.overflow = 'auto'; d.scrollTop += a === 'down' ? 120 : -120; return true; }
     $('#dbtns').querySelectorAll('.btn').forEach((x, k) => x.classList.toggle('f', k === dbtn));
     return true;
@@ -312,7 +314,7 @@ function nav(a, e) {
     case 'right': if (area === 'tabs') { tab = (tab + 1) % TABS.length; pos = 0; render(); } else if (area === 'grid' && pos % COLS < COLS - 1 && pos + 1 < n) { pos++; paint(); } break;
     case 'up': if (area === 'grid') { if (pos >= COLS) pos -= COLS; else area = 'tabs'; } else if (area === 'tabs') area = 'search'; paint(); break;
     case 'down': if (area === 'search') area = 'tabs'; else if (area === 'tabs') { if (n) { area = 'grid'; pos = 0; } } else if (pos + COLS < n) pos += COLS; else if (Math.floor(pos / COLS) < Math.floor((n - 1) / COLS)) pos = n - 1; paint(); break;
-    case 'ok': if (area === 'search') { $('#q').focus(); } else if (area === 'tabs') { if (n) { area = 'grid'; pos = 0; paint(); } else if (refreshError) getCatalog(); } else openCard(pos); break;
+    case 'ok': if (area === 'search') { $('#q').focus(); if (!e) LOS.osk.show($('#q'), { onDone: () => { $('#q').blur(); area = 'grid'; pos = 0; paint(); } }); } else if (area === 'tabs') { if (n) { area = 'grid'; pos = 0; paint(); } else if (refreshError) getCatalog(); } else openCard(pos); break;
     case 'opts': area = 'search'; paint(); $('#q').focus(); break;
     case 'back': if (query) { $('#q').value = ''; setQuery(''); } else home(); break;
     case 'menu': home(); break;
@@ -334,7 +336,7 @@ $('#tabs').onclick = e => { const t = e.target.closest('.tab'); if (!t || detail
 $('#grid').onclick = e => { const c = e.target.closest('.card'); if (!c || detail) return; area = 'grid'; pos = +c.dataset.k; paint(); openCard(pos); };
 $('#grid').addEventListener('mousemove', e => { const c = e.target.closest('.card'); if (!c || detail || !LOS.mouseRecent()) return; const k = +c.dataset.k; if (area === 'grid' && k === pos) return; area = 'grid'; pos = k; paint(); });
 $('#dbtns').onclick = e => { const b = e.target.closest('.btn'); if (!b) return; dbtn = +b.dataset.k; nav('ok'); };
-$('#ha').onclick = () => nav('ok'); $('#hb').onclick = () => nav('back'); $('#hm').onclick = home; $('#hy').onclick = () => nav('opts');
+$('#ha').onclick = () => nav('ok'); $('#hb').onclick = () => nav('back'); $('#hm').onclick = () => nav('menu'); $('#hy').onclick = () => nav('opts');
 
 /* start */
 (async function start() {

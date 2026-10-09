@@ -37,8 +37,8 @@
 .chk .mark { border-radius: 6px; }
 .opt.sel .mark, .chk.sel .mark { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .opt.sel .mark .ic, .chk.sel .mark .ic { width: 15px; height: 15px; }
-.zlist { max-height: 300px; overflow: hidden; margin-top: 12px; }
-.zrow.sel { background: #17324a; }
+.zlist { max-height: 340px; overflow-y: auto; margin-top: 12px; }
+.zrow.sel { background: var(--chip); }
 .zrow .when { margin-left: auto; color: var(--mute); font-size: 15px; }
 .status { display: flex; align-items: center; gap: 16px; padding: 18px; border-radius: 12px; background: var(--panel-2); margin-bottom: 16px; font-size: 18px; }
 .status .ic { width: 30px; height: 30px; }
@@ -48,10 +48,10 @@
 .dev { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 10px; background: var(--panel-2); margin-bottom: 8px; font-size: 15px; }
 .dev .ic { color: #cfe6ff; }
 #pad { position: relative; width: 362px; height: 250px; border-radius: 16px; background: var(--panel-2); }
-#pad .b { position: absolute; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; background: #1f3550; color: #cfe6ff; transition: background .08s, transform .08s; }
+#pad .b { position: absolute; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; background: var(--glyph); color: #cfe6ff; transition: background .08s, transform .08s; }
 #pad .b.on { background: var(--accent); color: var(--accent-ink); transform: scale(1.12); }
 #pad .sh { width: 60px; height: 26px; border-radius: 10px; font-size: 12px; }
-#pad .stick { position: absolute; width: 70px; height: 70px; border-radius: 50%; border: 2px solid #2a4260; }
+#pad .stick { position: absolute; width: 70px; height: 70px; border-radius: 50%; border: 2px solid var(--line2); }
 #pad .stick i { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px; border-radius: 50%; background: #cfe6ff; }
 #pad .msg { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; color: var(--mute); font-size: 14px; }
 .ctl { display: grid; grid-template-columns: 170px 1fr; gap: 12px 18px; font-size: 17px; align-items: center; }
@@ -59,12 +59,39 @@
 .key u { min-width: 26px; height: 26px; padding: 0 7px; border-radius: 13px; display: inline-grid; place-items: center; text-decoration: none; font-size: 12px; font-weight: 700; color: #0b1726; }
 .hero { display: flex; gap: 40px; align-items: center; }
 .hero img { width: 230px; height: 230px; border-radius: 40px; }
+.chk .pic { width: 40px; height: 40px; flex: none; }
+.chk .tag { margin-left: auto; font-size: 12px; color: var(--mute); white-space: nowrap; }
+.chk.sel .tag.dl { color: var(--accent); }
+#apps.cols { gap: 0 14px; }
+#apps .chk { padding: 9px 14px; margin-bottom: 7px; }
+.inst { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 12px; background: var(--panel-2); margin: 0 0 24px; font-size: 16px; }
+.inst .pic { width: 34px; height: 34px; }
+.inst .meterbar { flex: 1; height: 8px; border-radius: 4px; background: var(--chip); overflow: hidden; }
+.inst .meterbar i { display: block; height: 100%; background: var(--accent); transition: width .4s; }
 .time { font-size: 15px; color: var(--ink-2); margin-top: 6px; }
+/* the look step: color, background and theme pickers (the content scrolls if it doesn't fit) */
+#content.scroll { max-height: 404px; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; padding: 8px 10px; margin: -8px -10px; }
+#content.scroll::-webkit-scrollbar { display: none; }
+.sec { font-size: 15px; font-weight: 600; color: var(--ink-2); margin: 4px 0 10px; text-transform: none; }
+.walls { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+.wl { position: relative; height: 79px; border-radius: 10px; background: var(--panel-2) center / cover no-repeat; border: 2px solid transparent; transition: transform .16s ease, box-shadow .16s, border-color .16s; overflow: hidden; }
+.wl b { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 8px 5px; font-size: 12px; font-weight: 600; text-align: left; background: linear-gradient(transparent, rgba(0, 0, 0, .7)); }
+.wl.sel { border-color: #fff; }
+.wl.f { transform: scale(1.06); border-color: var(--accent); box-shadow: 0 0 0 6px rgba(var(--accent-glow), .14), 0 0 26px 6px rgba(var(--accent-glow), .12); z-index: 2; }
+.wl .lock, .th .lock { position: absolute; top: 6px; right: 6px; font-size: 10px; font-weight: 700; letter-spacing: .04em; padding: 2px 7px; border-radius: 8px; background: #e6c75a; color: #1a1406; }
+.themes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 8px; }
+.th { position: relative; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 2px solid transparent; font-size: 15px; transition: transform .16s ease, box-shadow .16s, border-color .16s; }
+.th i { width: 34px; height: 22px; border-radius: 6px; flex: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12); }
+.th.sel { border-color: #fff; }
+.th.f { transform: scale(1.04); border-color: var(--accent); box-shadow: 0 0 0 6px rgba(var(--accent-glow), .14); }
+body.setup-look #wall::after { background: rgba(5, 10, 18, .45); }
+#wall::after { background: rgba(5, 10, 18, .78); }
 </style>
 </head>
-<body>
+<body data-live>
 <div id="wrap"><div id="stage">
 <svg class="bgsvg" viewBox="0 0 1280 720" aria-hidden="true"><defs><path id="c" d="M-210 30 C-150 -110 120 -130 220 -10 C300 95 85 165 -50 130 C-170 100 -250 95 -210 30 Z" fill="none" stroke="#cfe6ff"/></defs><g transform="translate(1120 620)"><use href="#c" transform="scale(.6)" opacity=".12" stroke-width="2"/><use href="#c" transform="scale(1)" opacity=".1" stroke-width="1.2"/><use href="#c" transform="scale(1.5)" opacity=".08" stroke-width=".9"/></g></svg>
+<div id="wall" aria-hidden="true"></div>
 <div id="head"><h1>Setup</h1><div id="dots"></div></div>
 <div id="card"><h2 id="title"></h2><p class="lead" id="lead"></p><div id="content"></div></div>
 <div id="nav"></div>
@@ -73,11 +100,12 @@
 </div></div>
 <script src="los.js"></script>
 <script>
-const { $, call, toast, icon, esc } = LOS;
+const { $, call, toast, icon, pic, appPic, esc } = LOS;
 const content = $('#content');
 const COMMON_ZONES = ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Phoenix', 'America/Los_Angeles', 'America/Anchorage', 'Pacific/Honolulu', 'Europe/London', 'Europe/Berlin', 'Asia/Tokyo', 'Australia/Sydney'];
 const AVATARS = ['#e0793a', '#3ddc6b', '#5fb8ff', '#9d8cff', '#ff6fae', '#e6c75a'];
-const APPS = [['steam', 'Steam', 'PC games, with Proton for Windows games'], ['roblox', 'Roblox', 'Through Sober. Downloads the first time you open it'], ['freetube', 'FreeTube', 'YouTube without ads. Downloads the first time'], ['winprog', 'Windows programs', 'Run .exe files with Wine'], ['youtube', 'YouTube', 'In a web app'], ['discord', 'Discord', 'Chat and voice'], ['twitch', 'Twitch', 'Live streams']];
+const DEFAULT_APPS = ['steam', 'winprog'];
+let apps = [];   // Steam, Discord, Spotify…: from the system, with their icons and whether they're installed
 
 let zones = [], zq = '', zsel = '', vol = null, padTimer = null;
 const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -115,9 +143,14 @@ const STEPS = [
     async render() {
       vol = await call('volume_get');
       if (!vol.available) { content.innerHTML = `<div class="status"><span class="bad">${icon('sound')}</span><span>No sound device found. In VirtualBox, turn on Settings → Audio.</span></div>`; return; }
-      content.innerHTML = `<div class="status">${icon('sound')}<span>Volume <b id="vv">${vol.value}%</b></span></div><div class="slider" data-f data-slider id="vs"><i></i><b></b></div><button class="btn" data-f id="vt">Play a test sound</button>`;
+      content.innerHTML = `<div class="status">${icon('sound')}<span>Volume <b id="vv">${vol.value}%</b></span></div><div class="slider" data-f data-slider id="vs" role="slider" aria-label="Volume"><i></i><b></b></div><button class="btn" data-f id="vt">Play a test sound</button>`;
       paintVol();
       $('#vt').onclick = () => call('sound_test');
+      $('#vs').onclick = async ev => {   // a click on the slider sets the volume there
+        const r = $('#vs').getBoundingClientRect();
+        vol.value = Math.round(Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * 20) * 5;
+        paintVol(); vol = await call('volume_set', vol.value); paintVol();
+      };
     } },
   { id: 'display', title: 'Screen size', lead: 'If the edges of the picture are cut off on your TV, pick TV safe area.',
     async render() {
@@ -134,35 +167,103 @@ const STEPS = [
       startPad();
     },
     leave() { stopPad(); } },
-  { id: 'look', title: 'Make it yours', lead: 'Pick a highlight color and background. Changes show right away.',
+  { id: 'look', title: 'Make it yours', lead: 'Pick a highlight color and a background. Changes show right away.',
+    enter() { document.body.classList.add('setup-look'); },
     render() {
-      const p = LOS.prefs;
-      content.innerHTML = `<div class="swatches">${Object.keys(LOS.ACCENTS).map(k => `<button class="sw${p.accent === k ? ' sel' : ''}" data-f data-a="${k}" style="background:${LOS.ACCENTS[k][0]}" aria-label="${k}"></button>`).join('')}</div><div class="opt${p.pattern ? ' sel' : ''}" data-f id="pat"><span class="mark">${p.pattern ? icon('check') : ''}</span><span>Background lines<small>The contour pattern behind the home screen</small></span></div>`;
+      const p = LOS.prefs, pro = LOS.pro;
+      const lock = x => x.pro && !pro ? '<span class="lock">PRO</span>' : '';
+      const wall = x => `<button class="wl${p.wall === x.id ? ' sel' : ''}" data-f data-w="${x.id}" style="background-image:url('walls/thumbs/${x.live ? x.live : x.id}.webp')">${lock(x)}<b>${esc(x.name)}</b></button>`;
+      const th = ([k, [name, cols]]) => { const c = cols.split(' '); const locked = k !== 'midnight' && !pro;
+        return `<button class="th${(p.theme || 'midnight') === k ? ' sel' : ''}" data-f data-t="${k}" style="background:${c[2]}"><i style="background:linear-gradient(135deg,${c[5]},${c[0]})"></i>${esc(name)}${locked ? '<span class="lock">PRO</span>' : ''}</button>`; };
+      content.classList.add('scroll');
+      content.innerHTML = `<div class="sec">Highlight color</div><div class="swatches">${Object.keys(LOS.ACCENTS).map(k => `<button class="sw${p.accent === k ? ' sel' : ''}" data-f data-a="${k}" style="background:${LOS.ACCENTS[k][0]}" aria-label="${k}"></button>`).join('')}</div>`
+        + `<div class="sec">Background</div><div class="walls">${LOS.WALLS.map(wall).join('')}</div>`
+        + `<div class="sec">Live backgrounds${pro ? '' : ' · LaunchOS Pro'}</div><div class="walls">${LOS.LIVE.map(wall).join('')}</div>`
+        + `<div class="sec">Theme${pro ? '' : ' · LaunchOS Pro'}</div><div class="themes">${Object.entries(LOS.THEMES).map(th).join('')}</div>`;
+      const proNote = () => toast('Part of LaunchOS Pro. See Settings → LaunchOS Pro', 3200);
       content.querySelectorAll('.sw').forEach(b => b.onclick = () => { LOS.save({ accent: b.dataset.a }); content.querySelectorAll('.sw').forEach(x => x.classList.toggle('sel', x === b)); });
-      $('#pat').onclick = () => { LOS.save({ pattern: !LOS.prefs.pattern }); const on = LOS.prefs.pattern; $('#pat').classList.toggle('sel', on); $('#pat .mark').innerHTML = on ? icon('check') : ''; };
-    } },
-  { id: 'apps', title: 'Which apps do you want?', lead: 'Pick the apps to show on Home. You can change this any time by running Setup again.',
-    render() {
-      const sel = new Set(LOS.prefs.appsPicked ? LOS.prefs.apps : APPS.map(a => a[0]));
-      content.innerHTML = `<div class="cols" style="gap:0 16px">${APPS.map(([k, n, d]) => `<div class="chk${sel.has(k) ? ' sel' : ''}" data-f data-k="${k}"><span class="mark">${sel.has(k) ? icon('check') : ''}</span><span>${esc(n)}<small>${esc(d)}</small></span></div>`).join('')}</div>`;
-      content.querySelectorAll('.chk').forEach(c => c.onclick = () => {
-        const s = new Set(LOS.prefs.appsPicked ? LOS.prefs.apps : APPS.map(a => a[0])); s.has(c.dataset.k) ? s.delete(c.dataset.k) : s.add(c.dataset.k);
-        LOS.save({ apps: [...s], appsPicked: true }); const on = s.has(c.dataset.k); c.classList.toggle('sel', on); c.querySelector('.mark').innerHTML = on ? icon('check') : '';
+      content.querySelectorAll('.wl').forEach(b => b.onclick = () => {
+        const x = LOS.WALLS.concat(LOS.LIVE).find(w => w.id === b.dataset.w);
+        if (x.pro && !LOS.pro) { proNote(); return; }
+        LOS.save({ wall: x.id, pattern: x.id !== 'plain' });
+        content.querySelectorAll('.wl').forEach(y => y.classList.toggle('sel', y === b));
       });
-    } },
+      content.querySelectorAll('.th').forEach(b => b.onclick = () => {
+        if (b.dataset.t !== 'midnight' && !LOS.pro) { proNote(); return; }
+        LOS.save({ theme: b.dataset.t });
+        content.querySelectorAll('.th').forEach(y => y.classList.toggle('sel', y === b));
+      });
+    },
+    leave() { document.body.classList.remove('setup-look'); content.classList.remove('scroll'); } },
+  { id: 'apps', title: 'Which apps do you want?', lead: 'Pick your apps. The ones you don’t have yet download from Flathub after Setup, and show up on Home.',
+    async enter() { const r = await call('apps_info'); apps = r && Array.isArray(r.apps) ? r.apps : []; },
+    render() {
+      const sel = picked();
+      const tag = a => a.installed ? 'On this PC' : a.flatpak ? 'Download' : '';
+      content.innerHTML = `<div class="cols" id="apps">${apps.map(a => `<div class="chk${sel.has(a.key) ? ' sel' : ''}" data-f data-k="${a.key}"><span class="mark">${sel.has(a.key) ? icon('check') : ''}</span>${appPic(a.icon, a.key === 'winprog' ? 'wine' : a.key === 'steam' ? 'steam' : 'store')}<span>${esc(a.name)}<small>${esc(a.what)}</small></span><span class="tag${a.installed ? '' : ' dl'}">${tag(a)}</span></div>`).join('')}</div>`;
+      content.querySelectorAll('.chk').forEach(c => c.onclick = () => {
+        const s = picked(); s.has(c.dataset.k) ? s.delete(c.dataset.k) : s.add(c.dataset.k);
+        // unticked on purpose: kept off Home even while it's installed
+        const h = new Set(Array.isArray(LOS.prefs.appsHidden) ? LOS.prefs.appsHidden : []);
+        s.has(c.dataset.k) ? h.delete(c.dataset.k) : h.add(c.dataset.k);
+        LOS.save({ apps: [...s], appsPicked: true, appsHidden: [...h] }); const on = s.has(c.dataset.k); c.classList.toggle('sel', on); c.querySelector('.mark').innerHTML = on ? icon('check') : '';
+      });
+    },
+    leave(forward) { if (forward) startInstall(); } },
   { id: 'controls', title: 'You’re all set', lead: 'Here’s how to get around. Run Setup again any time from the home screen.',
     render() {
       const k = (c, t) => `<span class="key"><u style="background:${c}">${t}</u></span>`;
-      content.innerHTML = `<div class="ctl"><span>${k('#3ddc6b', 'A')} ${k('#cfe6ff', 'Enter')}</span><span>Select</span><span>${k('#e0443e', 'B')} ${k('#cfe6ff', 'Esc')}</span><span>Go back</span><span>${k('#cfe6ff', '≡')} ${k('#cfe6ff', 'M')}</span><span>Open the side menu: devices, settings, power</span><span>${k('#cfe6ff', 'D-pad')} ${k('#cfe6ff', 'Arrows')}</span><span>Move around</span><span>${k('#cfe6ff', 'Ctrl+W')}</span><span>Close the browser</span></div>`;
-    } },
+      content.innerHTML = `<div id="inst"></div><div class="ctl"><span>${k('#3ddc6b', 'A')} ${k('#cfe6ff', 'Enter')}</span><span>Select</span><span>${k('#e0443e', 'B')} ${k('#cfe6ff', 'Esc')}</span><span>Go back</span><span>${k('#cfe6ff', '≡')} ${k('#cfe6ff', 'M')}</span><span>Open the side menu: devices, settings, power</span><span>${k('#cfe6ff', 'D-pad')} ${k('#cfe6ff', 'Arrows')}</span><span>Move around</span><span>${k('#cfe6ff', 'Ctrl+W')}</span><span>Close the browser</span></div>`;
+      watchInstall();
+    },
+    leave() { clearTimeout(instTimer); } },
 ];
+
+/* ---------- apps: install the ones you picked ---------- */
+/* the apps on Home: the ones you picked, plus installed ones you haven't unticked (same as Home shows) */
+const picked = () => {
+  const hidden = Array.isArray(LOS.prefs.appsHidden) ? LOS.prefs.appsHidden : [];
+  return new Set([...(LOS.prefs.appsPicked ? LOS.prefs.apps : DEFAULT_APPS),
+    ...apps.filter(a => a.flatpak && a.installed && !hidden.includes(a.key)).map(a => a.key)]);
+};
+let instMsg = '', instTimer = null, instWait = null;
+function startInstall() {
+  const want = apps.filter(a => a.flatpak && !a.installed && picked().has(a.key)).map(a => a.key);
+  if (!want.length) { instMsg = ''; instWait = null; return; }
+  // (the last step waits for this: the answer comes once the downloads have really started)
+  instWait = call('get_app', want).then(r => {
+    instMsg = r && r.ok ? '' : (r && r.error) || 'Couldn’t start the downloads. Get your apps from Home later.';
+    return !!(r && r.ok && !r.nothing);
+  });
+}
+/* On the last step: how the downloads are going (they keep going after Setup). */
+async function watchInstall() {
+  clearTimeout(instTimer);
+  const el = $('#inst'); if (!el) return;
+  if (!instWait) { el.innerHTML = ''; return; }   // nothing to download
+  if (!el.innerHTML) el.innerHTML = `<div class="inst">${pic('store')}<span>Starting your downloads…</span></div>`;
+  const started = await instWait;
+  if (!$('#inst')) return;
+  if (!started && !instMsg) { el.innerHTML = ''; return; }   // everything was already here
+  if (instMsg) { el.innerHTML = `<div class="inst">${pic('store')}<span>${esc(instMsg)}</span></div>`; return; }
+  const j = await call('store_job');
+  if (!$('#inst')) return;
+  if (j && j.step && !j.done) {
+    el.innerHTML = `<div class="inst">${pic('store')}<span>${esc(j.step)}</span><span class="meterbar"><i style="width:${Math.max(2, j.percent || 0)}%"></i></span><span>${j.percent || 0}%</span></div><p class="note">Your apps keep downloading after Setup. Their tiles on Home show how far along they are.</p>`;
+    instTimer = setTimeout(watchInstall, 1200);
+  } else if (j && j.done && j.op === 'install' && j.app && j.error) {
+    el.innerHTML = `<div class="inst">${pic('store')}<span>${esc(j.error)} You can get them from Home later.</span></div>`;
+  } else if (j && j.done && j.op === 'install' && j.app && !j.error) {
+    el.innerHTML = `<div class="inst">${pic('store')}<span>Your apps are installed.</span></div>`;
+  } else el.innerHTML = '';
+}
 
 /* ---------- time zones ---------- */
 function listZones() {
   const q = zq.trim().toLowerCase().replace(/\s+/g, '_');
   let list = q ? zones.filter(z => z.toLowerCase().includes(q)) : COMMON_ZONES.filter(z => zones.includes(z) || !zones.length);
   if (zsel && !q && !list.includes(zsel)) list = [zsel, ...list];
-  list = list.slice(0, 7);
+  list = list.slice(0, 6);   // (as many as fit: type to find others)
   $('#zl').innerHTML = list.length ? list.map(z => `<div class="zrow${z === zsel ? ' sel' : ''}" data-f data-z="${z}"><span>${esc(prettyZone(z))}</span><span class="when">${tzNow(z)}</span></div>`).join('') : '<p class="note">No matches. Try a big city near you.</p>';
   $('#zl').querySelectorAll('.zrow').forEach(r => r.onclick = () => pickZone(r.dataset.z));
   $('#znow').textContent = zsel ? 'Selected: ' + prettyZone(zsel) + ', ' + tzNow(zsel) : 'No time zone picked yet';
@@ -227,7 +328,7 @@ function navButtons() {
 let showSeq = 0, loading = false;
 async function show(i) {
   const tok = ++showSeq;
-  const old = STEPS[cur]; if (old && old.leave && i !== cur) old.leave();
+  const old = STEPS[cur]; if (old && old.leave && i !== cur) old.leave(i > cur);   // (true when going forward)
   cur = i; const s = STEPS[cur];
   loading = true;
   $('#dots').innerHTML = only >= 0 ? '' : STEPS.map((x, k) => `<i class="${k === cur ? 'on' : k < cur ? 'done' : ''}"></i>`).join('');
@@ -250,12 +351,12 @@ function collect() { F = [...document.querySelectorAll('#content [data-f], #nav 
 function paint() { F.forEach((e, k) => e.classList.toggle('f', k === fi)); const e = F[fi]; if (!e) return; if (e.tagName === 'INPUT') e.focus(); else if (document.activeElement && document.activeElement.tagName === 'INPUT') document.activeElement.blur(); e.scrollIntoView && e.scrollIntoView({ block: 'nearest' }); }
 function focusAt(key) { collect(); const k = F.findIndex(e => e.dataset.z === key || e.dataset.k === key); if (k >= 0) { fi = k; paint(); } }
 function next() { if (only >= 0) return finish(); if (cur < STEPS.length - 1) show(cur + 1); }
-function finish(early) { const s = STEPS[cur]; if (s.leave) s.leave(); if (only < 0 && !early) LOS.save({ setupDone: true }); location.href = 'index.html'; }
+function finish(early, forward) { const s = STEPS[cur]; if (s.leave) s.leave(!!forward); if (only < 0 && !early) LOS.save({ setupDone: true }); location.href = 'index.html'; }
 function navAct(k) {
   if (k === 'next') next();
   else if (k === 'back') { if (cur > 0) show(cur - 1); }
   else if (k === 'skip') location.href = 'index.html';
-  else if (k === 'finish' || k === 'done') finish();
+  else if (k === 'finish' || k === 'done') finish(false, true);
 }
 function activate() {
   const e = F[fi]; if (!e) return;
@@ -266,7 +367,8 @@ function activate() {
 LOS.onNav((a, ev) => {
   const e = F[fi];
   if (STEPS[cur].id === 'controller' && ev === null) return true;   // controller is being tested: hold Menu to continue
-  if (a === 'menu' || a === 'guide') { finish(true); return true; }   // leave setup (Menu, Super key or Xbox button); what you set so far is kept
+  if (a === 'menu' && ev && ev.key === 'Tab') a = ev.shiftKey ? 'up' : 'down';   // (Tab moves between choices here, it doesn't leave Setup)
+  else if (a === 'menu' || a === 'guide') { finish(true); return true; }   // leave setup (Menu, Super key or Xbox button); what you set so far is kept
   if (loading) return true;   // the step is still being drawn
   if (a === 'opts') return true;
   if (a === 'ok') { activate(); return true; }
@@ -286,7 +388,11 @@ LOS.onNav((a, ev) => {
 function groupsOf() {
   const gs = [];
   F.forEach(el => { const p = el.parentElement; let gg = gs.find(x => x.p === p); if (!gg) { gg = { p, els: [] }; gs.push(gg); } gg.els.push(el); });
-  gs.forEach(gg => { gg.h = gg.p.classList.contains('swatches') || gg.p.id === 'nav'; gg.grid = getComputedStyle(gg.p).display === 'grid'; });
+  gs.forEach(gg => {
+    gg.h = gg.p.classList.contains('swatches') || gg.p.id === 'nav';
+    gg.grid = getComputedStyle(gg.p).display === 'grid';
+    gg.cols = gg.grid ? getComputedStyle(gg.p).gridTemplateColumns.split(' ').filter(Boolean).length || 2 : 1;
+  });
   return gs;
 }
 function enter(gg, fromAbove) {
@@ -305,8 +411,10 @@ function move(a) {
   }
   const d = a === 'up' ? -1 : 1;
   if (!gg.h) {
-    const step = gg.grid ? 2 : 1, nk = k + d * step;
+    const step = gg.grid ? gg.cols : 1, nk = k + d * step;
     if (nk >= 0 && nk < gg.els.length) { fi = F.indexOf(gg.els[nk]); paint(); return; }
+    // (a grid's last row may be short: from above it, go down to its last item)
+    if (gg.grid && d > 0 && Math.floor(k / step) < Math.floor((gg.els.length - 1) / step)) { fi = F.indexOf(gg.els[gg.els.length - 1]); paint(); return; }
   }
   const ng = gs[gi + d];
   if (ng) enter(ng, d > 0);

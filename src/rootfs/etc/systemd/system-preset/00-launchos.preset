@@ -1,0 +1,3 @@
+# LaunchOS: the image already has the services it needs switched on. On a PC's first start
+# systemd applies presets; this keeps it from switching on anything else.
+disable *

@@ -86,20 +86,31 @@
     const m = {
       installed: { 'org.videolan.VLC': { name: 'VLC', version: '3.0.21' } }, job: {}, upd: {}, admin: '',
       info: () => ({ apps: m.empty ? [] : apps, installed: m.installed, job: m.job, free: 20e9, catalog_age_h: 2 }),
-      home: () => Object.keys(m.installed).map(id => ({ id, name: m.installed[id].name, icon: '' })),
+      home: () => Object.keys(m.installed).filter(id => !MOCK_APPS.some(a => a[3] === id)).map(id => ({ id, name: m.installed[id].name, icon: '' })),   // (Setup's apps have their own tiles)
       act: a => {
         if (m.job.step && !m.job.done) return { ok: false, error: 'Wait for the app to finish first.' };
-        const j = m.job = { op: a.op, app: a.app, name: a.name || a.app, step: a.op === 'remove' ? 'Removing ' + a.name : 'Downloading ' + a.name, percent: 0, done: false, error: '' };
+        const list = a.apps || [a.app];
+        const j = m.job = { op: a.op, app: list.join(','), name: a.name || a.app, step: a.op === 'remove' ? 'Removing ' + a.name : 'Downloading ' + a.name, percent: 0, done: false, error: '' };
         let t = 0;
         const step = () => { t++; j.percent = Math.min(100, t * 25); if (t < 4) { setTimeout(step, 250); return; }
           j.done = true; j.step = a.op === 'remove' ? 'Removed' : 'Installed';
-          if (a.op === 'install') m.installed[a.app] = { name: a.name, version: '1.0' }; else if (a.op === 'remove') delete m.installed[a.app]; else m.empty = false; };
+          if (a.op === 'install') list.forEach(id => { m.installed[id] = { name: a.name, version: '1.0' }; }); else if (a.op === 'remove') delete m.installed[a.app]; else m.empty = false; };
         setTimeout(step, 250);
         return { ok: true };
       },
     };
     return m;
   })();
+  const MOCK_APPS = [['steam', 'Steam', 'PC games'], ['discord', 'Discord', 'Chat', 'com.discordapp.Discord'], ['spotify', 'Spotify', 'Music', 'com.spotify.Client'],
+    ['freetube', 'FreeTube', 'YouTube without ads', 'io.freetubeapp.FreeTube'], ['roblox', 'Roblox', 'Through Sober', 'org.vinegarhq.Sober'],
+    ['minecraft', 'Minecraft', 'Prism Launcher', 'org.prismlauncher.PrismLauncher'], ['heroic', 'Heroic', 'Epic and GOG', 'com.heroicgameslauncher.hgl'],
+    ['obs', 'OBS Studio', 'Record', 'com.obsproject.Studio'], ['vlc', 'VLC', 'Video', 'org.videolan.VLC'], ['winprog', 'Windows programs', 'Wine']];
+  // (preview: signed in unless the page is the sign-in screen or ?signedout is in the address)
+  const mockSession = { signed: !/login\.html$/.test(location.pathname) && !/signedout/.test(location.search), ask: true };
+  // (preview: LaunchOS Pro is on with ?pro in the address, on sale with ?onsale)
+  const mockPro = { active: /[?&]pro\b/.test(location.search), onSale: /onsale|[?&]pro\b/.test(location.search), job: {}, gaming: { perf: true, fps: 'off' } };
+  try { const v = sessionStorage.getItem('launchos.mock'); if (v) { const o = JSON.parse(v); mockStore.admin = o.admin || ''; mockSession.ask = o.ask !== false; if (o.signed) mockSession.signed = true; } } catch (e) { /* no storage */ }
+  addEventListener('pagehide', () => { try { sessionStorage.setItem('launchos.mock', JSON.stringify({ admin: mockStore.admin, ask: mockSession.ask, signed: mockSession.signed })); } catch (e) { /* no storage */ } });
   const MOCK = {
     info: () => ({ version: '0.5', build: '2026-10-05', kernel: 'preview', cpu: 'Preview CPU', cores: 2, mem_total_mb: 2048, mem_free_mb: 1200, uptime_min: 3, resolution: screen.width + ' x ' + screen.height }),
     network: () => ({ connected: true, gateway: '10.0.2.2', dns: ['10.0.2.3'], links: [{ name: 'enp0s3', up: true, mac: '08:00:27:00:00:01', ipv4: ['10.0.2.15'] }] }),
@@ -122,10 +133,24 @@
     open_browser: url => { window.open(url && url.startsWith('http') ? url : 'start.html', '_blank'); return { ok: true }; },
     open_app: a => { const was = !!mockApps[a.id]; mockApps[a.id] = mockApps[a.id] || { id: a.id, name: a.name, t0: Date.now(), title: a.name, uri: a.url || 'start.html', shown: false }; return { ok: true, resumed: was }; },
     end_app: id => { const ok = !!mockApps[id]; delete mockApps[id]; return { ok }; },
-    apps_info: () => ({ steam: { installed: true }, roblox: { installed: false }, freetube: { installed: false }, wine: { installed: true }, gpu: 'software' }),
+    apps_info: () => {
+      const apps = MOCK_APPS.map(([key, name, what, flatpak]) => ({ key, name, what, flatpak, icon: '', installed: key === 'steam' || key === 'winprog' || !!(flatpak && mockStore.installed[flatpak]) }));
+      const by = k => apps.find(a => a.key === k);
+      return { apps, job: mockStore.job, gpu: 'software', steam: { installed: true }, wine: { installed: true }, roblox: { installed: by('roblox').installed }, freetube: { installed: by('freetube').installed } };
+    },
+    get_app: keys => {
+      const ids = (Array.isArray(keys) ? keys : [keys]).map(k => (MOCK_APPS.find(a => a[0] === k) || [])[3]).filter(id => id && !mockStore.installed[id]);
+      if (!ids.length) return { ok: true, nothing: true };
+      return mockStore.act({ op: 'install', apps: ids, name: ids.length + ' apps' });
+    },
+    session_state: () => ({ signed_in: mockSession.signed, password: !!mockStore.admin && mockSession.ask, password_set: !!mockStore.admin, ask: mockSession.ask, wait_s: 0, running: Object.keys(mockApps).length }),
+    sign_in: a => { if (mockStore.admin && mockSession.ask && (a || {}).password !== mockStore.admin) return { ok: false, error: 'That password isn’t right.' }; mockSession.signed = true; return { ok: true }; },
+    lock: () => { mockSession.signed = false; setTimeout(() => { location.href = 'login.html'; }, 10); return { ok: true }; },
+    sign_out: () => { mockSession.signed = false; Object.keys(mockApps).forEach(k => delete mockApps[k]); setTimeout(() => { location.href = 'login.html'; }, 10); return { ok: true }; },
+    signin_ask: on => { mockSession.ask = !!on; return { ok: true, ask: !!on }; },
     storage: () => ({ installed: false, saving: false, total: 2e9, free: 1.5e9, boot: 'usb', can_usb_saving: true, job: {} }),
-    job_status: () => ({ step: 'Done', percent: 100, done: true, error: '' }),
-    get_app: () => ({ ok: true }), usb_saving: () => ({ ok: true }), mount_drives: () => ({ ok: true }), install_system: () => ({ ok: true }),
+    job_status: n => n === 'pro' ? mockPro.job : { step: 'Done', percent: 100, done: true, error: '' },
+    usb_saving: () => ({ ok: true }), mount_drives: () => ({ ok: true }), install_system: () => ({ ok: true }),
     win_programs: () => [{ name: 'setup', path: '/home/player/Downloads/setup.exe', where: 'Downloads', size: 2400000, mtime: 1 }],
     install_disks: () => [{ path: '/dev/sdb', size: 64e9, model: 'Samsung SSD', usb: false, parts: 2 }],
     wifi_status: () => ({ available: true, state: 'disconnected', scanning: false, networks: [{ name: 'Home WiFi', type: 'psk', connected: false, known: false, bars: 4 }, { name: 'Cafe', type: 'open', connected: false, known: false, bars: 2 }] }),
@@ -142,19 +167,38 @@
     update_info: () => ({ version: '0.8', build: '2026-10-08', check: mockStore.upd, system: {}, installed: false, saving: true }),
     update_action: w => { mockStore.upd = w === 'check' ? { step: 'LaunchOS 0.9 is available', percent: 100, done: true, available: true, latest: '0.9', notes: 'Pretend notes for 0.9.' } : { step: w === 'apply' ? 'Updated to LaunchOS 0.9. Restart to finish.' : 'Up to date', percent: 100, done: true, restart: w === 'apply' }; return { ok: true }; },
     admin_set: () => ({ set: !!mockStore.admin }), admin_password: a => { if (mockStore.admin && a.old !== mockStore.admin) return { done: true, error: 'The current password isn’t right.' }; mockStore.admin = a.new; return { done: true, step: 'Saved', error: '' }; },
+    pro_state: () => ({ active: mockPro.active, status: mockPro.active ? 'active' : '', installed: mockPro.active, key_hint: mockPro.active ? '38b1…4d51' : '', since: mockPro.active ? '2026-10-08' : '',
+      version: mockPro.active ? '1.0' : '', on_sale: mockPro.onSale, buy: mockPro.onSale ? 'https://launchos.example/pro' : '', job: mockPro.job, fps_ok: true, saving: true }),
+    pro_action: a => {
+      if (a.op === 'activate' && !/^[A-Za-z0-9-]{8,64}$/.test(a.key || '')) return { ok: false, error: 'That doesn’t look like a Pro key. It’s in the email from your purchase.' };
+      const good = a.op !== 'activate' || a.key === 'TEST-KEY-1234';
+      mockPro.job = { step: 'Checking your key', percent: 30, done: false, error: '' };
+      setTimeout(() => { mockPro.job = good ? { step: a.op === 'remove' ? 'Removed LaunchOS Pro from this PC' : 'LaunchOS Pro is on', percent: 100, done: true, error: '' } : { step: '', percent: 100, done: true, error: 'That key isn’t right. Check it against the email from your purchase.' };
+        if (good) mockPro.active = a.op !== 'remove'; }, 900);
+      return { ok: true };
+    },
+    pro_qr: () => ({ svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29"><path d="M2 2h7v7H2zM20 2h7v7h-7zM2 20h7v7H2zM12 12h5v5h-5z"/></svg>', url: 'https://launchos.example/pro' }),
+    gaming_get: () => Object.assign({}, mockPro.gaming), gaming_set: a => Object.assign(mockPro.gaming, a || {}),
     tasks: () => Object.values(mockApps).map(a => ({ id: a.id, name: a.name, running_s: Math.round((Date.now() - a.t0) / 1000), title: a.title, uri: a.uri, shown: false })),
   };
 
+  /* Signed out (locked) while on a page other than the sign-in screen: go there. */
+  const guard = r => { if (r && r.error === 'signed_out' && !/login\.html$/.test(location.pathname)) location.href = 'login.html'; return r; };
   function call(action, arg) {
     if (!native) {
       const fn = MOCK[action];
-      return new Promise(r => setTimeout(() => r(fn ? fn(arg) : { error: 'unknown' }), action === 'internet_test' ? 600 : 30));
+      const quiet = ['session_state', 'sign_in', 'power', 'info', 'network', 'log_error', 'inputs', 'timezone_get'];
+      return new Promise(r => setTimeout(() => r(guard(!mockSession.signed && !quiet.includes(action) ? { error: 'signed_out' } : fn ? fn(arg) : { error: 'unknown' })), action === 'internet_test' ? 600 : 30));
     }
+    return raw(action, arg).then(guard);
+  }
+  function raw(action, arg) {
     return new Promise(resolve => {
       const id = PAGE + '-' + (++seq);   // unique to this page, so a late reply can't answer another page's request
       pending[id] = resolve;
       const wait = { wifi_connect: 50000, fs_eject: 200000, fs_mount: 50000, fs_format: 20000, fs_list: 30000,   // drives can be slow
-        store_info: 120000, store_home: 120000, store_action: 30000, update_action: 30000, admin_password: 30000 }[action] || 15000;   // so is reading Flathub's list
+        store_info: 120000, store_home: 120000, store_action: 30000, update_action: 30000, admin_password: 30000,   // so is reading Flathub's list
+        get_app: 30000, sign_in: 30000 }[action] || 15000;
       setTimeout(() => { if (pending[id]) { delete pending[id]; resolve({ error: 'timeout' }); } }, wait);
       window.webkit.messageHandlers.launchos.postMessage(JSON.stringify({ id, action, arg }));
     });
@@ -170,10 +214,14 @@
   addEventListener('unhandledrejection', e => report(e.reason && (e.reason.stack || e.reason.message) || e.reason, 'promise'));
 
   /* ---------- saved preferences ---------- */
-  const DEFAULTS = { name: 'Player 1', avatar: '#e0793a', accent: 'green', size: 'fill', pattern: true, timezone: '', setupDone: false, apps: [], order: [] };
+  const DEFAULTS = { name: 'Player 1', avatar: '#e0793a', accent: 'green', size: 'fill', pattern: true, timezone: '', setupDone: false, apps: [], order: [],
+    wall: '', theme: 'midnight', proOn: false };
   function load() {
-    try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('launchos.prefs') || '{}')); }
-    catch (e) { return Object.assign({}, DEFAULTS); }
+    let p;
+    try { p = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('launchos.prefs') || '{}')); }
+    catch (e) { p = Object.assign({}, DEFAULTS); }
+    if (!p.wall) p.wall = p.pattern === false ? 'plain' : 'liftoff';   // (before 1.0 there was only the line pattern, on or off)
+    return p;
   }
   let prefs = load();
   function save(patch) {
@@ -195,12 +243,87 @@
   const SIZES = { fill: 1, tv: 0.93, compact: 0.85 };
   const SIZE_NAMES = { fill: 'Fill screen', tv: 'TV safe area', compact: 'Compact' };
 
+  /* Backgrounds: pictures for everyone, live (moving) ones with LaunchOS Pro. */
+  const WALLS = [['liftoff', 'Liftoff'], ['nebula', 'Nebula'], ['aurora', 'Aurora'], ['orbit', 'Orbit'], ['dunes', 'Dunes'], ['waves', 'Waves'],
+    ['grid', 'Retro'], ['contour', 'Contour lines'], ['plain', 'Plain']].map(([id, name]) => ({ id, name }));
+  const LIVE = [['warp', 'Warp speed', 'nebula'], ['drift', 'Nebula drift', 'nebula'], ['sky', 'Living aurora', 'aurora'], ['launch', 'Launch day', 'liftoff']]
+    .map(([id, name, still]) => ({ id: 'live:' + id, live: id, name, still, pro: true }));
+  /* Color themes: Midnight for everyone, the rest with LaunchOS Pro. */
+  const THEMES = {
+    midnight: ['Midnight', '#0b1726 #0f1b2a #122235 #1a2b40 #22344a #1d3550 #11233a #16273b #1f3550 #2a4260'],
+    carbon: ['Carbon', '#0d0e10 #141518 #1a1c20 #23262b #2c3036 #25282e #17191c #1c1e22 #262a30 #353a42'],
+    ocean: ['Deep sea', '#05181c #0a2025 #0d2a30 #13363d #1b444c #134049 #0b2a30 #10313a #164049 #22535c'],
+    royal: ['Royal', '#110b22 #170f2c #1d1637 #261d46 #312857 #2c2152 #1a1335 #21183f #2b2150 #3b3170'],
+    ember: ['Ember', '#170d0b #1f1210 #281814 #33201a #422a22 #3a241c #241612 #2c1b16 #3a2219 #52352a'],
+    oled: ['Pure black', '#000000 #0a0a0b #111214 #1a1b1e #26282c #1b1c20 #0f1012 #141518 #1d1f23 #303238'],
+  };
+  const THEME_VARS = ['--bg', '--panel', '--panel-2', '--chip', '--line', '--tile1', '--tile2', '--tb', '--glyph', '--line2'];
+  const proOK = () => !!prefs.proOn;
+  let liveStop = null, liveId = '';
+  function applyWall() {
+    const st = $('#stage'); if (!st || !document.body) return;
+    let w = $('#wall');
+    if (!w) { w = document.createElement('div'); w.id = 'wall'; w.setAttribute('aria-hidden', 'true'); st.prepend(w); }
+    let id = prefs.wall;
+    const live = LIVE.find(x => x.id === id);
+    if (live && !proOK()) id = live.still;
+    if (!live && !WALLS.some(x => x.id === id)) id = 'liftoff';
+    const still = live && proOK() ? live.still : id;
+    document.body.classList.toggle('wall-contour', still === 'contour');
+    document.body.classList.toggle('wall-plain', still === 'plain' || still === 'contour');
+    w.style.backgroundImage = still === 'contour' || still === 'plain' ? 'none' : `url("walls/${still}.webp")`;
+    // a live background draws on a canvas over its still picture (which shows if it can't run).
+    // Only on pages that ask for it (Home, sign-in, Setup): behind Files, the Store or a video it
+    // would only cost processor time. Never when reduced motion is asked for.
+    const moving = document.body.hasAttribute('data-live') &&
+      !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+    const want = live && proOK() && moving ? live.live : '';
+    if (want === liveId) return;
+    if (liveStop) { try { liveStop(); } catch (e) { /* already gone */ } liveStop = null; }
+    w.querySelectorAll('canvas').forEach(c => c.remove());
+    liveId = want;
+    if (!want) return;
+    const start = () => {
+      const fn = window.LOSLive && window.LOSLive[want];
+      if (!fn || liveId !== want) return;
+      const c = document.createElement('canvas'); w.append(c);
+      try { liveStop = fn(c, { hardware: !!window.__losHW }); } catch (e) { c.remove(); report(e.message, 'live ' + want); }
+    };
+    if (window.LOSLive && window.LOSLive[want]) { start(); return; }
+    // the live backgrounds come with LaunchOS Pro: shared helpers first, then the one wanted
+    const base = native ? 'file:///opt/launchos-pro/live/' : '../pro/live/';
+    const files = ['common'].concat(want === 'sky' ? ['aurora-src'] : [], [want]);
+    const next = () => {
+      const f = files.shift();
+      if (!f) { start(); return; }
+      if (document.querySelector(`script[data-live="${f}"]`)) { next(); return; }
+      const sc = document.createElement('script');
+      sc.src = base + f + '.js'; sc.dataset.live = f;
+      sc.onload = next;
+      document.head.append(sc);
+    };
+    next();
+  }
   function applyLook() {
     const a = ACCENTS[prefs.accent] || ACCENTS.green;
     const r = document.documentElement.style;
     r.setProperty('--accent', a[0]); r.setProperty('--accent-glow', a[1]); r.setProperty('--accent-ink', a[2]);
+    const th = (prefs.theme !== 'midnight' && proOK() && THEMES[prefs.theme]) || THEMES.midnight;
+    th[1].split(' ').forEach((c, i) => r.setProperty(THEME_VARS[i], c));
     document.body && document.body.classList.toggle('nopattern', !prefs.pattern);
+    applyWall();
     fit();
+  }
+  /* Whether LaunchOS Pro is on (remembered, so the look is right from the first frame). */
+  function checkPro() {
+    // (pages redraw what depends on Pro, like the badge, when it changes: the 'los:pro' event)
+    const changed = on => { save({ proOn: on }); document.dispatchEvent(new CustomEvent('los:pro', { detail: on })); };
+    if (!native) { if (!!prefs.proOn !== mockPro.active) changed(mockPro.active); return Promise.resolve(); }
+    return raw('pro_state').then(s => {
+      if (!s || s.error) return;
+      const on = !!s.active;
+      if (on !== !!prefs.proOn) changed(on);
+    });
   }
 
   /* ---------- fit the 1280x720 stage to any screen ---------- */
@@ -222,6 +345,122 @@
     tm = setTimeout(() => { t.classList.remove('on'); tm = setTimeout(() => { t.style.visibility = 'hidden'; }, 320); }, ms || 2400);
   }
 
+  /* ---------- on-screen keyboard: type with a controller ----------
+     Opens when A is pressed on a text box with a controller (keyboard and mouse users never see
+     it). D-pad moves, A types, X deletes, Y adds a space, B or Hide closes, Menu or Done is Enter. */
+  const textBox = el => !!el && el.tagName === 'INPUT' && /^(text|password|search|url|email|)$/.test(el.type || 'text') && !el.disabled && !el.readOnly;
+  const OSK_ROWS = {
+    abc: [['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'bksp'], ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '-'],
+      ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', '@', '.'], ['shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm', '_', '/', 'done'],
+      ['sym', 'left', 'space', 'right', 'hide']],
+    sym: [['!', '"', '#', '$', '%', '&', "'", '(', ')', '*', 'bksp'], ['+', ',', ';', ':', '<', '=', '>', '?', '[', ']', '\\'],
+      ['^', '`', '{', '|', '}', '~', '€', '£', '¥', '°', '.'], ['shift', '§', '¿', '¡', '«', '»', '…', '–', '_', '/', 'done'],
+      ['abc', 'left', 'space', 'right', 'hide']],
+  };
+  const OSK_NAMES = { bksp: '⌫', shift: '⇧', done: 'Done', sym: '#+=', abc: 'abc', left: '◀', right: '▶', space: 'Space', hide: 'Hide' };
+  const osk = {
+    open: false, el: null, input: null, layer: 'abc', shift: false, r: 1, c: 0, pw: false,
+    show(input, opts) {
+      if (!textBox(input)) return;
+      this.input = input; this.done = opts && opts.onDone; this.open = true; this.layer = 'abc'; this.shift = false; this.r = 1; this.c = 0;
+      // a password box (or one that was a password box before Show): typed text shows as dots
+      this.pw = input.type === 'password' || input.dataset.pw === '1';
+      if (this.pw) input.dataset.pw = '1';
+      const st = $('#stage') || document.body;
+      if (!this.el) { this.el = document.createElement('div'); this.el.id = 'osk'; }
+      this.el.classList.remove('top');
+      st.append(this.el);
+      this.el.onmousedown = ev => { ev.preventDefault(); const b = ev.target.closest('[data-r]'); if (b) { this.r = +b.dataset.r; this.c = +b.dataset.c; this.press(); } };
+      this.draw();
+      document.body.classList.add('oskon');
+      input.focus();
+      // never over the box being typed in: if it would cover it, the keyboard goes to the top
+      const a = input.getBoundingClientRect(), k = this.el.getBoundingClientRect();
+      if (a.bottom > k.top && a.top < k.bottom) this.el.classList.add('top');
+    },
+    hide() { if (!this.open) return; this.open = false; this.done = null; if (this.el) this.el.remove(); document.body.classList.remove('oskon'); },
+    rows() {
+      const R = OSK_ROWS[this.layer];
+      if (!this.pw) return R;   // password boxes get a Show / Hide text key next to Hide
+      const last = R[R.length - 1].slice(); last.splice(last.length - 1, 0, 'eye');
+      return R.slice(0, -1).concat([last]);
+    },
+    label(k) {
+      if (k === 'eye') return this.input && this.input.type === 'password' ? 'Show' : 'Hide text';
+      if (OSK_NAMES[k]) return OSK_NAMES[k];
+      return this.shift ? k.toUpperCase() : k;
+    },
+    val() {
+      const i = this.input; if (!i) return '';
+      return i.type === 'password' ? '•'.repeat(i.value.length) : i.value;
+    },
+    draw() {
+      const R = this.rows();
+      this.r = Math.min(this.r, R.length - 1); this.c = Math.min(this.c, R[this.r].length - 1);
+      const name = this.input && (this.input.getAttribute('aria-label') || this.input.placeholder) || 'Type';
+      this.el.innerHTML = `<div class="oskhead"><span>${esc(name)}</span><span class="oskval">${esc(this.val())}</span><span class="oskhelp"><u>X</u> Delete <u>Y</u> Space <u>B</u> Close <u>≡</u> Done</span></div>` +
+        R.map((row, r) => `<div class="oskrow">${row.map((k, c) => `<button class="oskk k-${k.length > 1 ? k : 'ch'}${k === 'shift' && this.shift ? ' on' : ''}${r === this.r && c === this.c ? ' f' : ''}" data-r="${r}" data-c="${c}">${esc(this.label(k))}</button>`).join('')}</div>`).join('');
+    },
+    edit(fn) {
+      const i = this.input; if (!i) return;
+      const a = i.selectionStart == null ? i.value.length : i.selectionStart, b = i.selectionEnd == null ? a : i.selectionEnd;
+      const r = fn(i.value, a, b);
+      if (!r) return;
+      const max = i.maxLength > 0 ? i.maxLength : 1e6;
+      i.value = r[0].slice(0, max); const pos = Math.min(r[1], i.value.length);
+      try { i.setSelectionRange(pos, pos); } catch (e) { /* some inputs have no cursor */ }
+      i.dispatchEvent(new Event('input', { bubbles: true }));
+      const v = this.el && this.el.querySelector('.oskval');
+      if (v) v.textContent = this.val();
+    },
+    type(t) { this.edit((v, a, b) => [v.slice(0, a) + t + v.slice(b), a + t.length]); if (this.shift) { this.shift = false; this.draw(); } },
+    press() {
+      const k = this.rows()[this.r][this.c];
+      if (k === 'bksp') this.edit((v, a, b) => a !== b ? [v.slice(0, a) + v.slice(b), a] : a > 0 ? [v.slice(0, a - 1) + v.slice(a), a - 1] : null);
+      else if (k === 'space') this.type(' ');
+      else if (k === 'shift') { this.shift = !this.shift; this.draw(); }
+      else if (k === 'sym' || k === 'abc') { this.layer = k === 'sym' ? 'sym' : 'abc'; this.draw(); }
+      else if (k === 'left' || k === 'right') this.edit((v, a) => [v, Math.max(0, Math.min(v.length, a + (k === 'left' ? -1 : 1)))]);
+      else if (k === 'hide') this.hide();
+      else if (k === 'eye') { if (this.input) this.input.type = this.input.type === 'password' ? 'text' : 'password'; this.draw(); }
+      else if (k === 'done') this.enter();
+      else this.type(this.label(k));
+    },
+    enter() {
+      const i = this.input, done = this.done; this.hide();
+      // the box went away (its panel was closed or replaced): nothing to finish
+      if (!i || !i.isConnected || !i.offsetParent) return;
+      if (done) done(i.value);
+      else i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    },
+    move(dr, dc) {
+      const R = this.rows();
+      if (dc) { this.c = (this.c + dc + R[this.r].length) % R[this.r].length; }
+      if (dr) {
+        const nr = this.r + dr; if (nr < 0 || nr >= R.length) return this.draw();
+        const cur = this.el.querySelector(`[data-r="${this.r}"][data-c="${this.c}"]`);
+        const x = cur ? cur.offsetLeft + cur.offsetWidth / 2 : 0;
+        let best = 0, bd = 1e9;
+        this.el.querySelectorAll(`[data-r="${nr}"]`).forEach(b => { const d = Math.abs(b.offsetLeft + b.offsetWidth / 2 - x); if (d < bd) { bd = d; best = +b.dataset.c; } });
+        this.r = nr; this.c = best;
+      }
+      this.draw();
+    },
+    nav(a) {
+      if (a === 'left') this.move(0, -1); else if (a === 'right') this.move(0, 1);
+      else if (a === 'up') this.move(-1, 0); else if (a === 'down') this.move(1, 0);
+      else if (a === 'ok') this.press();
+      else if (a === 'bksp') { const k = this.rows()[this.r][this.c]; this.edit((v, s0, s1) => s0 !== s1 ? [v.slice(0, s0) + v.slice(s1), s0] : s0 > 0 ? [v.slice(0, s0 - 1) + v.slice(s0), s0 - 1] : null); }
+      else if (a === 'space') this.type(' ');
+      else if (a === 'menu') this.enter();
+      else if (a === 'back' || a === 'guide') this.hide();
+      return true;
+    },
+    /* a real keyboard: it types on its own, so the on-screen one steps aside */
+    key(e) { if (e.key === 'Escape') { this.hide(); return true; } this.hide(); return false; },
+  };
+  window.addEventListener('blur', () => osk.hide());
+
   /* ---------- navigation input: keyboard + game controller ---------- */
   let handler = () => false;
   const hideCur = () => document.body.classList.add('nocur');
@@ -235,8 +474,10 @@
     document.body.classList.remove('nocur');
   }, { capture: true });   // capture: runs before any element's own mousemove handler
   const mouseRecent = () => performance.now() - lastMove < 300;
+  let lastPad = -Infinity;   // (no controller used yet: the on-screen keyboard doesn't pop up by itself)
   addEventListener('keydown', e => {
     hideCur();
+    if (osk.open && osk.key(e)) { e.preventDefault(); return; }
     const k = e.key, typing = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA');
     let a = null;
     if (k === 'ArrowLeft') a = 'left'; else if (k === 'ArrowRight') a = 'right';
@@ -254,6 +495,10 @@
   let guideHere = false;
   function dispatch(a, e) {
     if (panelOpen) { if (a === 'guide' || a === 'back') call('discord_panel', { open: false }); return true; }
+    if (osk.open) return osk.nav(a);
+    // A on a controller on a selected text box: type with the on-screen keyboard
+    const ae = document.activeElement;
+    if (a === 'ok' && e === null && textBox(ae) && ae.classList.contains('f')) { osk.show(ae); return true; }
     if (a === 'guide' && !guideHere) { location.href = 'index.html'; return true; }
     return handler(a, e);
   }
@@ -274,12 +519,13 @@
     const gp = navigator.getGamepads ? [...navigator.getGamepads()].find(x => x) : null;
     if (gp) {
       const B = i => gp.buttons[i] && gp.buttons[i].pressed, ax = gp.mapping === 'standard' ? (gp.axes || []) : [];   // sticks only on known layouts
-      const S = { up: B(12) || ax[1] < -.6, down: B(13) || ax[1] > .6, left: B(14) || ax[0] < -.6, right: B(15) || ax[0] > .6, ok: B(0), back: B(1), opts: B(2) || B(3), menu: B(9) || B(8), guide: B(16) };
+      const S = { up: B(12) || ax[1] < -.6, down: B(13) || ax[1] > .6, left: B(14) || ax[0] < -.6, right: B(15) || ax[0] > .6, ok: B(0), back: B(1),
+        opts: osk.open ? false : B(2) || B(3), bksp: osk.open && B(2), space: osk.open && B(3), menu: B(9) || B(8), guide: B(16) };
       const now = performance.now();
       if (rearm) { for (const k in S) prev[k] = S[k]; rearm = false; }
       for (const k in S) {
-        const dir = ['up', 'down', 'left', 'right'].includes(k);
-        if (S[k] && (!prev[k] || (dir && now > rep[k]))) { hideCur(); rep[k] = now + (prev[k] ? 120 : 380); dispatch(k, null); }
+        const dir = ['up', 'down', 'left', 'right', 'bksp'].includes(k);
+        if (S[k] && (!prev[k] || (dir && now > rep[k]))) { hideCur(); lastPad = now; rep[k] = now + (prev[k] ? 120 : 380); dispatch(k, null); }
         prev[k] = S[k];
       }
     }
@@ -339,6 +585,11 @@
     bag: 'M5 8h14l-1 12H6zM9 8V6a3 3 0 016 0v2',
     terminal: 'M4 5h16v14H4zM7 9l3 3-3 3M12 15h5',
   };
+  /* Full-color icons (Papirus icon theme, in icons/) for LaunchOS's own apps and settings,
+     and the apps' own icons for Steam, Discord and everything from Flathub. */
+  const fileUrl = p => 'file://' + String(p).split('/').map(encodeURIComponent).join('/');
+  const pic = (n, cls) => `<img class="pic ${cls || ''}" src="icons/${n}.svg" alt="" draggable="false">`;
+  const appPic = (path, fallback, cls) => path ? `<img class="pic ${cls || ''}" src="${esc(fileUrl(path))}" alt="" draggable="false">` : fallback ? pic(fallback, cls) : '';
   const icon = (n, cls) => `<svg class="ic ${cls || ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${P[n] || P.grid}"/></svg>`;
 
   /* ---------- clock in the chosen time zone ---------- */
@@ -352,9 +603,11 @@
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   window.LOS = {
-    $, call, native, toast, icon, esc, fit, clockText, mouseRecent,
-    get prefs() { return prefs; }, save, ACCENTS, SIZE_NAMES,
+    $, call, native, toast, icon, pic, appPic, fileUrl, esc, fit, clockText, mouseRecent,
+    get prefs() { return prefs; }, save, ACCENTS, SIZE_NAMES, WALLS, LIVE, THEMES, get pro() { return proOK(); }, checkPro,
+    osk: { show: (el, o) => osk.show(el, o), hide: () => osk.hide(), get open() { return osk.open; } },
+    padRecent: () => performance.now() - lastPad < 30000,
     onNav(fn, opts) { handler = fn; guideHere = !!(opts && opts.guide); },   // opts.guide: the page handles the Super key itself
   };
-  document.addEventListener('DOMContentLoaded', () => { hideCur(); applyLook(); });
+  document.addEventListener('DOMContentLoaded', () => { hideCur(); applyLook(); checkPro(); });
 })();

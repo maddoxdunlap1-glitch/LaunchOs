@@ -49,6 +49,10 @@ function show() {
   $('#name').textContent = f.name;
   $('#count').textContent = V.list.length > 1 ? (V.i + 1) + ' of ' + V.list.length : '';
   $('#hl').hidden = $('#hr').hidden = V.list.length < 2;
+  // songs and videos: left and right skip 10 seconds, up and down go to the previous or next one
+  const av = V.kind !== 'image' && V.kind !== 'text';
+  $('#hl').innerHTML = av ? '<u style="background:#cfe6ff">&uarr;</u>Previous' : '<u style="background:#cfe6ff">&lsaquo;</u>Previous';
+  $('#hr').innerHTML = av ? '<u style="background:#cfe6ff">&darr;</u>Next' : '<u style="background:#cfe6ff">&rsaquo;</u>Next';
   media = null;
   if (V.kind === 'image') {
     box.innerHTML = '<img alt="">';

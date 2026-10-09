@@ -1,0 +1,116 @@
+name: Flasher
+
+# Builds LaunchOS-Flasher.exe on Windows, runs its checks, writes a pretend LaunchOS image to a
+# virtual disk with it (and checks every byte), and takes a screenshot of its window.
+# On its own (push or by hand) it publishes the result as the "build-flasher" prerelease;
+# the Build workflow calls it for releases and takes the .exe from it.
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches: [main]
+    paths: ["flasher/**", ".github/workflows/flasher.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  flasher:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          $v = (Get-Content dist/VERSION).Trim()
+          dotnet build flasher/LaunchOSFlasher/LaunchOSFlasher.csproj -c Release -p:Version=$v -o out
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Get-ChildItem out | Format-Table Name, Length
+
+      - name: Checks
+        run: |
+          $p = Start-Process out/LaunchOS-Flasher.exe -ArgumentList '--self-test', "$PWD\selftest.log" -Wait -PassThru
+          Get-Content selftest.log
+          if ($p.ExitCode -ne 0) { exit 1 }
+
+      - name: Write to a virtual disk
+        run: |
+          Start-Transcript -Path "$PWD\vdisk.log"
+          $vhd = "$env:RUNNER_TEMP\test.vhd"
+          "create vdisk file=$vhd maximum=96 type=fixed" | Out-File dp0.txt -Encoding ascii
+          diskpart /s dp0.txt
+          # a pretend old save area right where LaunchOS (24 MB here) will end: the flasher must clear it
+          $fs = [IO.File]::OpenWrite($vhd); [void]$fs.Seek(24MB + 1024, 'Begin'); $m = [Text.Encoding]::ASCII.GetBytes('OLD-SAVES-MARKER'); $fs.Write($m, 0, $m.Length); $fs.Close()
+          "select vdisk file=$vhd`nattach vdisk" | Out-File dp.txt -Encoding ascii
+          diskpart /s dp.txt
+          Start-Sleep 3
+          $disk = (Get-Disk | Where-Object { $_.Location -eq $vhd } | Select-Object -First 1).Number
+          "virtual disk number: $disk"
+          if ($null -eq $disk) { Stop-Transcript; exit 1 }
+          # a volume with a drive letter on it, like a USB drive that's in use
+          Initialize-Disk -Number $disk -PartitionStyle MBR
+          New-Partition -DiskNumber $disk -UseMaximumSize -AssignDriveLetter | Format-Volume -FileSystem FAT32 -Confirm:$false
+          Get-Volume | Format-Table DriveLetter, FileSystemLabel, Size
+          $mk = Start-Process out/LaunchOS-Flasher.exe -ArgumentList '--make-test-image', "$PWD\fake.iso", '9.9' -Wait -PassThru
+          if ($mk.ExitCode -ne 0) { "couldn't make the test image"; Stop-Transcript; exit 1 }
+          $p = Start-Process out/LaunchOS-Flasher.exe -ArgumentList '--write-test-vhd', "$vhd", "$PWD\fake.iso", "$PWD\write.log" -Wait -PassThru
+          Get-Content write.log
+          "select vdisk file=$vhd`ndetach vdisk" | Out-File dp2.txt -Encoding ascii
+          diskpart /s dp2.txt
+          # the disk's bytes are the image's bytes (a fixed VHD is the raw disk plus a 512-byte footer)
+          $img = [IO.File]::ReadAllBytes("$PWD\fake.iso")
+          $fs = [IO.File]::OpenRead($vhd); $buf = New-Object byte[] $img.Length; [void]$fs.Read($buf, 0, $buf.Length)
+          [void]$fs.Seek(24MB + 1024, 'Begin'); $after = New-Object byte[] 16; [void]$fs.Read($after, 0, 16); $fs.Close()
+          $same = [Linq.Enumerable]::SequenceEqual([byte[]]$img, [byte[]]$buf)
+          $cleared = -not ($after | Where-Object { $_ -ne 0 })
+          "disk matches the image: $same"
+          "old save area cleared: $cleared"
+          Stop-Transcript
+          if ($p.ExitCode -ne 0 -or -not $same -or -not $cleared) { exit 1 }
+
+      - name: Screenshot of the window
+        if: always()
+        run: |
+          Start-Process out/LaunchOS-Flasher.exe
+          Start-Sleep 12
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $bmp.Save("$PWD\flasher-window.png")
+          Get-Process LaunchOS-Flasher -ErrorAction SilentlyContinue | Stop-Process -Force
+          "screen: $($b.Width)x$($b.Height)"
+
+      - name: Keep the .exe for the release
+        if: github.event_name == 'workflow_call' || github.workflow != 'Flasher'
+        uses: actions/upload-artifact@v4
+        with:
+          name: LaunchOS-Flasher
+          path: out/LaunchOS-Flasher.exe
+          retention-days: 2
+
+      - name: Logs (readable through the API as annotations)
+        if: always()
+        run: |
+          foreach ($f in 'selftest.log', 'write.log', 'vdisk.log') {
+            if (Test-Path $f) {
+              $t = (Get-Content $f -Raw); if ($t.Length -gt 3800) { $t = $t.Substring($t.Length - 3800) }
+              $t = $t -replace '%', '%25' -replace "`r", '' -replace "`n", '%0A'
+              Write-Output "::notice title=$f::$t"
+            }
+          }
+
+      - name: Publish the test build
+        if: always() && github.workflow == 'Flasher'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          Copy-Item out/LaunchOS-Flasher.exe .
+          gh release delete build-flasher --yes --cleanup-tag -R $env:GITHUB_REPOSITORY 2>$null
+          $files = @('LaunchOS-Flasher.exe', 'selftest.log', 'write.log', 'vdisk.log', 'flasher-window.png') | Where-Object { Test-Path $_ }
+          gh release create build-flasher @files -R $env:GITHUB_REPOSITORY --prerelease --title "Flasher test build (not a release)" --notes "LaunchOS Flasher built from $env:GITHUB_SHA, with its test results. Not a release."

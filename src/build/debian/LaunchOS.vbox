@@ -1,0 +1,59 @@
+<?xml version="1.0"?>
+<VirtualBox xmlns="http://www.virtualbox.org/" version="1.19-windows">
+  <Machine uuid="{36fca252-c127-42dd-9a18-1ffb759997b6}" name="LaunchOS" OSType="Debian_64" snapshotFolder="Snapshots" lastStateChange="2026-10-04T12:00:00Z">
+    <MediaRegistry>
+      <DVDImages>
+        <Image uuid="{05278288-89a8-436c-845a-384b8f74bf0c}" location="LaunchOS.iso"/>
+      </DVDImages>
+      <HardDisks>
+        <HardDisk uuid="{97fd8d36-e667-4676-841c-ee193e3052ae}" location="LaunchOS-data.vdi" format="VDI" type="Normal"/>
+        <HardDisk uuid="{c3c3a374-90f5-4912-9b55-3c56e456d90b}" location="LaunchOS-storage.vdi" format="VDI" type="Normal"/>
+      </HardDisks>
+    </MediaRegistry>
+    <Hardware>
+      <CPU count="4">
+        <PAE enabled="true"/>
+        <LongMode enabled="true"/>
+        <X2APIC enabled="true"/>
+      </CPU>
+      <Memory RAMSize="4096"/>
+      <HID Pointing="USBTablet" Keyboard="PS2Keyboard"/>
+      <Boot>
+        <Order position="1" device="DVD"/>
+        <Order position="2" device="None"/>
+        <Order position="3" device="None"/>
+        <Order position="4" device="None"/>
+      </Boot>
+      <Display controller="VMSVGA" VRAMSize="128"/>
+      <BIOS>
+        <IOAPIC enabled="true"/>
+        <SmbiosUuidLittleEndian enabled="true"/>
+      </BIOS>
+      <RTC localOrUTC="UTC"/>
+      <AudioAdapter controller="HDA" driver="Default" enabled="true" enabledIn="false" enabledOut="true"/>
+      <USB>
+        <Controllers>
+          <Controller name="OHCI" type="OHCI"/>
+        </Controllers>
+      </USB>
+      <Network>
+        <Adapter slot="0" enabled="true" MACAddress="080027A1B2C4" type="82540EM">
+          <NAT/>
+        </Adapter>
+      </Network>
+      <StorageControllers>
+        <StorageController name="SATA" type="AHCI" PortCount="3" useHostIOCache="false" Bootable="true">
+          <AttachedDevice passthrough="false" tempeject="true" type="DVD" hotpluggable="false" port="0" device="0">
+            <Image uuid="{05278288-89a8-436c-845a-384b8f74bf0c}"/>
+          </AttachedDevice>
+          <AttachedDevice type="HardDisk" hotpluggable="false" port="1" device="0">
+            <Image uuid="{97fd8d36-e667-4676-841c-ee193e3052ae}"/>
+          </AttachedDevice>
+          <AttachedDevice type="HardDisk" hotpluggable="true" port="2" device="0">
+            <Image uuid="{c3c3a374-90f5-4912-9b55-3c56e456d90b}"/>
+          </AttachedDevice>
+        </StorageController>
+      </StorageControllers>
+    </Hardware>
+  </Machine>
+</VirtualBox>

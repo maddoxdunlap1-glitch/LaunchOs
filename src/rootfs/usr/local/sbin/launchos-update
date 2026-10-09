@@ -4,15 +4,22 @@
   launchos-update check    is there a newer LaunchOS on GitHub?
   launchos-update apply    download it, check it, and put it in place
   launchos-update apps     update the apps installed from the Store
-  launchos-update system   Ubuntu's own updates (security fixes)
+  launchos-update system   Debian's own updates (security fixes)
 
-A LaunchOS update is a small package published with each release: launchos-update.json
-(the version, the package's SHA-256 and any system packages it needs) and
-launchos-update.tar.gz (LaunchOS's own files). Only LaunchOS's own folders can be written.
+A LaunchOS update is a small package published with each release: launchos-update-v1.json
+(the version, the package's SHA-256, any system packages it needs, and min_version: the oldest
+LaunchOS it can update) and launchos-update.tar.gz (LaunchOS's own files). Only LaunchOS's own
+folders can be written. (launchos-update.json is for LaunchOS 0.x, which can't update to 1.x:
+it always says to download LaunchOS fresh.)
+
+With Pro, early-access versions come from the Pro server, signed with the Pro signing key. An
+early build has the same version number as the release it leads up to; the release itself
+counts as newer, so early PCs move on to it.
 """
-import hashlib, io, json, os, re, shutil, subprocess, sys, tarfile, time, urllib.request
+import hashlib, io, json, os, re, shutil, subprocess, sys, tarfile, time, urllib.error, urllib.request
 sys.path.insert(0, "/usr/local/lib/launchos")
 import disks as D
+import signed
 
 CONF = "/etc/launchos/update.conf"
 DEFAULT_URL = "https://github.com/maddoxdunlap1-glitch/LaunchOs/releases/latest/download/"
@@ -21,9 +28,11 @@ MAX_SIZE = 200 << 20
 # the only places an update may write to
 ALLOWED = ("opt/launcher/", "usr/local/bin/launchos-", "usr/local/sbin/launchos-", "usr/local/lib/launchos/",
            "etc/launchos/", "etc/systemd/system/launch", "etc/udev/rules.d/90-launchos", "etc/tmpfiles.d/launchos",
-           "etc/launchos-release")
+           "etc/launchos-release", "etc/sysctl.d/90-launchos.conf", "etc/systemd/system-preset/00-launchos.preset",
+           "etc/systemd/zram-generator.conf")
 NEVER = ("etc/launchos/installed", "etc/launchos/update.conf")
-PKG = re.compile(r"[a-z0-9][a-z0-9+.-]{1,60}")
+PKG = re.compile(r"[a-z0-9][a-z0-9+.-]{1,60}(:i386)?")
+VERSION_RE = re.compile(r"[0-9]+(\.[0-9]+){0,3}")
 
 
 def version(text):
@@ -35,12 +44,36 @@ def vtuple(v):
     return tuple(int(x) for x in re.findall(r"\d+", str(v))[:4]) or (0,)
 
 
+def vkey(v, early=False):
+    """For comparing versions: an early-access build comes just before the release of the same number."""
+    t = vtuple(v)
+    return t + (0,) * (4 - len(t)) + (0 if early else 1,)
+
+
 def current():
     try:
         with open("/etc/launchos-release") as f:
             return version(f.read())
     except OSError:
         return "0"
+
+
+def current_early():
+    try:
+        with open("/etc/launchos-release") as f:
+            return bool(re.search(r'^EARLY="?1', f.read(), re.M))
+    except OSError:
+        return False
+
+
+def newer(m):
+    return vkey(m["version"], bool(m.get("early"))) > vkey(current(), current_early())
+
+
+def too_old(m):
+    """This PC's LaunchOS is older than the update can handle: it needs LaunchOS fresh."""
+    mv = str(m.get("min_version", ""))
+    return bool(m.get("full")) or (VERSION_RE.fullmatch(mv) is not None and vtuple(current()) < vtuple(mv))
 
 
 def base_url():
@@ -78,9 +111,57 @@ def fetch(name, limit, progress=None, url=None):
 
 
 def manifest():
-    m = json.loads(fetch("launchos-update.json", 1 << 20).decode("utf-8"))
-    if not isinstance(m, dict) or not re.fullmatch(r"[0-9]+(\.[0-9]+){0,3}", str(m.get("version", ""))):
+    try:
+        raw = fetch("launchos-update-v1.json", 1 << 20)
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            raise
+        raw = fetch("launchos-update.json", 1 << 20)   # (a release from before 1.0)
+    m = json.loads(raw.decode("utf-8"))
+    if not isinstance(m, dict) or not VERSION_RE.fullmatch(str(m.get("version", ""))):
         raise ValueError("bad manifest")
+    m.pop("early", None)
+    return m
+
+
+# ---------- early access (LaunchOS Pro): newer versions from the Pro server ----------
+
+def pro_download_url(name):
+    """A short-lived link to one of the Pro server's files, or None without Pro."""
+    try:
+        st = json.load(open("/var/lib/launchos/pro.json"))
+        key = open("/var/lib/launchos/pro-key").read().strip()
+        conf = dict(l.strip().split("=", 1) for l in open("/etc/launchos/pro.conf") if "=" in l and not l.lstrip().startswith("#"))
+    except (OSError, ValueError):
+        return None
+    url = conf.get("url", "").strip().rstrip("/")
+    if st.get("status") != "active" or not st.get("instance_id") or not re.fullmatch(r"https://[A-Za-z0-9.-]+(:\d+)?|http://10\.0\.2\.2(:\d+)?", url):
+        return None
+    req = urllib.request.Request(url + "/v1/download", method="POST", headers={"content-type": "application/json", "User-Agent": "LaunchOS-updater"},
+                                 data=json.dumps({"key": key, "instance_id": st["instance_id"], "file": name}).encode())
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            a = json.loads(r.read(65536) or b"{}")
+    except Exception:
+        return None
+    if not isinstance(a, dict):
+        return None
+    link = str(a.get("url", ""))
+    return link if a.get("ok") and link.startswith(url + "/") else None
+
+
+def early_manifest():
+    """The early-access update, if there is one (Pro only, signed with the Pro signing key)."""
+    link = pro_download_url("early-update.json")
+    if not link:
+        return None
+    try:
+        m = signed.verify(fetch("", 1 << 20, url=link))
+    except Exception:
+        return None
+    if not VERSION_RE.fullmatch(str(m.get("version", ""))) or too_old(m):
+        return None   # (an early build that needs a fresh download isn't offered: the public update still is)
+    m["early"] = True
     return m
 
 
@@ -97,18 +178,30 @@ def offline(e):
     return "Couldn’t reach GitHub. Check your internet connection and try again."
 
 
-def check():
-    say("Checking for updates", 10)
+def best_manifest():
+    """The newest update: the public one, or with Pro an early-access one if that's newer."""
+    m, err = None, None
     try:
         m = manifest()
     except Exception as e:
-        say("", 100, True, offline(e))
+        err = e
+    e = early_manifest()
+    if e and (m is None or vkey(e["version"], True) > vkey(m["version"])):
+        return e, None
+    return m, err
+
+
+def check():
+    say("Checking for updates", 10)
+    m, err = best_manifest()
+    if m is None:
+        say("", 100, True, offline(err))
         return
     cur, new = current(), str(m["version"])
     notes = str(m.get("notes", ""))[:2000]
-    if vtuple(new) > vtuple(cur):
-        say("LaunchOS " + new + " is available", 100, True, available=True, latest=new, current=cur, notes=notes,
-            full=bool(m.get("full")))
+    if newer(m):
+        say("LaunchOS " + new + (" (early access)" if m.get("early") else "") + " is available", 100, True, available=True,
+            latest=new, current=cur, notes=notes, full=too_old(m), early=bool(m.get("early")))
     else:
         say("LaunchOS is up to date (" + cur + ")", 100, True, available=False, latest=new, current=cur)
 
@@ -135,25 +228,30 @@ def safe_members(tar):
 
 def apply():
     say("Checking for updates", 3)
-    try:
-        m = manifest()
-    except Exception as e:
-        say("", 100, True, offline(e))
+    m, err = best_manifest()
+    if m is None:
+        say("", 100, True, offline(err))
         return
     new = str(m["version"])
-    if vtuple(new) <= vtuple(current()):
+    if not newer(m):
         say("LaunchOS is up to date (" + current() + ")", 100, True, available=False)
         return
     if not saving():
         say("", 100, True, "Turn on saving first: without it, the update is gone when you restart.")
         return
-    if m.get("full"):
-        say("", 100, True, "LaunchOS " + new + " has to be installed fresh: download LaunchOS.zip from GitHub and write it to your USB stick again.")
+    if too_old(m):
+        say("", 100, True, "LaunchOS " + new + " has to be installed fresh: write it to your USB stick with LaunchOS Flasher, "
+            "or download LaunchOS.zip from GitHub.")
         return
     name = "launchos-update.tar.gz"
     base = base_url()
     # the package of exactly this version (not "latest", which may change in between)
     url = base.replace("/releases/latest/download/", "/releases/download/v" + new + "/") + name
+    if m.get("early"):   # early access: from the Pro server
+        url = pro_download_url("early-update.tar.gz")
+        if not url:
+            say("", 100, True, "Couldn’t reach the Pro server. Try again later.")
+            return
     try:
         data = fetch(name, MAX_SIZE, lambda got, total: say("Downloading LaunchOS " + new, 5 + 55 * got // total), url=url)
     except Exception as e:
@@ -195,7 +293,8 @@ def apply():
             os.unlink("/" + name)
     if release:
         put(tar, *release)
-    for cmd in (["systemctl", "daemon-reload"], ["systemd-tmpfiles", "--create"], ["udevadm", "control", "--reload"]):
+    for cmd in (["systemctl", "daemon-reload"], ["systemd-tmpfiles", "--create"], ["udevadm", "control", "--reload"],
+                ["sysctl", "--system"]):
         subprocess.run(cmd, capture_output=True)
     for unit in m.get("enable") or []:   # new LaunchOS services
         if re.fullmatch(r"launch[a-z0-9-]*\.(service|path|timer)", str(unit)):
@@ -216,10 +315,11 @@ def put(tar, name, member):
 
 
 def saving():
-    with open("/proc/cmdline") as f:
-        persistent = "persistent" in f.read().split()
-    labels = D.sh("lsblk", "-rno", "LABEL").stdout.split()
-    return os.path.exists("/etc/launchos/installed") or (persistent and ("casper-rw" in labels or "writable" in labels))
+    """Installed on a drive, or running live with the save area in use."""
+    if os.path.exists("/etc/launchos/installed"):
+        return True
+    with open("/proc/self/mounts") as f:
+        return any(len(l.split()) > 1 and l.split()[1].startswith("/run/live/persistence/") for l in f)
 
 
 def apps():
@@ -238,7 +338,7 @@ def apps():
 
 
 def system():
-    """Ubuntu's updates. 'upgrade' (not full-upgrade) never adds or removes packages, so the
+    """Debian's updates. 'upgrade' (not full-upgrade) never adds or removes packages, so the
     tested kernel and start-up files stay as they are."""
     def say_s(step, pct, done=False, err=""):
         D.status("sysupdate", step, pct, done, err)
@@ -251,7 +351,7 @@ def system():
     out = r.stdout + r.stderr
     offline = any(t in out for t in ("Failed to fetch", "Could not resolve", "Temporary failure resolving", "Unable to connect"))
     if r.returncode != 0 or offline:
-        say_s("", 100, True, "Couldn’t reach Ubuntu’s servers. Check your internet connection and try again.")
+        say_s("", 100, True, "Couldn’t reach Debian’s servers. Check your internet connection and try again.")
         return
     rfd, wfd = os.pipe()
     p = subprocess.Popen(["apt-get", "-y", "-o", "APT::Status-Fd=%d" % wfd, "-o", "Dpkg::Options::=--force-confold",

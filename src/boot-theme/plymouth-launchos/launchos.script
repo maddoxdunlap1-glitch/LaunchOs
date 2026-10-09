@@ -1,59 +1,98 @@
-# LaunchOS boot screen: a slowly spinning ferris wheel whose cabins stay upright.
-# Everything is re-laid out whenever the screen size changes (the display driver
-# can switch resolution partway through boot), and a full-screen background layer
-# is nudged periodically to force a full repaint so no part of the screen is left black.
+# LaunchOS boot screen: a rocket climbing through space. Its flame flickers, puffs of exhaust
+# trail off, and stars stream past at three depths.
+# Everything is laid out again whenever the screen size changes (the graphics driver can take
+# over partway through start-up), and the background is nudged now and then so the whole screen
+# is repainted (a display that appears late never stays black).
 Window.SetBackgroundTopColor(0.043, 0.090, 0.149);
-Window.SetBackgroundBottomColor(0.043, 0.090, 0.149);
+Window.SetBackgroundBottomColor(0.020, 0.043, 0.082);
 
-bg_src = Image("bg.png");
-glow_src = Image("glow.png");
-stand_src = Image("stand.png");
-wheel_src = Image("wheel.png");
-for (i = 0; i < 8; i++) gsrc[i] = Image("gondola" + i + ".png");
-
-bg = Sprite(); bg.SetZ(-100);
-glow = Sprite(); glow.SetZ(1);
-stand = Sprite(); stand.SetZ(2);
-wheel = Sprite(); wheel.SetZ(3);
-for (i = 0; i < 8; i++) { gond[i] = Sprite(); gond[i].SetZ(4); }
-
-period = Math.Pi / 8;
-NF = 36;
+NFLAME = 12;
+NSTAR = 54;
+NSTREAK = 5;
+NPUFF = 10;
 lastw = -1;
 lasth = -1;
+tick = 0;
+
+bg = Sprite(); bg.SetZ(-100);
+glow = Sprite(); glow.SetZ(2);
+flame = Sprite(); flame.SetZ(3);
+rocket = Sprite(); rocket.SetZ(5);
+for (i = 0; i < NSTAR; i++) { star[i] = Sprite(); star[i].SetZ(0); }
+for (i = 0; i < NSTREAK; i++) { streak[i] = Sprite(); streak[i].SetZ(1); }
+for (i = 0; i < NPUFF; i++) { puff[i] = Sprite(); puff[i].SetZ(4); puff[i].SetOpacity(0); }
+
+fun load (name)
+{
+  if (global.big) return Image(name + "@2x.png");
+  return Image(name + ".png");
+}
+
+fun fit (img)
+{
+  # the images are drawn for a 1080p screen (or twice that); scale them to this one
+  k = global.s;
+  if (global.big) k = k / 2;
+  return img.Scale(img.GetWidth() * k, img.GetHeight() * k);
+}
 
 fun layout ()
 {
   global.sw = Window.GetWidth();
   global.sh = Window.GetHeight();
-  s = sh / 1080 * 1.6;
-  if (s > 2) s = 2;
+  global.wx = Window.GetX();
+  global.wy = Window.GetY();
+  s = sh / 1080;
+  if (s * 1920 > sw) s = sw / 1920 * 1.15;   # tall or narrow screens: keep it all in view
+  if (s < 0.4) s = 0.4;
   global.s = s;
-  global.cx = Window.GetX() + sw / 2;
-  global.cy = Window.GetY() + sh / 2 - 30 * s;
-  global.R = 150 * s;
-  bg.SetImage(bg_src.Scale(sw + 4, sh + 4));
-  bg.SetPosition(Window.GetX() - 2, Window.GetY() - 2, -100);
-  g = glow_src.Scale(glow_src.GetWidth() * s, glow_src.GetHeight() * s);
-  glow.SetImage(g);
-  glow.SetPosition(cx - g.GetWidth() / 2, cy - g.GetHeight() / 2, 1);
-  st = stand_src.Scale(stand_src.GetWidth() * s, stand_src.GetHeight() * s);
-  stand.SetImage(st);
-  stand.SetPosition(cx - st.GetWidth() / 2, cy - 18 * s, 2);
-  w = wheel_src.Scale(wheel_src.GetWidth() * s, wheel_src.GetHeight() * s);
-  for (k = 0; k < NF; k++) global.frames[k] = w.Rotate(k * period / NF);
-  global.ww = w.GetWidth();
-  wheel.SetImage(frames[0]);
-  wheel.SetPosition(cx - ww / 2, cy - ww / 2, 3);
-  for (i = 0; i < 8; i++)
+  global.big = 0;
+  if (s > 1.4) global.big = 1;
+
+  bg.SetImage(Image("bg.png").Scale(sw + 4, sh + 4));
+  bg.SetPosition(wx - 2, wy - 2, -100);
+
+  global.rimg = fit(load("rocket"));
+  rocket.SetImage(rimg);
+  global.cx = wx + sw / 2;
+  global.top = wy + sh / 2 - 300 * s;
+  global.nozzle = 320 * s;                       # from the top of the rocket
+  for (k = 0; k < NFLAME; k++) global.fimg[k] = fit(load("flame" + k));
+  flame.SetImage(fimg[0]);
+  global.gimg = fit(load("glow"));
+  glow.SetImage(gimg);
+
+  stimg[0] = fit(load("star0"));
+  stimg[1] = fit(load("star1"));
+  stimg[2] = fit(load("star2"));
+  for (i = 0; i < NSTAR; i++)
   {
-    global.gimg[i] = gsrc[i].Scale(gsrc[i].GetWidth() * s, gsrc[i].GetHeight() * s);
-    gond[i].SetImage(gimg[i]);
+    layer = i % 3;
+    global.sl[i] = layer;
+    star[i].SetImage(stimg[layer]);
+    global.sx[i] = wx + Math.Random() * sw;
+    global.sy[i] = wy + Math.Random() * sh;
+    global.sv[i] = (0.6 + 0.8 * Math.Random()) * s * (2.6 - layer * 0.9);
+    star[i].SetPosition(sx[i], sy[i], 0);
+    star[i].SetOpacity(1 - layer * 0.22);
+  }
+  global.kimg = fit(load("streak"));
+  for (i = 0; i < NSTREAK; i++)
+  {
+    streak[i].SetImage(kimg);
+    global.kx[i] = wx + sw * (0.15 + 0.7 * Math.Random());
+    global.ky[i] = wy + Math.Random() * sh;
+    global.kv[i] = (7 + 5 * Math.Random()) * s;
+    streak[i].SetPosition(kx[i], ky[i], 1);
+  }
+  global.pimg = fit(load("puff"));
+  for (i = 0; i < NPUFF; i++)
+  {
+    puff[i].SetImage(pimg);
+    global.plife[i] = -1 - i * 7;                 # start one after another
   }
 }
 
-angle = 0;
-tick = 0;
 fun refresh_callback ()
 {
   if (Window.GetWidth() != lastw || Window.GetHeight() != lasth)
@@ -63,22 +102,66 @@ fun refresh_callback ()
     layout();
   }
   tick++;
-  # Nudge the background by one pixel twice a second. Moving it marks the whole
-  # screen for repaint, which covers a display that appeared mid-boot.
+  # nudge the background by a pixel twice a second: moving it repaints the whole screen
   if (tick % 25 == 0)
   {
-    if (tick % 50 == 0) bg.SetX(Window.GetX() - 2); else bg.SetX(Window.GetX() - 1);
+    if (tick % 50 == 0) bg.SetX(wx - 2); else bg.SetX(wx - 1);
   }
-  angle = angle + 0.008;
-  if (angle > Math.Pi * 2) angle = angle - Math.Pi * 2;
-  phase = angle - Math.Int(angle / period) * period;
-  f = Math.Int(phase / period * NF);
-  if (f >= NF) f = NF - 1;
-  wheel.SetImage(frames[f]);
-  for (i = 0; i < 8; i++)
+
+  # the rocket hovers gently, with a slight engine shake
+  y = top + Math.Sin(tick * 0.045) * 6 * s + Math.Sin(tick * 1.7) * 0.6 * s;
+  rocket.SetPosition(cx - rimg.GetWidth() / 2, y, 5);
+  f = Math.Int(tick / 2) % NFLAME;
+  flame.SetImage(fimg[f]);
+  flame.SetPosition(cx - fimg[f].GetWidth() / 2, y + nozzle - 8 * s, 3);
+  glow.SetPosition(cx - gimg.GetWidth() / 2, y + nozzle - gimg.GetHeight() / 2 + 40 * s, 2);
+  glow.SetOpacity(0.8 + 0.2 * Math.Sin(tick * 0.31));
+
+  # stars and speed lines stream past (we're going up)
+  for (i = 0; i < NSTAR; i++)
   {
-    a = angle + i * Math.Pi / 4;
-    gond[i].SetPosition(cx + Math.Cos(a) * R - gimg[i].GetWidth() / 2, cy + Math.Sin(a) * R, 4);
+    sy[i] = sy[i] + sv[i];
+    if (sy[i] > wy + sh + 10)
+    {
+      sy[i] = wy - 10;
+      sx[i] = wx + Math.Random() * sw;
+    }
+    star[i].SetY(sy[i]);
+    star[i].SetX(sx[i]);
+  }
+  for (i = 0; i < NSTREAK; i++)
+  {
+    ky[i] = ky[i] + kv[i];
+    if (ky[i] > wy + sh + 20)
+    {
+      ky[i] = wy - kimg.GetHeight() - Math.Random() * sh * 0.5;
+      kx[i] = wx + sw * (0.12 + 0.76 * Math.Random());
+    }
+    streak[i].SetY(ky[i]);
+    streak[i].SetX(kx[i]);
+  }
+
+  # puffs of exhaust leave the end of the flame and drift away, fading
+  for (i = 0; i < NPUFF; i++)
+  {
+    plife[i] = plife[i] + 1;
+    if (plife[i] == 0)
+    {
+      global.px[i] = cx + (Math.Random() - 0.5) * 30 * s;
+      global.py[i] = y + nozzle + 150 * s;
+      global.pvx[i] = (Math.Random() - 0.5) * 2.2 * s;
+      global.pvy[i] = (2.2 + Math.Random() * 1.4) * s;
+    }
+    if (plife[i] >= 0)
+    {
+      px[i] = px[i] + pvx[i];
+      py[i] = py[i] + pvy[i];
+      o = 0.55 * (1 - plife[i] / 70);
+      if (o < 0) o = 0;
+      puff[i].SetOpacity(o);
+      puff[i].SetPosition(px[i] - pimg.GetWidth() / 2, py[i], 4);
+      if (plife[i] > 70) plife[i] = -Math.Int(Math.Random() * 8);
+    }
   }
 }
 Plymouth.SetRefreshFunction(refresh_callback);

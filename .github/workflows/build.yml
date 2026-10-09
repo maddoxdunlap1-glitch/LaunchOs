@@ -1,0 +1,169 @@
+name: Build LaunchOS
+
+# Builds LaunchOS.iso from src/ on top of the Debian base (the build-debian-base prerelease),
+# starts it in QEMU with KVM to check it reaches the sign-in screen (BIOS and UEFI, disc and USB
+# stick) and to time the start-up, then either publishes it as the "build-test" prerelease (test)
+# or makes the real release with the VirtualBox files, the update package and the flasher (release).
+on:
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: "test: quick build + start-up tests. release: full build + tests, then publish"
+        type: choice
+        options: [test, release]
+        default: test
+      order:
+        description: List the files read while starting (for boot-order.txt)
+        type: boolean
+        default: false
+      test_release:
+        description: "Instead of building: start-up test the ISO of this release (e.g. v0.9)"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-launchos
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  flasher:
+    if: inputs.kind == 'release' && inputs.test_release == ''
+    uses: ./.github/workflows/flasher.yml
+
+  image:
+    needs: [flasher]
+    # (runs for test builds too, when the flasher job is skipped)
+    if: always() && needs.flasher.result != 'failure' && needs.flasher.result != 'cancelled'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 200
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Room and tools
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache /usr/local/share/boost /usr/share/swift /usr/local/.ghcup &
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq squashfs-tools xorriso mtools dosfstools grub-common grub-pc-bin grub-efi-amd64-bin \
+            qemu-system-x86 qemu-utils ovmf python3-pil zip >/dev/null
+          wait
+          df -h / /mnt
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; echo "KVM: yes"; else echo "KVM: no (timings will be slow)"; fi
+          nproc; free -g | head -2
+
+      - name: Release to test
+        if: inputs.test_release != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sudo mkdir -p /mnt/w/img && sudo chown -R "$USER" /mnt/w
+          cd /mnt/w
+          gh release download "${{ inputs.test_release }}" -R "$GITHUB_REPOSITORY" -p LaunchOS.zip
+          unzip -q LaunchOS.zip LaunchOS.iso && rm LaunchOS.zip
+          echo "FROM=--from-iso /mnt/w/LaunchOS.iso" >> "$GITHUB_ENV"
+          echo "V=${{ inputs.test_release }}" >> "$GITHUB_ENV"
+
+      - name: Debian base
+        if: inputs.test_release == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sudo mkdir -p /mnt/w && sudo chown "$USER" /mnt/w
+          cd /mnt/w
+          gh release download build-debian-base -R "$GITHUB_REPOSITORY" -p 'base.squashfs.part*' -p base.squashfs.sha256
+          cat base.squashfs.part* > base.squashfs && rm -f base.squashfs.part*
+          echo "$(cat base.squashfs.sha256)  base.squashfs" | sha256sum -c -
+
+      - name: Build LaunchOS.iso
+        if: inputs.test_release == ''
+        run: |
+          V=$(cat dist/VERSION)
+          echo "V=$V" >> "$GITHUB_ENV"
+          sudo src/build/debian/make-image.sh /mnt/w/base.squashfs /mnt/w/img "$V" ${{ inputs.kind == 'test' && 'fast' || '' }} > /mnt/w/build.log 2>&1 \
+            || { tail -60 /mnt/w/build.log; exit 1; }
+          tail -15 /mnt/w/build.log
+          sudo rm -f /mnt/w/base.squashfs
+
+      - name: Start-up tests
+        run: |
+          mkdir -p out
+          t() { sudo python3 src/tests/ci_boot.py /mnt/w/img out $FROM "$@" || echo "$*" >> out/failed; }
+          t --name bios-disc ${{ inputs.order && '--order' || '' }}
+          t --uefi --name uefi-disc
+          t --usb --boots 2 --name bios-usb
+          t --usb --uefi --boots 2 --mbps 40 --name uefi-usb-40MBps
+          sudo chown -R "$USER" out
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import glob, json
+          print('| Start | Ready (wall) | Ready (since kernel start) | KVM |\n|---|---|---|---|')
+          for f in sorted(glob.glob('out/*.json')):
+              for r in json.load(open(f)):
+                  print(f"| {r['label']} | {r.get('wall_s', 'not ready')} s | {r.get('uptime_s', '-')} s | {r.get('kvm')} |")
+          PY
+          cat "$GITHUB_STEP_SUMMARY"
+          # (readable through the API as annotations)
+          for f in out/*.json; do echo "::notice title=$(basename $f)::$(tr -d '\n' < $f)"; done
+          for f in out/*-analyze.txt; do echo "== $f"; cat "$f"; done
+          head -25 out/bios-disc-boot1-blame.txt || true
+          cp /mnt/w/build.log out/ 2>/dev/null || true
+          [ ! -f out/failed ] || { cat out/failed; exit 1; }
+
+      - name: Publish the test build
+        if: always() && inputs.kind == 'test'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tar czf boot-report.tar.gz -C out .
+          files="boot-report.tar.gz"
+          [ -f /mnt/w/img/LaunchOS.iso ] && files="$files /mnt/w/img/LaunchOS.iso"
+          gh release delete build-test --yes --cleanup-tag -R "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh release create build-test $files -R "$GITHUB_REPOSITORY" --prerelease --title "Test build (not a release)" \
+            --notes "Test build of LaunchOS $V from $GITHUB_SHA, with its start-up test report. Not a release."
+
+      - name: The flasher
+        if: inputs.kind == 'release' && inputs.test_release == ''
+        uses: actions/download-artifact@v4
+        with:
+          name: LaunchOS-Flasher
+          path: /mnt/w/flasher
+
+      - name: Release files
+        if: inputs.kind == 'release' && inputs.test_release == ''
+        run: |
+          W=/mnt/w
+          sudo src/build/debian/make-vbox.sh $W/rel
+          sudo chown -R "$USER" $W/rel
+          ln -sf $W/img/LaunchOS.iso $W/rel/LaunchOS.iso
+          ( cd $W/rel && zip -q -1 $W/LaunchOS.zip LaunchOS.iso LaunchOS.vbox LaunchOS-data.vdi LaunchOS-storage.vdi )
+          mkdir -p $W/update
+          # the short note Settings > Updates shows: dist/UPDATE_NOTE, or the first line of the release notes
+          { cat dist/UPDATE_NOTE 2>/dev/null || head -1 dist/NOTES.md; } > $W/update/notes.txt
+          FULL=$(cat dist/FULL 2>/dev/null || echo 0) MIN_VERSION=$(cat dist/MIN_VERSION 2>/dev/null || echo 1.0) \
+            src/build/debian/make-update.sh "$V" $W/update $(cat dist/APT 2>/dev/null)
+          cp $W/img/LaunchOS.iso $W/LaunchOS.iso
+          ( cd $W && sha256sum LaunchOS.iso LaunchOS.zip > SHA256SUMS.txt && ( cd flasher && sha256sum LaunchOS-Flasher.exe ) >> SHA256SUMS.txt \
+            && cat SHA256SUMS.txt )
+          ls -la $W
+
+      - name: Publish the release
+        if: inputs.kind == 'release' && inputs.test_release == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          W=/mnt/w; v="v$V"
+          tar czf $W/boot-report.tar.gz -C out .
+          gh release delete "$v" --yes --cleanup-tag -R "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh release create "$v" $W/LaunchOS.zip $W/LaunchOS.iso $W/SHA256SUMS.txt $W/update/launchos-update.tar.gz \
+            $W/update/launchos-update.json $W/update/launchos-update-v1.json $W/flasher/LaunchOS-Flasher.exe -R "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --title "LaunchOS $v" --notes-file dist/NOTES.md
+          # keep only the newest release (removed after the new one is up, so updates never find nothing)
+          for t in $(gh release list -R "$GITHUB_REPOSITORY" --limit 50 --json tagName -q '.[].tagName'); do
+            case "$t" in "$v"|build-*) continue ;; esac
+            gh release delete "$t" --yes --cleanup-tag -R "$GITHUB_REPOSITORY" || true
+          done

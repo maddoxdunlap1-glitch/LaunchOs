@@ -24,7 +24,7 @@ function setup() {
       return reply({ valid: ok, license_key: { status: "active" }, meta: ls.meta });
     }
     if (path === "deactivate") {
-      return reply({ deactivated: ls.instances.delete(f.get("instance_id")) });
+      return reply({ deactivated: ls.instances.delete(f.get("instance_id")), meta: ls.meta });
     }
     return reply({}, 404);
   };
@@ -177,4 +177,70 @@ test("CORS only for the website origin", async () => {
   const pre = (origin) => worker.fetch(new Request("https://pro.test/v1/account/login", { method: "OPTIONS", headers: { origin } }), env);
   assert.equal((await pre("https://site.test")).headers.get("access-control-allow-origin"), "https://site.test");
   assert.equal((await pre("https://evil.test")).headers.get("access-control-allow-origin"), null);
+});
+
+test("a PC can remove Pro itself, freeing its slot", async () => {
+  const { env } = setup();
+  const ids = [];
+  for (let i = 1; i <= 5; i++) ids.push((await call(env, post("/v1/activate", { key: KEY, pc_id: pc(i) }))).body.instance_id);
+  assert.equal((await call(env, post("/v1/activate", { key: KEY, pc_id: pc(6) }))).body.error, "pc_limit");
+  const r = await call(env, post("/v1/deactivate", { key: KEY, instance_id: ids[2] }));
+  assert.equal(r.body.ok, true);
+  assert.equal((await call(env, post("/v1/activate", { key: KEY, pc_id: pc(6) }))).status, 200);
+  assert.equal((await call(env, post("/v1/deactivate", { key: "WRONG-KEY-0000", instance_id: ids[0] }))).status, 403);
+});
+
+test("early-access files can be downloaded, other names can't", async () => {
+  const { env } = setup();
+  const a = await call(env, post("/v1/activate", { key: KEY, pc_id: pc(1) }));
+  for (const file of ["early-update.json", "early-update.tar.gz", "pro-update.json"]) {
+    assert.equal((await call(env, post("/v1/download", { key: KEY, instance_id: a.body.instance_id, file }))).status, 200);
+  }
+  assert.equal((await call(env, post("/v1/download", { key: KEY, instance_id: a.body.instance_id, file: "secrets.txt" }))).status, 400);
+});
+
+test("not set up yet: no key works", async () => {
+  const { env } = setup();
+  env.LS_STORE_ID = "";
+  const a = await call(env, post("/v1/activate", { key: KEY, pc_id: pc(1) }));
+  assert.equal(a.status, 503);
+  assert.equal(a.body.error, "unavailable");
+});
+
+test("a key from someone else's store is refused", async () => {
+  const { ls, env } = setup();
+  ls.meta = { store_id: 999999, product_id: 2, order_id: 5 };
+  const a = await call(env, post("/v1/activate", { key: KEY, pc_id: pc(1) }));
+  assert.equal(a.status, 403);
+  assert.equal(a.body.error, "invalid_key");
+});
+
+test("Lemon Squeezy busy (429): ask again later, never 'wrong key'", async () => {
+  const { env } = setup();
+  const a = await call(env, post("/v1/activate", { key: KEY, pc_id: pc(1) }));
+  const real = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ error: "Too many requests" }), { status: 429 });
+  const c = await call(env, post("/v1/check", { key: KEY, instance_id: a.body.instance_id }));
+  assert.equal(c.status, 503);
+  assert.equal(c.body.error, "unavailable");
+  globalThis.fetch = async () => { throw new Error("offline"); };
+  const d = await call(env, post("/v1/activate", { key: KEY, pc_id: pc(2) }));
+  assert.equal(d.body.error, "unavailable");
+  globalThis.fetch = real;
+});
+
+test("the same PC entering its key again keeps its one slot", async () => {
+  const { ls, env } = setup();
+  const first = await call(env, post("/v1/activate", { key: KEY, pc_id: pc(1) }));
+  for (let i = 0; i < 6; i++) {
+    const again = await call(env, post("/v1/activate", { key: KEY, pc_id: pc(1) }));
+    assert.equal(again.status, 200);
+    assert.equal(again.body.instance_id, first.body.instance_id);
+  }
+  assert.equal(ls.instances.size, 1);
+  // freed by Remove Pro: the next activation takes a new slot
+  await call(env, post("/v1/deactivate", { key: KEY, instance_id: first.body.instance_id }));
+  const next = await call(env, post("/v1/activate", { key: KEY, pc_id: pc(1) }));
+  assert.equal(next.status, 200);
+  assert.notEqual(next.body.instance_id, first.body.instance_id);
 });
