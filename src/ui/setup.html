@@ -37,7 +37,7 @@
 .chk .mark { border-radius: 6px; }
 .opt.sel .mark, .chk.sel .mark { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .opt.sel .mark .ic, .chk.sel .mark .ic { width: 15px; height: 15px; }
-.zlist { max-height: 300px; overflow: hidden; margin-top: 12px; }
+.zlist { max-height: 340px; overflow-y: auto; margin-top: 12px; }
 .zrow.sel { background: var(--chip); }
 .zrow .when { margin-left: auto; color: var(--mute); font-size: 15px; }
 .status { display: flex; align-items: center; gap: 16px; padding: 18px; border-radius: 12px; background: var(--panel-2); margin-bottom: 16px; font-size: 18px; }
@@ -143,9 +143,14 @@ const STEPS = [
     async render() {
       vol = await call('volume_get');
       if (!vol.available) { content.innerHTML = `<div class="status"><span class="bad">${icon('sound')}</span><span>No sound device found. In VirtualBox, turn on Settings → Audio.</span></div>`; return; }
-      content.innerHTML = `<div class="status">${icon('sound')}<span>Volume <b id="vv">${vol.value}%</b></span></div><div class="slider" data-f data-slider id="vs"><i></i><b></b></div><button class="btn" data-f id="vt">Play a test sound</button>`;
+      content.innerHTML = `<div class="status">${icon('sound')}<span>Volume <b id="vv">${vol.value}%</b></span></div><div class="slider" data-f data-slider id="vs" role="slider" aria-label="Volume"><i></i><b></b></div><button class="btn" data-f id="vt">Play a test sound</button>`;
       paintVol();
       $('#vt').onclick = () => call('sound_test');
+      $('#vs').onclick = async ev => {   // a click on the slider sets the volume there
+        const r = $('#vs').getBoundingClientRect();
+        vol.value = Math.round(Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * 20) * 5;
+        paintVol(); vol = await call('volume_set', vol.value); paintVol();
+      };
     } },
   { id: 'display', title: 'Screen size', lead: 'If the edges of the picture are cut off on your TV, pick TV safe area.',
     async render() {
@@ -258,7 +263,7 @@ function listZones() {
   const q = zq.trim().toLowerCase().replace(/\s+/g, '_');
   let list = q ? zones.filter(z => z.toLowerCase().includes(q)) : COMMON_ZONES.filter(z => zones.includes(z) || !zones.length);
   if (zsel && !q && !list.includes(zsel)) list = [zsel, ...list];
-  list = list.slice(0, 7);
+  list = list.slice(0, 6);   // (as many as fit: type to find others)
   $('#zl').innerHTML = list.length ? list.map(z => `<div class="zrow${z === zsel ? ' sel' : ''}" data-f data-z="${z}"><span>${esc(prettyZone(z))}</span><span class="when">${tzNow(z)}</span></div>`).join('') : '<p class="note">No matches. Try a big city near you.</p>';
   $('#zl').querySelectorAll('.zrow').forEach(r => r.onclick = () => pickZone(r.dataset.z));
   $('#znow').textContent = zsel ? 'Selected: ' + prettyZone(zsel) + ', ' + tzNow(zsel) : 'No time zone picked yet';

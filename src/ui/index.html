@@ -199,8 +199,8 @@ try { const p = JSON.parse(sessionStorage.getItem('launchos.pos') || 'null'); if
 function renderHome(keep) {
   if (!keep) T1 = tiles();
   $('#tb').innerHTML = TB.map(t => `<button class="tb" aria-label="${t[1]}">${pic(t[0])}</button>`).join('');
-  $('#r1').innerHTML = T1.map((t, i) => `<div class="t t1${i === 0 ? ' big' : ''}" style="background:${t.bg}"><span class="g">${t.img || t.pic ? appPic(t.img, t.pic, 'appimg') : t.glyph ? icon(t.glyph) : esc(t.letter)}</span>${t.badge ? `<span class="soon${t.badge === 'Get' ? ' get' : ''}">${esc(t.badge)}</span>` : ''}<b>${esc(t.name)}</b></div>`).join('');
-  $('#r2').innerHTML = T2.map(t => `<div class="t t2" style="background:${t.bg}"><span class="g">${pic(t.pic)}</span><small>${esc(t.sub)}</small><b>${esc(t.name)}</b></div>`).join('');
+  $('#r1').innerHTML = T1.map((t, i) => `<div class="t t1${i === 0 ? ' big' : ''}" role="button" aria-label="${esc(t.name)}" style="background:${t.bg}"><span class="g">${t.img || t.pic ? appPic(t.img, t.pic, 'appimg') : t.glyph ? icon(t.glyph) : esc(t.letter)}</span>${t.badge ? `<span class="soon${t.badge === 'Get' ? ' get' : ''}">${esc(t.badge)}</span>` : ''}<b>${esc(t.name)}</b></div>`).join('');
+  $('#r2').innerHTML = T2.map(t => `<div class="t t2" role="button" aria-label="${esc(t.name)}" style="background:${t.bg}"><span class="g">${pic(t.pic)}</span><small>${esc(t.sub)}</small><b>${esc(t.name)}</b></div>`).join('');
   R = [[...document.querySelectorAll('.tb')], [...document.querySelectorAll('.t1')], [...document.querySelectorAll('.t2')]];
   if (!R[pos.r] || !R[pos.r].length) pos = { r: 1, c: 0 };
   pos.c = Math.max(0, Math.min(pos.c, R[pos.r].length - 1));   // the app list may have changed
@@ -453,7 +453,7 @@ function items() {
     ];
     case 3: {
       const n = [];
-      if (!LOS.prefs.setupDone) n.push(row('Finish setting up', 'Run Setup to pick your name, time zone and apps', 'wand', goSetup(), { pic: 'setup' }));
+      if (!LOS.prefs.setupDone) n.push(row('Finish setting up', 'Your name, time zone and apps', 'wand', goSetup(), { pic: 'setup' }));
       if (net && !net.connected) n.push(row('No network connection', 'Open Network settings', 'wifi', () => netPanel(), { pic: 'network' }));
       if (vol && vol.available && vol.muted) n.push(row('Sound is muted', 'Open Sound settings', 'sound', () => volPanel(), { pic: 'sound' }));
       if (storage && !storage.saving) n.push(row('Saving is off', 'Changes reset when you shut down', 'info', () => savingPanel(), { pic: 'saving' }));
@@ -541,12 +541,12 @@ function typeAll(ids, finish) {
   const go = k => { const el = $('#' + ids[k]); if (!el) return; el.focus(); LOS.osk.show(el, { onDone: () => k + 1 < ids.length ? go(k + 1) : finish() }); };
   go(0);
 }
-function typeRow(label, ids, finish) { return row(label, 'With the on-screen keyboard', 'keyboard', () => typeAll(ids, finish), { pic: 'keyboard' }); }
+function typeRow(label, ids, finish) { return Object.assign(row(label, 'With the on-screen keyboard', 'keyboard', () => typeAll(ids, finish), { pic: 'keyboard' }), { typing: true }); }
 function autoType(ids, finish) { if (LOS.padRecent()) setTimeout(() => { if (P) typeAll(ids, finish); }, 120); }
 function dropInput() { const a = document.activeElement; if (a && a.closest && a.closest('#panel')) a.blur(); }
 function rp() {
   $('#pl').innerHTML = P.rows.map((o, k) => o.slider != null
-    ? `<div class="slider${k === P.i ? ' f' : ''}" data-k="${k}" role="slider" aria-valuenow="${o.slider}"><i style="width:${o.slider}%"></i><b style="left:${o.slider}%"></b></div>`
+    ? `<div class="slider${k === P.i ? ' f' : ''}" data-k="${k}" role="slider" aria-label="${esc(o.t || 'Volume')}" aria-valuenow="${o.slider}"><i style="width:${o.slider}%"></i><b style="left:${o.slider}%"></b></div>`
     : `<div class="it${k === P.i ? ' f' : ''}" data-k="${k}">${rowIcon(o)}<span class="txt"><span>${esc(o.t)}</span>${o.s ? `<small>${esc(o.s)}</small>` : ''}</span></div>`).join('');
   keepVisible($('#pl'));
 }
@@ -861,8 +861,13 @@ function back() { if (mode === 'panel') closePanel(); else if (mode === 'guide')
 function menu() { if (mode === 'home') openG(); else closeAll(); }
 function ok() { if (mode === 'home') act(); else if (mode === 'guide') gact(); else if (mode === 'panel') pact(); }
 function nav(a, e) {
-  // Enter in a panel's text box does the panel's main thing
-  if (a === 'ok' && e && e.target && e.target.tagName === 'INPUT' && mode === 'panel' && P && P.enter) { P.enter(); return; }
+  // Enter in a panel's text box does the panel's main thing, unless another choice (like Cancel)
+  // was picked with the arrows
+  if (a === 'ok' && e && e.target && e.target.tagName === 'INPUT' && mode === 'panel' && P && P.enter) {
+    const o = P.rows[P.i];
+    if (o && !o.typing && o.a !== P.enter) { o.a(); return; }
+    P.enter(); return;
+  }
   if (mode === 'move') { const f = { left: () => moveBy(-1), right: () => moveBy(1), ok: dropMove, back: cancelMove, menu: cancelMove, guide: cancelMove }[a]; if (f) f(); return; }
   const f = { left: () => mv(-1, 0), right: () => mv(1, 0), up: () => mv(0, -1), down: () => mv(0, 1), ok, back, menu,
     guide: menu,                                              // Super key / Xbox button: open or close the side menu

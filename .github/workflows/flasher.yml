@@ -41,28 +41,36 @@ jobs:
         run: |
           Start-Transcript -Path "$PWD\vdisk.log"
           $vhd = "$env:RUNNER_TEMP\test.vhd"
-          "create vdisk file=$vhd maximum=96 type=fixed`nselect vdisk file=$vhd`nattach vdisk" | Out-File dp.txt -Encoding ascii
+          "create vdisk file=$vhd maximum=96 type=fixed" | Out-File dp0.txt -Encoding ascii
+          diskpart /s dp0.txt
+          # a pretend old save area right where LaunchOS (24 MB here) will end: the flasher must clear it
+          $fs = [IO.File]::OpenWrite($vhd); [void]$fs.Seek(24MB + 1024, 'Begin'); $m = [Text.Encoding]::ASCII.GetBytes('OLD-SAVES-MARKER'); $fs.Write($m, 0, $m.Length); $fs.Close()
+          "select vdisk file=$vhd`nattach vdisk" | Out-File dp.txt -Encoding ascii
           diskpart /s dp.txt
           Start-Sleep 3
           $disk = (Get-Disk | Where-Object { $_.Location -eq $vhd } | Select-Object -First 1).Number
-          if ($null -eq $disk) { $disk = (Get-Disk | Where-Object { $_.Size -lt 200MB } | Select-Object -First 1).Number }
           "virtual disk number: $disk"
+          if ($null -eq $disk) { Stop-Transcript; exit 1 }
           # a volume with a drive letter on it, like a USB drive that's in use
           Initialize-Disk -Number $disk -PartitionStyle MBR
           New-Partition -DiskNumber $disk -UseMaximumSize -AssignDriveLetter | Format-Volume -FileSystem FAT32 -Confirm:$false
           Get-Volume | Format-Table DriveLetter, FileSystemLabel, Size
-          Start-Process out/LaunchOS-Flasher.exe -ArgumentList '--make-test-image', "$PWD\fake.iso", '9.9' -Wait
-          $p = Start-Process out/LaunchOS-Flasher.exe -ArgumentList '--write-test', $disk, "$PWD\fake.iso", "$PWD\write.log" -Wait -PassThru
+          $mk = Start-Process out/LaunchOS-Flasher.exe -ArgumentList '--make-test-image', "$PWD\fake.iso", '9.9' -Wait -PassThru
+          if ($mk.ExitCode -ne 0) { "couldn't make the test image"; Stop-Transcript; exit 1 }
+          $p = Start-Process out/LaunchOS-Flasher.exe -ArgumentList '--write-test-vhd', "$vhd", "$PWD\fake.iso", "$PWD\write.log" -Wait -PassThru
           Get-Content write.log
           "select vdisk file=$vhd`ndetach vdisk" | Out-File dp2.txt -Encoding ascii
           diskpart /s dp2.txt
           # the disk's bytes are the image's bytes (a fixed VHD is the raw disk plus a 512-byte footer)
           $img = [IO.File]::ReadAllBytes("$PWD\fake.iso")
-          $fs = [IO.File]::OpenRead($vhd); $buf = New-Object byte[] $img.Length; [void]$fs.Read($buf, 0, $buf.Length); $fs.Close()
+          $fs = [IO.File]::OpenRead($vhd); $buf = New-Object byte[] $img.Length; [void]$fs.Read($buf, 0, $buf.Length)
+          [void]$fs.Seek(24MB + 1024, 'Begin'); $after = New-Object byte[] 16; [void]$fs.Read($after, 0, 16); $fs.Close()
           $same = [Linq.Enumerable]::SequenceEqual([byte[]]$img, [byte[]]$buf)
+          $cleared = -not ($after | Where-Object { $_ -ne 0 })
           "disk matches the image: $same"
+          "old save area cleared: $cleared"
           Stop-Transcript
-          if ($p.ExitCode -ne 0 -or -not $same) { exit 1 }
+          if ($p.ExitCode -ne 0 -or -not $same -or -not $cleared) { exit 1 }
 
       - name: Screenshot of the window
         if: always()

@@ -43,12 +43,14 @@ namespace LaunchOSFlasher
         {
             try
             {
-                var resp = await Http.GetAsync("https://api.github.com/repos/" + Repo + "/releases/latest");
+                var resp = await Http.GetAsync("https://api.github.com/repos/" + Repo + "/releases/latest").ConfigureAwait(false);
                 if (resp.StatusCode == HttpStatusCode.NotFound)
-                    return Tuple.Create<Release, string>(null, "No LaunchOS release can be downloaded right now.");
+                    return Tuple.Create<Release, string>(null, "No LaunchOS release can be downloaded from GitHub right now.");
+                if ((int)resp.StatusCode == 403 || (int)resp.StatusCode == 429)
+                    return Tuple.Create<Release, string>(null, "GitHub is busy (too many checks from this network). Try again in an hour.");
                 if (!resp.IsSuccessStatusCode)
                     return Tuple.Create<Release, string>(null, "GitHub didn't answer (" + (int)resp.StatusCode + "). Try again later.");
-                string json = await resp.Content.ReadAsStringAsync();
+                string json = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
                 var r = Parse(json);
                 if (r == null) return Tuple.Create<Release, string>(null, "The newest release has no LaunchOS.iso.");
                 string sumsUrl = null;
@@ -56,12 +58,15 @@ namespace LaunchOSFlasher
                     if (a.Key == "SHA256SUMS.txt") sumsUrl = a.Value;
                 if (sumsUrl != null)
                 {
-                    foreach (var line in (await Http.GetStringAsync(sumsUrl)).Split('\n'))
+                    foreach (var line in (await Http.GetStringAsync(sumsUrl).ConfigureAwait(false)).Split('\n'))
                     {
                         var parts = line.Trim().Split(new[] { ' ', '*' }, StringSplitOptions.RemoveEmptyEntries);
                         if (parts.Length == 2 && parts[1] == (r.IsZip ? "LaunchOS.zip" : "LaunchOS.iso") && parts[0].Length == 64) r.IsoSha256 = parts[0].ToLowerInvariant();
                     }
                 }
+                // only what can be checked is downloaded
+                if (r.IsoSha256 == "")
+                    return Tuple.Create<Release, string>(null, "LaunchOS " + r.Version + " on GitHub has no checksum, so the flasher won't download it.");
                 return Tuple.Create(r, "");
             }
             catch (Exception)
@@ -105,39 +110,55 @@ namespace LaunchOSFlasher
         }
 
         /// <summary>Downloads the release's ISO (or reuses an earlier download), checking its SHA-256.</summary>
-        public static async Task<string> DownloadIso(Release r, IProgress<Tuple<long, long>> progress, CancellationToken ct)
+        public static async Task<string> DownloadIso(Release r, IProgress<Tuple<long, long>> progress, IProgress<string> step, CancellationToken ct)
         {
+            if (r.IsoSha256 == "") throw new InvalidDataException("This release can't be checked, so it isn't downloaded.");
             Directory.CreateDirectory(Downloads);
             string dest = System.IO.Path.Combine(Downloads, "LaunchOS-" + r.Version + (r.IsZip ? ".zip" : ".iso"));
-            if (File.Exists(dest) && new FileInfo(dest).Length == r.IsoSize && (r.IsoSha256 == "" || Sha256(dest, ct) == r.IsoSha256))
-                return dest;
-            string part = dest + ".part";
-            using (var resp = await Http.GetAsync(r.IsoUrl, HttpCompletionOption.ResponseHeadersRead, ct))
+            // an earlier download is used again only if it checks out
+            if (File.Exists(dest))
             {
-                resp.EnsureSuccessStatusCode();
-                long total = resp.Content.Headers.ContentLength ?? r.IsoSize;
-                using (var src = await resp.Content.ReadAsStreamAsync())
-                using (var dst = new FileStream(part, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 20))
+                step?.Report("Checking the earlier download");
+                if (new FileInfo(dest).Length == r.IsoSize && await Task.Run(() => Sha256(dest, ct), ct).ConfigureAwait(false) == r.IsoSha256)
+                    return dest;
+                File.Delete(dest);
+            }
+            foreach (var old in Directory.GetFiles(Downloads, "*.part")) { try { File.Delete(old); } catch { } }
+            string part = dest + ".part";
+            try
+            {
+                using (var resp = await Http.GetAsync(r.IsoUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false))
                 {
-                    var buf = new byte[1 << 20];
-                    long got = 0;
-                    int n;
-                    while ((n = await src.ReadAsync(buf, 0, buf.Length, ct)) > 0)
+                    resp.EnsureSuccessStatusCode();
+                    long total = resp.Content.Headers.ContentLength ?? r.IsoSize;
+                    long free = new DriveInfo(System.IO.Path.GetPathRoot(Downloads)).AvailableFreeSpace;
+                    if (total > free - (64L << 20)) throw new IOException("There isn't enough free space on this PC for the download (" + Images.Size(total) + ").");
+                    using (var src = await resp.Content.ReadAsStreamAsync().ConfigureAwait(false))
+                    using (var dst = new FileStream(part, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 20))
                     {
-                        await dst.WriteAsync(buf, 0, n, ct);
-                        got += n;
-                        progress?.Report(Tuple.Create(got, total));
+                        var buf = new byte[1 << 20];
+                        long got = 0;
+                        int n;
+                        while ((n = await src.ReadAsync(buf, 0, buf.Length, ct).ConfigureAwait(false)) > 0)
+                        {
+                            await dst.WriteAsync(buf, 0, n, ct).ConfigureAwait(false);
+                            got += n;
+                            progress?.Report(Tuple.Create(got, total));
+                        }
+                        if (got != r.IsoSize) throw new InvalidDataException("The download stopped early. Try again.");
                     }
                 }
+                step?.Report("Checking the download");
+                if (await Task.Run(() => Sha256(part, ct), ct).ConfigureAwait(false) != r.IsoSha256)
+                    throw new InvalidDataException("The download was damaged. Try again.");
+                File.Move(part, dest);
+                return dest;
             }
-            if (r.IsoSha256 != "" && Sha256(part, ct) != r.IsoSha256)
+            catch
             {
-                File.Delete(part);
-                throw new InvalidDataException("The download was damaged. Try again.");
+                try { File.Delete(part); } catch { }
+                throw;
             }
-            if (File.Exists(dest)) File.Delete(dest);
-            File.Move(part, dest);
-            return dest;
         }
 
         public static string Sha256(string path, CancellationToken ct)

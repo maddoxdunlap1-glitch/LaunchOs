@@ -73,9 +73,13 @@ namespace LaunchOSFlasher
                     Check(Releases.Parse("{\"tag_name\":\"v1.0\",\"assets\":[]}") == null, "a release without an ISO isn't offered");
                     var latest = Releases.Latest().Result;
                     log.WriteLine("info  newest on GitHub: " + (latest.Item1 != null ? latest.Item1.Version + " " + latest.Item1.IsoUrl + " sha " + latest.Item1.IsoSha256 : latest.Item2));
-                    var drives = Drives.List(allowAny: true);
-                    foreach (var d in drives) log.WriteLine("info  drive " + d.Number + ": " + d.Label + " bus " + d.Bus + (d.HasWindows ? " (Windows)" : "") + (d.HasLaunchOS ? " has " + Images.Describe(d.LaunchOSVersion) : ""));
-                    Check(Drives.List().All(d => d.Bus == Drives.BusUsb || d.Bus == Drives.BusSd || d.Bus == Drives.BusMmc), "only USB drives and memory cards are offered");
+                    var disks = Drives.All(out bool windowsFound);
+                    foreach (var d in disks) log.WriteLine("info  drive " + d.Number + ": " + d.Label + " bus " + d.Bus + " sector " + d.SectorSize + (d.HasWindows ? " (Windows)" : "") + (d.HasLaunchOS ? " has " + Images.Describe(d.LaunchOSVersion) : ""));
+                    Check(disks.Count > 0 && disks.All(d => d.Size > 0 && d.SectorSize > 0), "sees the PC's drives, with their sizes");
+                    Check(windowsFound && disks.Count(d => d.HasWindows) == 1, "finds the drive Windows is on");
+                    var offered = Drives.List(true, out string problem);
+                    Check(problem == "" && offered.All(d => !d.HasWindows && (d.Bus == Drives.BusUsb || d.Bus == Drives.BusSd || d.Bus == Drives.BusMmc)),
+                        "only USB drives and memory cards are offered, never the Windows drive (" + offered.Count + " offered here)");
                 }
                 catch (Exception e)
                 {
@@ -93,21 +97,26 @@ namespace LaunchOSFlasher
             return 0;
         }
 
-        /// <summary>Writes an image to a disk (a virtual one in the tests) and checks it.</summary>
-        public static int WriteTest(int disk, string image, string logPath)
+        /// <summary>Writes an image to a test VHD file's disk and checks it. Only a small virtual disk made from
+        /// the named VHD file can be written this way: never a real drive.</summary>
+        public static int WriteTest(string vhd, string image, string logPath)
         {
             using (log = new StreamWriter(logPath))
             {
                 try
                 {
-                    var d = Drives.List(allowAny: true).FirstOrDefault(x => x.Number == disk) ?? throw new Exception("no disk " + disk);
-                    log.WriteLine("writing " + image + " to " + d.Label + " (bus " + d.Bus + ")");
+                    int disk = Drives.DiskOfVhd(vhd);
+                    log.WriteLine("test disk " + vhd + " is disk " + disk);
+                    var d = Drives.All(out _).FirstOrDefault(x => x.Number == disk) ?? throw new Exception("no disk " + disk);
+                    if (d.Bus != Drives.BusVirtual || d.Size > (1L << 30) || d.HasWindows) throw new Exception("disk " + disk + " isn't a small test disk (bus " + d.Bus + ")");
+                    Check(!Drives.List(true, out _).Any(x => x.Number == disk), "a virtual disk isn't offered as a USB drive");
+                    log.WriteLine("writing " + image + " to " + d.Label + " (bus " + d.Bus + ", volumes " + d.Volumes.Count + ")");
                     var info = Images.Inspect(image);
                     var w = new Writer();
                     string last = "";
                     w.Progress = (step, done, total) => { if (step != last) { log.WriteLine("  " + step); last = step; } };
                     var t0 = DateTime.Now;
-                    w.Write(d, info, true, CancellationToken.None);
+                    w.Write(d, info, true, CancellationToken.None, testDisk: true);
                     log.WriteLine("written and checked in " + (DateTime.Now - t0).TotalSeconds.ToString("0.0") + " s");
                     Drives.ReadLaunchOS(d);
                     Check(d.HasLaunchOS && d.LaunchOSVersion == info.Version, "the drive now reads as " + Images.Describe(d.LaunchOSVersion));

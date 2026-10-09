@@ -42,8 +42,10 @@ def make_test_iso(work, out_iso, from_iso=''):
         g = '/usr/lib/grub'
     cfg = os.path.join(img, 'boot', 'grub', 'grub.cfg')
     orig = open(cfg).read()
+    # (plymouth.ignore-serial-consoles: the boot animation still draws on the screen, as on a real PC,
+    # though the serial port is a console too)
     test = orig.replace('quiet splash', 'console=ttyS0,115200 console=tty0 systemd.mask=serial-getty@ttyS0.service '
-                        'systemd.debug_shell=/dev/ttyS0 quiet splash')
+                        'systemd.debug_shell=/dev/ttyS0 plymouth.ignore-serial-consoles quiet splash')
     assert test != orig, 'boot line not found'
     try:
         open(cfg, 'w').write(test)

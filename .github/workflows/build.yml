@@ -144,7 +144,8 @@ jobs:
           mkdir -p $W/update
           # the short note Settings > Updates shows: dist/UPDATE_NOTE, or the first line of the release notes
           { cat dist/UPDATE_NOTE 2>/dev/null || head -1 dist/NOTES.md; } > $W/update/notes.txt
-          FULL=$(cat dist/FULL 2>/dev/null || echo 0) src/build/debian/make-update.sh "$V" $W/update $(cat dist/APT 2>/dev/null)
+          FULL=$(cat dist/FULL 2>/dev/null || echo 0) MIN_VERSION=$(cat dist/MIN_VERSION 2>/dev/null || echo 1.0) \
+            src/build/debian/make-update.sh "$V" $W/update $(cat dist/APT 2>/dev/null)
           cp $W/img/LaunchOS.iso $W/LaunchOS.iso
           ( cd $W && sha256sum LaunchOS.iso LaunchOS.zip > SHA256SUMS.txt && cat SHA256SUMS.txt )
           ls -la $W
@@ -158,7 +159,7 @@ jobs:
           tar czf $W/boot-report.tar.gz -C out .
           gh release delete "$v" --yes --cleanup-tag -R "$GITHUB_REPOSITORY" 2>/dev/null || true
           gh release create "$v" $W/LaunchOS.zip $W/LaunchOS.iso $W/SHA256SUMS.txt $W/update/launchos-update.tar.gz \
-            $W/update/launchos-update.json $W/flasher/LaunchOS-Flasher.exe -R "$GITHUB_REPOSITORY" \
+            $W/update/launchos-update.json $W/update/launchos-update-v1.json $W/flasher/LaunchOS-Flasher.exe -R "$GITHUB_REPOSITORY" \
             --title "LaunchOS $v" --notes-file dist/NOTES.md
           # keep only the newest release (removed after the new one is up, so updates never find nothing)
           for t in $(gh release list -R "$GITHUB_REPOSITORY" --limit 50 --json tagName -q '.[].tagName'); do
