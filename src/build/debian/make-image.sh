@@ -38,7 +38,13 @@ mount -t proc proc "$R/proc"; mount -t sysfs sys "$R/sys"; mount -t tmpfs tmpfs 
 IN="chroot $R env LANG=C.UTF-8"
 
 # ---------- LaunchOS's files ----------
-cp -a "$SRC/rootfs/." "$R/"
+# Owned by root whoever checked out the source, and without touching folders the system already
+# has (cp -a would give /, /etc, /usr... the checkout's owner: on GitHub that's uid 1001).
+tar -C "$SRC/rootfs" --owner=0 --group=0 --numeric-owner -cf - . | tar -C "$R" -xpf - --no-overwrite-dir
+# nothing of ours writable by others (a checkout made with umask 002 has group-writable files)
+( cd "$SRC/rootfs" && find . -mindepth 1 ! -type l -print0 ) | while IFS= read -r -d '' p; do
+  [ -L "$R/$p" ] || chmod go-w "$R/$p"
+done
 find "$R/usr/local" -name __pycache__ -prune -exec rm -rf {} +
 chown -R 0:0 "$R/usr/local" "$R/etc/launchos" "$R/etc/systemd/system" "$R/etc/initramfs-tools"
 chmod 755 "$R/usr/local/bin/launchos-session" "$R/usr/local/bin/launchos-inner" "$R"/usr/local/sbin/launchos-* \
@@ -69,13 +75,19 @@ for u in launcher.service launchos-helper.path launchos-reconcile.service launch
          iwd.service seatd.service systemd-networkd.service systemd-resolved.service systemd-timesyncd.service getty@tty2.service; do
   $IN systemctl enable "$u" >/dev/null 2>&1 || echo "note: couldn't enable $u"
 done
-for u in getty@tty1.service systemd-networkd-wait-online.service apt-daily.timer apt-daily-upgrade.timer e2scrub_all.timer; do
+for u in getty@tty1.service systemd-networkd-wait-online.service apt-daily.timer apt-daily-upgrade.timer e2scrub_all.timer \
+         systemd-firstboot.service; do
   $IN systemctl mask "$u" >/dev/null 2>&1 || true
 done
 # the player's groups (seat access, sound, Wi-Fi) in case the base predates a change
 $IN groupadd -f netdev
 $IN usermod -aG audio,video,input,render,netdev player
 $IN passwd -l root >/dev/null
+# Every PC makes its own machine id on its first start (it names the PC to the network's DHCP
+# server, among other things). /etc/systemd/system-preset/00-launchos.preset keeps systemd's
+# first-start setup from switching services on.
+: > "$R/etc/machine-id"
+mkdir -p "$R/var/lib/dbus"; ln -sf /etc/machine-id "$R/var/lib/dbus/machine-id"
 
 # font cache made now, not on first start (the Terminal's first window waits for it)
 $IN fc-cache -s >/dev/null 2>&1 || true
@@ -87,6 +99,9 @@ $IN update-initramfs -u -k "$KVER"
 # graphics drivers and their firmware (about 140 MB) come out of it. They load from the system a
 # few seconds later; until then the boot animation uses the screen the firmware (or GRUB) set up.
 # Intel graphics, virtual machine graphics and everything that finds the disc or USB stick stay.
+# This build's own id: the start-up image only accepts a disc or stick with the same id (so with
+# two LaunchOS sticks plugged in, it starts from the one the PC booted, not the other one).
+LIVE_UUID=$(cat /proc/sys/kernel/random/uuid)
 cat > "$R/tmp/slim-initrd" <<'SLIM'
 #!/bin/sh
 set -e
@@ -99,6 +114,7 @@ rm -rf "$M/amd" "$M/nouveau" "$M/radeon" "$F/amdgpu" "$F/nvidia" "$F/radeon"
 # network cards aren't needed to start from a disc, USB stick or drive; nor is udev's hardware list
 rm -rf "$T/main/usr/lib/modules/$K/kernel/drivers/net" "$T/main/usr/lib/modules/$K/kernel/drivers/infiniband" "$T/main/usr/lib/udev/hwdb.bin"
 depmod -a -b "$T/main" "$K"
+mkdir -p "$T/main/conf"; echo "$2" > "$T/main/conf/uuid.conf"
 : > "$I.new"
 for e in "$T"/early*; do
   [ -d "$e" ] && ( cd "$e" && find . -print0 | LC_ALL=C sort -z | cpio --null -o -H newc --quiet ) >> "$I.new"
@@ -109,14 +125,23 @@ rm -rf "$T"
 SLIM
 chmod 755 "$R/tmp/slim-initrd"
 ls -l "$R/boot/initrd.img-$KVER"
-$IN /tmp/slim-initrd "$KVER"
+$IN /tmp/slim-initrd "$KVER" "$LIVE_UUID"
 rm -f "$R/tmp/slim-initrd"
 ls -l "$R/boot/initrd.img-$KVER"
+# done now instead of at every start: the library cache, and the "system was updated" marks that
+# would otherwise make the first start rebuild it (1-3 seconds)
+$IN ldconfig
+$IN /usr/lib/systemd/systemd-update-done || touch "$R/etc/.updated" "$R/var/.updated"
 cleanup
 trap - EXIT
 
 # ---------- the disc image ----------
-rm -rf "$IMG"; mkdir -p "$IMG/live" "$IMG/boot/grub" "$IMG/EFI/BOOT"
+# nothing in the system may belong to a normal user except the player's home
+bad=$(find "$R" -xdev \( -uid +999 -o -gid +999 \) ! -uid 65534 ! -gid 65534 ! -path "$R/home/*" -print | head -20)
+if [ -n "$bad" ]; then echo "files owned by a normal user:"; echo "$bad"; exit 1; fi
+
+rm -rf "$IMG"; mkdir -p "$IMG/live" "$IMG/boot/grub" "$IMG/EFI/BOOT" "$IMG/.disk"
+echo "$LIVE_UUID" > "$IMG/.disk/live-uuid-$LIVE_UUID"
 cp "$R/boot/vmlinuz-$KVER" "$IMG/live/vmlinuz"
 cp "$R/boot/initrd.img-$KVER" "$IMG/live/initrd.img"
 # quickusbmodules: live-boot otherwise waits 5 seconds for USB drives that are already there
@@ -157,11 +182,11 @@ menuentry "LaunchOS" {
   initrd /live/initrd.img
 }
 EOF
-# Boot loaders (Debian's GRUB). Both find the system by looking for /live/vmlinuz.
-cat > "$W/embed.cfg" <<'EOF'
-search --no-floppy --set=root --file /live/vmlinuz
-set prefix=($root)/boot/grub
-configfile ($root)/boot/grub/grub.cfg
+# Boot loaders (Debian's GRUB). Both find the system by this build's own id file.
+cat > "$W/embed.cfg" <<EOF
+search --no-floppy --set=root --file /.disk/live-uuid-$LIVE_UUID
+set prefix=(\$root)/boot/grub
+configfile (\$root)/boot/grub/grub.cfg
 EOF
 G=$R/usr/lib/grub
 grub-mkimage -d "$G/i386-pc" -O i386-pc-eltorito -p /boot/grub -c "$W/embed.cfg" -o "$IMG/boot/grub/eltorito.img" \

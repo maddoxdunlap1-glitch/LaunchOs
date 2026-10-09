@@ -91,7 +91,11 @@ body.panelopen #stage::after { content: ""; position: absolute; inset: 0; backgr
 
 /* on-screen keyboard (controller typing) */
 #osk { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); width: 1000px; padding: 14px 16px 16px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line2); box-shadow: 0 18px 60px rgba(0, 0, 0, .55); z-index: 80; }
-.oskhead { display: flex; align-items: center; justify-content: space-between; font-size: 15px; color: var(--ink-2); margin: 0 4px 10px; }
+#osk.top { bottom: auto; top: 18px; }
+.oskhead { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 15px; color: var(--ink-2); margin: 0 4px 10px; }
+.oskval { flex: 1; min-width: 0; padding: 6px 12px; border-radius: 9px; background: var(--panel-2); color: var(--ink); font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+.oskval:empty::before { content: " "; white-space: pre; }
+.oskk.k-eye { background: var(--chip); font-size: 15px; flex: 1.3; }
 .oskhelp { font-size: 13px; color: var(--mute); display: flex; align-items: center; gap: 6px; }
 .oskhelp u { text-decoration: none; display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--chip); color: var(--ink); font-size: 11px; font-weight: 700; margin-left: 8px; }
 .oskrow { display: flex; gap: 8px; margin-top: 8px; justify-content: center; }

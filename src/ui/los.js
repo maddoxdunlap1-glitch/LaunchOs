@@ -272,8 +272,12 @@
     document.body.classList.toggle('wall-contour', still === 'contour');
     document.body.classList.toggle('wall-plain', still === 'plain' || still === 'contour');
     w.style.backgroundImage = still === 'contour' || still === 'plain' ? 'none' : `url("walls/${still}.webp")`;
-    // a live background draws on a canvas over its still picture (which shows if it can't run)
-    const want = live && proOK() ? live.live : '';
+    // a live background draws on a canvas over its still picture (which shows if it can't run).
+    // Only on pages that ask for it (Home, sign-in, Setup): behind Files, the Store or a video it
+    // would only cost processor time. Never when reduced motion is asked for.
+    const moving = document.body.hasAttribute('data-live') &&
+      !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+    const want = live && proOK() && moving ? live.live : '';
     if (want === liveId) return;
     if (liveStop) { try { liveStop(); } catch (e) { /* already gone */ } liveStop = null; }
     w.querySelectorAll('canvas').forEach(c => c.remove());
@@ -312,11 +316,13 @@
   }
   /* Whether LaunchOS Pro is on (remembered, so the look is right from the first frame). */
   function checkPro() {
-    if (!native) { if (!!prefs.proOn !== mockPro.active) save({ proOn: mockPro.active }); return; }
-    raw('pro_state').then(s => {
+    // (pages redraw what depends on Pro, like the badge, when it changes: the 'los:pro' event)
+    const changed = on => { save({ proOn: on }); document.dispatchEvent(new CustomEvent('los:pro', { detail: on })); };
+    if (!native) { if (!!prefs.proOn !== mockPro.active) changed(mockPro.active); return Promise.resolve(); }
+    return raw('pro_state').then(s => {
       if (!s || s.error) return;
       const on = !!s.active;
-      if (on !== !!prefs.proOn) save({ proOn: on });
+      if (on !== !!prefs.proOn) changed(on);
     });
   }
 
@@ -353,26 +359,46 @@
   };
   const OSK_NAMES = { bksp: '⌫', shift: '⇧', done: 'Done', sym: '#+=', abc: 'abc', left: '◀', right: '▶', space: 'Space', hide: 'Hide' };
   const osk = {
-    open: false, el: null, input: null, layer: 'abc', shift: false, r: 1, c: 0,
+    open: false, el: null, input: null, layer: 'abc', shift: false, r: 1, c: 0, pw: false,
     show(input, opts) {
       if (!textBox(input)) return;
       this.input = input; this.done = opts && opts.onDone; this.open = true; this.layer = 'abc'; this.shift = false; this.r = 1; this.c = 0;
+      // a password box (or one that was a password box before Show): typed text shows as dots
+      this.pw = input.type === 'password' || input.dataset.pw === '1';
+      if (this.pw) input.dataset.pw = '1';
       const st = $('#stage') || document.body;
       if (!this.el) { this.el = document.createElement('div'); this.el.id = 'osk'; }
+      this.el.classList.remove('top');
       st.append(this.el);
       this.el.onmousedown = ev => { ev.preventDefault(); const b = ev.target.closest('[data-r]'); if (b) { this.r = +b.dataset.r; this.c = +b.dataset.c; this.press(); } };
       this.draw();
       document.body.classList.add('oskon');
       input.focus();
+      // never over the box being typed in: if it would cover it, the keyboard goes to the top
+      const a = input.getBoundingClientRect(), k = this.el.getBoundingClientRect();
+      if (a.bottom > k.top && a.top < k.bottom) this.el.classList.add('top');
     },
-    hide() { if (!this.open) return; this.open = false; if (this.el) this.el.remove(); document.body.classList.remove('oskon'); },
-    rows() { return OSK_ROWS[this.layer]; },
-    label(k) { if (OSK_NAMES[k]) return OSK_NAMES[k]; return this.shift ? k.toUpperCase() : k; },
+    hide() { if (!this.open) return; this.open = false; this.done = null; if (this.el) this.el.remove(); document.body.classList.remove('oskon'); },
+    rows() {
+      const R = OSK_ROWS[this.layer];
+      if (!this.pw) return R;   // password boxes get a Show / Hide text key next to Hide
+      const last = R[R.length - 1].slice(); last.splice(last.length - 1, 0, 'eye');
+      return R.slice(0, -1).concat([last]);
+    },
+    label(k) {
+      if (k === 'eye') return this.input && this.input.type === 'password' ? 'Show' : 'Hide text';
+      if (OSK_NAMES[k]) return OSK_NAMES[k];
+      return this.shift ? k.toUpperCase() : k;
+    },
+    val() {
+      const i = this.input; if (!i) return '';
+      return i.type === 'password' ? '•'.repeat(i.value.length) : i.value;
+    },
     draw() {
       const R = this.rows();
       this.r = Math.min(this.r, R.length - 1); this.c = Math.min(this.c, R[this.r].length - 1);
       const name = this.input && (this.input.getAttribute('aria-label') || this.input.placeholder) || 'Type';
-      this.el.innerHTML = `<div class="oskhead"><span>${esc(name)}</span><span class="oskhelp"><u>X</u> Delete <u>Y</u> Space <u>B</u> Close <u>≡</u> Done</span></div>` +
+      this.el.innerHTML = `<div class="oskhead"><span>${esc(name)}</span><span class="oskval">${esc(this.val())}</span><span class="oskhelp"><u>X</u> Delete <u>Y</u> Space <u>B</u> Close <u>≡</u> Done</span></div>` +
         R.map((row, r) => `<div class="oskrow">${row.map((k, c) => `<button class="oskk k-${k.length > 1 ? k : 'ch'}${k === 'shift' && this.shift ? ' on' : ''}${r === this.r && c === this.c ? ' f' : ''}" data-r="${r}" data-c="${c}">${esc(this.label(k))}</button>`).join('')}</div>`).join('');
     },
     edit(fn) {
@@ -384,6 +410,8 @@
       i.value = r[0].slice(0, max); const pos = Math.min(r[1], i.value.length);
       try { i.setSelectionRange(pos, pos); } catch (e) { /* some inputs have no cursor */ }
       i.dispatchEvent(new Event('input', { bubbles: true }));
+      const v = this.el && this.el.querySelector('.oskval');
+      if (v) v.textContent = this.val();
     },
     type(t) { this.edit((v, a, b) => [v.slice(0, a) + t + v.slice(b), a + t.length]); if (this.shift) { this.shift = false; this.draw(); } },
     press() {
@@ -394,13 +422,16 @@
       else if (k === 'sym' || k === 'abc') { this.layer = k === 'sym' ? 'sym' : 'abc'; this.draw(); }
       else if (k === 'left' || k === 'right') this.edit((v, a) => [v, Math.max(0, Math.min(v.length, a + (k === 'left' ? -1 : 1)))]);
       else if (k === 'hide') this.hide();
+      else if (k === 'eye') { if (this.input) this.input.type = this.input.type === 'password' ? 'text' : 'password'; this.draw(); }
       else if (k === 'done') this.enter();
       else this.type(this.label(k));
     },
     enter() {
       const i = this.input, done = this.done; this.hide();
-      if (done) done(i ? i.value : '');
-      else if (i) i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      // the box went away (its panel was closed or replaced): nothing to finish
+      if (!i || !i.isConnected || !i.offsetParent) return;
+      if (done) done(i.value);
+      else i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     },
     move(dr, dc) {
       const R = this.rows();
@@ -443,7 +474,7 @@
     document.body.classList.remove('nocur');
   }, { capture: true });   // capture: runs before any element's own mousemove handler
   const mouseRecent = () => performance.now() - lastMove < 300;
-  let lastPad = 0;
+  let lastPad = -Infinity;   // (no controller used yet: the on-screen keyboard doesn't pop up by itself)
   addEventListener('keydown', e => {
     hideCur();
     if (osk.open && osk.key(e)) { e.preventDefault(); return; }

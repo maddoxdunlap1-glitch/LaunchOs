@@ -137,3 +137,49 @@ test("early-access files can be downloaded, other names can't", async () => {
   }
   assert.equal((await call(env, post("/v1/download", { key: KEY, instance_id: a.body.instance_id, file: "secrets.txt" }))).status, 400);
 });
+
+test("not set up yet: no key works", async () => {
+  const { env } = setup();
+  env.LS_STORE_ID = "";
+  const a = await call(env, post("/v1/activate", { key: KEY, pc_id: pc(1) }));
+  assert.equal(a.status, 503);
+  assert.equal(a.body.error, "unavailable");
+});
+
+test("a key from someone else's store is refused", async () => {
+  const { ls, env } = setup();
+  ls.meta = { store_id: 999999, product_id: 2, order_id: 5 };
+  const a = await call(env, post("/v1/activate", { key: KEY, pc_id: pc(1) }));
+  assert.equal(a.status, 403);
+  assert.equal(a.body.error, "invalid_key");
+});
+
+test("Lemon Squeezy busy (429): ask again later, never 'wrong key'", async () => {
+  const { env } = setup();
+  const a = await call(env, post("/v1/activate", { key: KEY, pc_id: pc(1) }));
+  const real = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ error: "Too many requests" }), { status: 429 });
+  const c = await call(env, post("/v1/check", { key: KEY, instance_id: a.body.instance_id }));
+  assert.equal(c.status, 503);
+  assert.equal(c.body.error, "unavailable");
+  globalThis.fetch = async () => { throw new Error("offline"); };
+  const d = await call(env, post("/v1/activate", { key: KEY, pc_id: pc(2) }));
+  assert.equal(d.body.error, "unavailable");
+  globalThis.fetch = real;
+});
+
+test("the same PC entering its key again keeps its one slot", async () => {
+  const { ls, env } = setup();
+  const first = await call(env, post("/v1/activate", { key: KEY, pc_id: pc(1) }));
+  for (let i = 0; i < 6; i++) {
+    const again = await call(env, post("/v1/activate", { key: KEY, pc_id: pc(1) }));
+    assert.equal(again.status, 200);
+    assert.equal(again.body.instance_id, first.body.instance_id);
+  }
+  assert.equal(ls.instances.size, 1);
+  // freed by Remove Pro: the next activation takes a new slot
+  await call(env, post("/v1/deactivate", { key: KEY, instance_id: first.body.instance_id }));
+  const next = await call(env, post("/v1/activate", { key: KEY, pc_id: pc(1) }));
+  assert.equal(next.status, 200);
+  assert.notEqual(next.body.instance_id, first.body.instance_id);
+});

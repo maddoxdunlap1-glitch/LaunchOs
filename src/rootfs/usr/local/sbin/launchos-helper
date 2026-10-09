@@ -184,8 +184,8 @@ def handle(req):
         elif op in ("install", "remove"):
             fresh_status("pro")
             background("launchos-pro", "/usr/local/sbin/launchos-pro", op)
-        elif op == "check":
-            background("launchos-pro-check", "/usr/local/sbin/launchos-pro", "check", "--now")
+        elif op == "check":   # (its own name: launchos-pro-check is the daily timer's service)
+            background("launchos-pro-checknow", "/usr/local/sbin/launchos-pro", "check", "--now")
     # Gaming mode (Pro): performance settings while a game runs, back to normal after
     elif action == "game":
         op = str(req.get("op", ""))

@@ -1909,23 +1909,48 @@ def kv_file(path):
     return out
 
 
+def json_obj(text):
+    try:
+        v = json.loads(text or '{}')
+    except ValueError:
+        return {}
+    return v if isinstance(v, dict) else {}
+
+
 def pro_info():
     """Whether LaunchOS Pro is on here (a checked key and the Pro extras installed)."""
-    try:
-        st = json.loads(read(PRO_STATE, '{}') or '{}')
-    except ValueError:
-        st = {}
-    try:
-        man = json.loads(read(os.path.join(PRO_DIR, 'manifest.json'), '{}') or '{}')
-    except ValueError:
-        man = {}
+    st = json_obj(read(PRO_STATE, '{}'))
+    man = json_obj(read(os.path.join(PRO_DIR, 'manifest.json'), '{}'))
     conf = kv_file(PRO_CONF)
     buy = conf.get('buy', '')
-    return {'active': st.get('status') == 'active' and bool(man), 'status': st.get('status', ''),
+    return {'active': st.get('status') == 'active' and bool(man), 'status': str(st.get('status', '')),
+            'installed': bool(man),   # (status active without the extras: they still have to download)
             'key_hint': str(st.get('key_hint', ''))[:20], 'since': str(st.get('since', ''))[:10],
             'version': str(man.get('version', ''))[:20], 'on_sale': bool(conf.get('url')),
             'buy': buy if re.fullmatch(r'https://[^\s"<>]{4,300}', buy) else '',
-            'job': job_status('pro'), 'fps_ok': os.path.exists('/usr/bin/mangohud')}
+            'job': job_status('pro'), 'fps_ok': os.path.exists('/usr/bin/mangohud'), 'saving': saving_on()}
+
+
+def pro_job(payload):
+    """Starts a Pro job and returns once it has really started, so the progress screen never shows
+    the previous job's result."""
+    path = '/run/launchos-status/pro.json'
+
+    def stamp():
+        try:
+            s = os.stat(path)
+            return (s.st_ino, s.st_mtime_ns)
+        except OSError:
+            return None
+    before = stamp()
+    if not helper_request(payload).get('ok'):
+        return {'ok': False, 'error': 'LaunchOS couldn’t ask for that. Try again.'}
+    end = time.monotonic() + 8
+    while time.monotonic() < end:
+        time.sleep(0.2)
+        if stamp() != before:
+            return {'ok': True}
+    return {'ok': False, 'error': 'LaunchOS Pro didn’t start. Try again.'}
 
 
 def pro_action(arg):
@@ -1937,12 +1962,13 @@ def pro_action(arg):
             return {'ok': False, 'error': 'That doesn’t look like a Pro key. It’s in the email from your purchase.'}
         if job_running('pro', 'launchos-pro'):
             return {'ok': False, 'error': 'Wait for LaunchOS Pro to finish what it’s doing.'}
-        helper_request({'action': 'pro', 'op': 'activate', 'key': key})
-        return {'ok': True}
-    if op in ('install', 'remove', 'check'):
-        if op != 'check' and job_running('pro', 'launchos-pro'):
+        return pro_job({'action': 'pro', 'op': 'activate', 'key': key})
+    if op in ('install', 'remove'):
+        if job_running('pro', 'launchos-pro'):
             return {'ok': False, 'error': 'Wait for LaunchOS Pro to finish what it’s doing.'}
-        helper_request({'action': 'pro', 'op': op})
+        return pro_job({'action': 'pro', 'op': op})
+    if op == 'check':
+        helper_request({'action': 'pro', 'op': 'check'})
         return {'ok': True}
     return {'ok': False, 'error': 'unknown'}
 
@@ -1987,12 +2013,31 @@ def gaming_set(arg):
     return g
 
 
+GAME_APPS = {'steam', 'winprog', 'roblox', 'minecraft', 'heroic'}
+
+
+def is_game(app_id):
+    """Steam, Windows programs, the game apps, and Store apps that are games or emulators."""
+    if app_id in GAME_APPS:
+        return True
+    if not app_id.startswith('app:') or not APP_ID.fullmatch(app_id[4:]):
+        return False
+    aid = app_id[4:]
+    desktop = f'/var/lib/flatpak/app/{aid}/current/active/export/share/applications/{aid}.desktop'
+    for line in read(desktop).splitlines():
+        if line.startswith('Categories='):
+            cats = line.split('=', 1)[1].split(';')
+            return 'Game' in cats or 'Emulator' in cats
+    return 'games' in ((_store['by_id'].get(aid) or {}).get('shelves') or [])
+
+
 def game_env(app_id, argv):
-    """With Pro: the FPS counter (MangoHud) and a bigger shader cache for games."""
-    if not pro_info()['active']:
+    """With Pro, for games: the FPS counter (MangoHud) and a bigger shader cache."""
+    if not is_game(app_id) or not pro_info()['active']:
         return argv, None
     g = gaming_get()
-    env = dict(os.environ, MESA_SHADER_CACHE_MAX_SIZE='10G')
+    # (without saving, the cache lives in memory: keep it small)
+    env = dict(os.environ, MESA_SHADER_CACHE_MAX_SIZE='10G' if saving_on() else '512M')
     if g['fps'] in FPS_MODES and os.path.exists('/usr/bin/mangohud'):
         env.update(MANGOHUD='1', MANGOHUD_CONFIG=FPS_MODES[g['fps']])
         if app_id == 'winprog':
@@ -2120,7 +2165,7 @@ class Launcher(Gtk.Application):
                 'store_info': store_info, 'store_home': store_home_apps, 'admin_password': lambda: admin_password(arg),
                 'store_action': lambda: store_action(arg), 'update_action': lambda: update_action(arg),
                 'get_app': lambda: get_app(arg), 'apps_info': apps_info, 'sign_in': lambda: self.sign_in(arg),
-                'pro_qr': pro_qr}
+                'pro_qr': pro_qr, 'pro_action': lambda: pro_action(arg)}
         if action in slow:
             def work():
                 try:
@@ -2176,7 +2221,6 @@ class Launcher(Gtk.Application):
             'sign_out': lambda: self.sign_out(end_apps=True),
             'signin_ask': lambda: set_signin_ask(bool(arg)),
             'pro_state': pro_info,
-            'pro_action': lambda: pro_action(arg),
             'gaming_get': gaming_get,
             'gaming_set': lambda: gaming_set(arg),
         }

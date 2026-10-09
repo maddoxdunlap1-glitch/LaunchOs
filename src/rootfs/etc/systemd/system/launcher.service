@@ -15,7 +15,10 @@ StandardOutput=journal
 TTYReset=yes
 TTYVHangup=yes
 ExecStartPre=+-/usr/bin/plymouth quit --retain-splash
+# gaming mode never outlives the launcher (if it crashed while a game ran)
+ExecStartPre=+-/usr/local/sbin/launchos-game off 0
 ExecStart=/usr/local/bin/launchos-session
+ExecStopPost=+-/usr/local/sbin/launchos-game off 0
 KillMode=control-group
 Restart=always
 RestartSec=2

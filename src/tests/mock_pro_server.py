@@ -4,8 +4,10 @@ Same calls and answers; keys and PC slots are kept in memory.
 
   python3 mock_pro_server.py FILES_DIR [PORT]     (files: pro-package.tar.gz, pro-update.json, ...)
 
-Valid key: TEST-KEY-1234-ABCD (5 PCs). REFUND-KEY-0000 acts like a refunded key.
-In the VM, set url=http://10.0.2.2:PORT in /etc/launchos/pro.conf.
+Valid key: TEST-KEY-1234-ABCD (5 PCs). REFUND-KEY-0000 acts like a refunded key. While the
+file FILES_DIR/busy exists, checks answer "unavailable" (like the store being rate limited).
+In the VM, set url=http://10.0.2.2:PORT in /etc/launchos/pro.conf, and signing_key= to the public
+key the files in FILES_DIR were signed with (pro-server/make-pro-files.py --key ...).
 """
 import hashlib, hmac, json, os, re, sys, time, uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -63,12 +65,17 @@ class H(BaseHTTPRequestHandler):
                 return self.reply({'ok': False, 'error': 'invalid_key'}, 403)
             if key.startswith('REFUND'):
                 return self.reply({'ok': False, 'error': 'revoked'}, 403)
+            for iid, pc in KEYS[key].items():   # this PC's slot already
+                if pc == b.get('pc_id'):
+                    return self.reply({'ok': True, 'instance_id': iid})
             if len(KEYS[key]) >= 5:
                 return self.reply({'ok': False, 'error': 'pc_limit'}, 403)
             iid = str(uuid.uuid4())
             KEYS[key][iid] = b.get('pc_id')
             return self.reply({'ok': True, 'instance_id': iid})
         ok = key in KEYS and str(b.get('instance_id', '')) in KEYS[key]
+        if os.path.exists(os.path.join(sys.argv[1], 'busy')) and self.path in ('/v1/check', '/v1/download'):
+            return self.reply({'ok': False, 'error': 'unavailable'}, 503)
         if self.path == '/v1/check':
             return self.reply({'ok': True} if ok else {'ok': False, 'error': 'invalid_key'}, 200 if ok else 403)
         if self.path == '/v1/deactivate':
