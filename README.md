@@ -1,5 +1,7 @@
 # LaunchOS
 
+**[🌐 Visit the LaunchOS site](https://maddoxdunlap1-glitch.github.io/LaunchOs/)** · [Download](../../releases/latest) · [LaunchOS Pro](https://maddoxdunlap1-glitch.github.io/LaunchOs/#pro)
+
 ![LaunchOS start-up: a rocket climbing through the stars](assets/boot-preview.gif)
 
 A console-style Linux system, based on Debian, with a controller-friendly Home screen. It starts with a rocket lift-off, then the sign-in screen and Home. Run it in VirtualBox, from a USB stick, or install it on a PC. In our start-up tests it reaches the sign-in screen in 10 to 20 seconds.
@@ -95,7 +97,7 @@ Lock, sign out, shut down or restart from **Side menu → Settings → Power**.
 - **Early access** to new versions
 - A **supporter badge** on Home and the sign-in screen
 
-One key will work on up to 5 PCs and cover every future version. It's built into LaunchOS (Settings → LaunchOS Pro) but isn't on sale yet; see the [LaunchOS site](docs/index.html) for news.
+One key will work on up to 5 PCs and cover every future version. It's built into LaunchOS (Settings → LaunchOS Pro) but isn't on sale yet; see the [LaunchOS site](https://maddoxdunlap1-glitch.github.io/LaunchOs/#pro) for what's in it.
 
 ## Credits and trademarks
 
