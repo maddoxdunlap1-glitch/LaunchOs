@@ -51,3 +51,15 @@ Add a Cloudflare rate limiting rule (Security > WAF > Rate limiting) of about 30
 | `POST /v1/check` | `{key, instance_id}` | `{ok:true}` or an error. Never lock Pro because of `unavailable` or being offline. |
 | `POST /v1/download` | `{key, instance_id, file}` (`pro-package.tar.gz` or `pro-update.json`) | `{ok, url, expires_in:600}`. Download the url within 10 minutes, then check its SHA-256. |
 After a refund, `/activate` and `/download` answer `revoked`. Do not delete anything from the PC.
+
+## 6. Accounts (login page on the website)
+1. Make the accounts store: `npx wrangler kv namespace create ACCOUNTS`, paste the id into `wrangler.toml` (the `ACCOUNTS` entry).
+2. Google sign-in (optional; leave `GOOGLE_CLIENT_ID` empty to hide the button): in console.cloud.google.com create a project > APIs & Services > Credentials > Create credentials > OAuth client ID > Web application. Under **Authorized JavaScript origins** add your website address (e.g. `https://maddoxdunlap1-glitch.github.io`). Copy the client ID (not a secret) into `GOOGLE_CLIENT_ID` in `wrangler.toml` and into `googleClientId` in `docs/login.html`.
+3. Set `ALLOWED_ORIGIN` in `wrangler.toml` to the website address (no trailing slash), run `npx wrangler deploy`, and put the Worker address in `api` in `docs/login.html`.
+4. Pro from PayPal: when a payment arrives, turn Pro on for that buyer's account email:
+   ```
+   curl -X POST https://launchos-pro.<you>.workers.dev/admin/grant-pro -H "Authorization: Bearer YOUR_ADMIN_TOKEN" -d '{"email":"buyer@example.com"}'
+   ```
+   (`/admin/revoke-pro` turns it off, e.g. after a refund.) The account page then shows Pro as Active.
+
+Notes: email sign-ups are not verified by a confirmation email (no mail service is set up); Google sign-ins are verified by Google. Passwords are stored only as PBKDF2 hashes. Keep the rate limit rule from step 5 on, it also slows password guessing.

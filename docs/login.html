@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in: LaunchOS</title>
+<link rel="icon" href="assets/launchos-icon.png">
+<style>
+:root{--bg:#0d1117;--panel:#161b22;--line:#2a313c;--text:#e6edf3;--dim:#9aa7b4;--accent:#3ddc97;--accent-ink:#06281a;--bad:#ff7b72}
+@media (prefers-color-scheme:light){:root{--bg:#f6f8fa;--panel:#fff;--line:#d8dee4;--text:#1f2328;--dim:#59636e;--accent:#12a06b;--accent-ink:#fff;--bad:#cf222e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+a{color:var(--accent)}
+.wrap{max-width:960px;margin:0 auto;padding:0 20px}
+header{border-bottom:1px solid var(--line)}
+nav{display:flex;align-items:center;gap:20px;padding:14px 0}
+nav .brand{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--text);text-decoration:none;margin-right:auto}
+nav .brand img{width:28px;height:28px}
+nav a{color:var(--dim);text-decoration:none}
+.box{max-width:400px;margin:48px auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:26px}
+h1{font-size:1.5rem;margin:0 0 4px}
+.sub{color:var(--dim);margin:0 0 18px}
+.tabs{display:flex;gap:6px;margin-bottom:16px}
+.tabs button{flex:1;padding:8px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:8px;font:inherit;cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--bg);color:var(--text);border-color:var(--accent)}
+label{display:block;font-size:.9rem;color:var(--dim);margin:12px 0 4px}
+input{width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:inherit}
+.btn{display:block;width:100%;margin-top:16px;padding:12px;border-radius:10px;font:inherit;font-weight:600;text-align:center;text-decoration:none;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);cursor:pointer}
+.btn.plain{background:var(--panel);color:var(--text);border-color:var(--line)}
+.btn[disabled]{opacity:.6;cursor:wait}
+.or{display:flex;align-items:center;gap:10px;color:var(--dim);font-size:.85rem;margin:18px 0}
+.or::before,.or::after{content:"";flex:1;border-top:1px solid var(--line)}
+#g{display:flex;justify-content:center;min-height:44px}
+#msg{min-height:1.4em;margin:12px 0 0;color:var(--bad);font-size:.92rem}
+.note{color:var(--dim);font-size:.82rem;margin-top:16px}
+.pill{display:inline-block;padding:2px 10px;border-radius:99px;font-size:.85rem;border:1px solid var(--line);color:var(--dim)}
+.pill.on{border-color:var(--accent);color:var(--accent)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header><div class="wrap"><nav>
+  <a class="brand" href="./"><img src="assets/launchos-icon.png" alt="">LaunchOS</a>
+  <a href="./#pro">Pro</a>
+  <a href="./">Home</a>
+</nav></div></header>
+
+<main class="box">
+  <section id="out">
+    <h1 id="title">Log in</h1>
+    <p class="sub">Make a LaunchOS account to keep track of Pro.</p>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" id="t-login" aria-selected="true">Log in</button>
+      <button type="button" role="tab" id="t-signup" aria-selected="false">Sign up</button>
+    </div>
+    <div id="g"></div>
+    <div class="or" id="or">or use your email</div>
+    <form id="form" novalidate>
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="email" required>
+      <label for="pw">Password <span id="pwhint" hidden>(at least 8 characters)</span></label>
+      <input id="pw" type="password" autocomplete="current-password" minlength="8" required>
+      <button class="btn" id="go" type="submit">Log in</button>
+    </form>
+    <p id="msg" role="alert"></p>
+    <p class="note">We only store your email and a scrambled copy of your password. Never share your password with anyone, including us.</p>
+  </section>
+
+  <section id="in" hidden>
+    <h1>Your account</h1>
+    <p class="sub" id="who"></p>
+    <p>LaunchOS Pro: <span class="pill" id="pro">checking</span></p>
+    <a class="btn" id="buy" href="#" hidden>Get Pro</a>
+    <p class="note" id="buynote" hidden>Pay with the same email you use here. Pro is turned on for your account after the payment is checked.</p>
+    <button class="btn plain" id="logout" type="button">Log out</button>
+  </section>
+</main>
+
+<script>
+// Fill these in after the Pro server is deployed (see pro-server/SETUP.md).
+var CONFIG = {
+  api: "",              // e.g. https://launchos-pro.<you>.workers.dev
+  googleClientId: "",   // Google Cloud OAuth client ID (public). Leave empty to hide the Google button.
+  buy: "https://py.pl/NBW6UcOtaF61Hm77Yg6HFQ"
+};
+
+var $ = function (id) { return document.getElementById(id); };
+var mode = "login";
+var store = { get: function () { try { return localStorage.getItem("los_token"); } catch (e) { return null; } },
+              set: function (v) { try { v ? localStorage.setItem("los_token", v) : localStorage.removeItem("los_token"); } catch (e) {} } };
+var ERR = {
+  bad_email: "That email doesn't look right.",
+  bad_password: "Use a password of 8 or more characters.",
+  exists: "An account with that email already exists. Try logging in.",
+  bad_login: "Wrong email or password.",
+  use_google: "That account uses Google. Press the Google button.",
+  email_not_verified: "Google says that email isn't verified.",
+  google_not_set_up: "Google sign-in isn't set up yet.",
+  unavailable: "Something is down. Try again in a minute.",
+  not_logged_in: "Please log in again."
+};
+
+function say(t) { $("msg").textContent = t || ""; }
+
+async function api(path, opts) {
+  if (!CONFIG.api) throw new Error("Accounts aren't switched on yet. Check back soon.");
+  var res;
+  try { res = await fetch(CONFIG.api + path, opts); } catch (e) { throw new Error("Can't reach the server. Check your connection."); }
+  var data = await res.json().catch(function () { return {}; });
+  if (!data.ok) throw new Error(ERR[data.error] || "Something went wrong. Try again.");
+  return data;
+}
+function post(path, body) {
+  return api(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+}
+
+function setMode(m) {
+  mode = m;
+  var signup = m === "signup";
+  $("t-login").setAttribute("aria-selected", String(!signup));
+  $("t-signup").setAttribute("aria-selected", String(signup));
+  $("title").textContent = signup ? "Sign up" : "Log in";
+  $("go").textContent = signup ? "Make my account" : "Log in";
+  $("pwhint").hidden = !signup;
+  $("pw").autocomplete = signup ? "new-password" : "current-password";
+  say("");
+}
+$("t-login").onclick = function () { setMode("login"); };
+$("t-signup").onclick = function () { setMode("signup"); };
+
+function showAccount(p) {
+  $("out").hidden = true; $("in").hidden = false;
+  $("who").textContent = p.email;
+  var pro = $("pro");
+  pro.textContent = p.pro ? "Active" : "Not yet";
+  pro.className = "pill" + (p.pro ? " on" : "");
+  var buy = $("buy");
+  buy.hidden = $("buynote").hidden = !!p.pro;
+  if (CONFIG.buy) buy.href = CONFIG.buy;
+}
+function loggedIn(r) { store.set(r.token); showAccount(r); }
+
+$("form").onsubmit = async function (e) {
+  e.preventDefault(); say("");
+  var email = $("email").value.trim(), pw = $("pw").value;
+  if (!email || !pw) return say("Enter your email and password.");
+  $("go").disabled = true;
+  try { loggedIn(await post(mode === "signup" ? "/v1/account/signup" : "/v1/account/login", { email: email, password: pw })); }
+  catch (err) { say(err.message); }
+  $("go").disabled = false;
+};
+
+$("logout").onclick = function () { store.set(null); $("in").hidden = true; $("out").hidden = false; $("pw").value = ""; };
+
+async function restore() {
+  var t = store.get();
+  if (!t || !CONFIG.api) return;
+  try { showAccount(await api("/v1/account/me", { headers: { authorization: "Bearer " + t } })); }
+  catch (e) { store.set(null); }
+}
+
+function setupGoogle() {
+  if (!CONFIG.googleClientId) { $("g").hidden = true; $("or").hidden = true; return; }
+  var s = document.createElement("script");
+  s.src = "https://accounts.google.com/gsi/client"; s.async = true;
+  s.onload = function () {
+    google.accounts.id.initialize({
+      client_id: CONFIG.googleClientId,
+      callback: async function (r) {
+        say("");
+        try { loggedIn(await post("/v1/account/google", { credential: r.credential })); } catch (err) { say(err.message); }
+      }
+    });
+    google.accounts.id.renderButton($("g"), { theme: "outline", size: "large", text: "continue_with", width: 300 });
+  };
+  document.head.appendChild(s);
+}
+
+setupGoogle();
+restore();
+</script>
+</body>
+</html>

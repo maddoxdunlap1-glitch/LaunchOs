@@ -2,7 +2,10 @@
 // - Checks license keys with Lemon Squeezy (it also enforces the 5-PC limit).
 // - Hands out download links that expire after 10 minutes. Files live in a private R2 bucket.
 // - Listens for the Lemon Squeezy refund webhook.
+// - Accounts: sign up / log in with email + password or Google (see accounts.js).
 // Secrets (set with `wrangler secret put`, never in this repo): LS_WEBHOOK_SECRET, LINK_SECRET, ADMIN_TOKEN.
+
+import * as accounts from "./accounts.js";
 
 const LS = "https://api.lemonsqueezy.com/v1/licenses";
 const LINK_SECONDS = 600;
@@ -171,17 +174,59 @@ async function adminDeactivate(request, env) {
   return json({ ok: !!r.body.deactivated });
 }
 
+// The website is on another address (GitHub Pages), so account calls need CORS.
+// Sessions travel in the Authorization header, never cookies, so allowing the site origin is enough.
+function cors(request, env, res) {
+  const origin = request.headers.get("origin");
+  if (origin && env.ALLOWED_ORIGIN && same(origin, env.ALLOWED_ORIGIN)) {
+    const h = new Headers(res.headers);
+    h.set("access-control-allow-origin", origin);
+    h.set("access-control-allow-headers", "content-type, authorization");
+    h.set("access-control-allow-methods", "GET, POST, OPTIONS");
+    h.set("vary", "origin");
+    return new Response(res.body, { status: res.status, headers: h });
+  }
+  return res;
+}
+
+async function account(request, env, pathname) {
+  const wrap = (r) => (r instanceof Response ? r : json(r));
+  if (request.method === "GET" && pathname === "/v1/account/me") return wrap(await accounts.me(env, request, fail));
+  if (request.method !== "POST") return fail(405, "method");
+  const b = await readJson(request);
+  if (!b) return fail(400, "bad_request");
+  if (pathname === "/v1/account/signup") return wrap(await accounts.signup(env, b, fail));
+  if (pathname === "/v1/account/login") return wrap(await accounts.login(env, b, fail));
+  if (pathname === "/v1/account/google") return wrap(await accounts.google(env, b, fail));
+  return fail(404, "not_found");
+}
+
+async function adminPro(request, env, on) {
+  const auth = request.headers.get("authorization") || "";
+  if (!env.ADMIN_TOKEN || !same(auth, `Bearer ${env.ADMIN_TOKEN}`)) return fail(401, "unauthorized");
+  const b = await readJson(request);
+  if (!b) return fail(400, "bad_request");
+  const r = await accounts.setPro(env, b, fail, on);
+  return r instanceof Response ? r : json(r);
+}
+
 export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
     const m = request.method;
     try {
+      if (pathname.startsWith("/v1/account/")) {
+        if (m === "OPTIONS") return cors(request, env, new Response(null, { status: 204 }));
+        return cors(request, env, await account(request, env, pathname));
+      }
       if (m === "GET" && pathname.startsWith("/v1/file/")) return await file(request, env, pathname.slice(9));
       if (m !== "POST") return fail(405, "method");
       if (pathname === "/v1/activate") return await activate(request, env);
       if (pathname === "/v1/check") return await check(request, env);
       if (pathname === "/v1/download") return await download(request, env);
       if (pathname === "/webhook/lemonsqueezy") return await webhook(request, env);
+      if (pathname === "/admin/grant-pro") return await adminPro(request, env, true);
+      if (pathname === "/admin/revoke-pro") return await adminPro(request, env, false);
       if (pathname === "/admin/deactivate") return await adminDeactivate(request, env);
       return fail(404, "not_found");
     } catch {

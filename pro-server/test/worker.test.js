@@ -36,6 +36,9 @@ function setup() {
     LINK_SECRET: "linksec",
     ADMIN_TOKEN: "admin-token",
     REVOKED: { get: async (k) => kv.get(k) ?? null, put: async (k, v) => void kv.set(k, v) },
+    ACCOUNTS: { get: async (k) => kv.get("a:" + k) ?? null, put: async (k, v) => void kv.set("a:" + k, v), delete: async (k) => void kv.delete("a:" + k) },
+    GOOGLE_CLIENT_ID: "client-123",
+    ALLOWED_ORIGIN: "https://site.test",
     PRO_FILES: { get: async (n) => (n === "pro-package.tar.gz" ? { body: "PRO", size: 3 } : null) },
   };
   return { ls, env };
@@ -116,4 +119,62 @@ test("wrong store, bad input, expired and tampered links are refused", async () 
   assert.equal((await worker.fetch(new Request(`https://pro.test/v1/file/pro-package.tar.gz?exp=${exp}&sig=${sig}`), env)).status, 403);
   const exp2 = Math.floor(Date.now() / 1000) + 300;
   assert.equal((await worker.fetch(new Request(`https://pro.test/v1/file/pro-package.tar.gz?exp=${exp2}&sig=abc`), env)).status, 403);
+});
+
+test("sign up, log in, wrong password, duplicate, Pro grant", async () => {
+  const { env } = setup();
+  const s = await call(env, post("/v1/account/signup", { email: " Me@Example.com ", password: "hunter22!" }));
+  assert.equal(s.status, 200);
+  assert.equal(s.body.email, "me@example.com");
+  assert.equal(s.body.pro, false);
+  assert.equal((await call(env, post("/v1/account/signup", { email: "me@example.com", password: "hunter22!" }))).body.error, "exists");
+  assert.equal((await call(env, post("/v1/account/signup", { email: "nope", password: "hunter22!" }))).body.error, "bad_email");
+  assert.equal((await call(env, post("/v1/account/signup", { email: "b@example.com", password: "short" }))).body.error, "bad_password");
+  assert.equal((await call(env, post("/v1/account/login", { email: "me@example.com", password: "wrong-pass" }))).status, 403);
+  assert.equal((await call(env, post("/v1/account/login", { email: "ghost@example.com", password: "hunter22!" }))).body.error, "bad_login");
+  const l = await call(env, post("/v1/account/login", { email: "ME@example.com", password: "hunter22!" }));
+  assert.equal(l.status, 200);
+  const me = () => call(env, new Request("https://pro.test/v1/account/me", { headers: { authorization: "Bearer " + l.body.token } }));
+  assert.equal((await me()).body.pro, false);
+  const g = await call(env, post("/admin/grant-pro", { email: "me@example.com" }, { authorization: "Bearer admin-token" }));
+  assert.equal(g.status, 200);
+  assert.equal((await me()).body.pro, true);
+  assert.equal((await call(env, post("/admin/grant-pro", { email: "me@example.com" }))).status, 401);
+});
+
+test("session tokens: missing, tampered and expired are refused", async () => {
+  const { env } = setup();
+  const s = await call(env, post("/v1/account/signup", { email: "me@example.com", password: "hunter22!" }));
+  const me = (t) => call(env, new Request("https://pro.test/v1/account/me", { headers: t ? { authorization: "Bearer " + t } : {} }));
+  assert.equal((await me()).status, 401);
+  assert.equal((await me(s.body.token.slice(0, -2) + "00")).status, 401);
+  const body = Buffer.from(JSON.stringify({ e: "me@example.com", x: 1 })).toString("base64url");
+  assert.equal((await me(body + "." + (await sign("session.linksec", body)))).status, 401);
+});
+
+test("Google sign-in checks the app id and verified email", async () => {
+  const { env } = setup();
+  const realFetch = globalThis.fetch;
+  const tokeninfo = (info, status = 200) => (globalThis.fetch = async () => new Response(JSON.stringify(info), { status }));
+  const cred = "x".repeat(40);
+  tokeninfo({ aud: "client-123", email: "G@Example.com", email_verified: "true" });
+  const ok = await call(env, post("/v1/account/google", { credential: cred }));
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.email, "g@example.com");
+  tokeninfo({ aud: "someone-else", email: "g@example.com", email_verified: "true" });
+  assert.equal((await call(env, post("/v1/account/google", { credential: cred }))).status, 403);
+  tokeninfo({ aud: "client-123", email: "g@example.com", email_verified: "false" });
+  assert.equal((await call(env, post("/v1/account/google", { credential: cred }))).body.error, "email_not_verified");
+  tokeninfo({ error: "invalid_token" }, 400);
+  assert.equal((await call(env, post("/v1/account/google", { credential: cred }))).status, 403);
+  // A Google-only account has no password to log in with.
+  assert.equal((await call(env, post("/v1/account/login", { email: "g@example.com", password: "whatever1" }))).body.error, "use_google");
+  globalThis.fetch = realFetch;
+});
+
+test("CORS only for the website origin", async () => {
+  const { env } = setup();
+  const pre = (origin) => worker.fetch(new Request("https://pro.test/v1/account/login", { method: "OPTIONS", headers: { origin } }), env);
+  assert.equal((await pre("https://site.test")).headers.get("access-control-allow-origin"), "https://site.test");
+  assert.equal((await pre("https://evil.test")).headers.get("access-control-allow-origin"), null);
 });

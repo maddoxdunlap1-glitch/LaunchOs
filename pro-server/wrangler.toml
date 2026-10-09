@@ -6,6 +6,10 @@ compatibility_date = "2025-01-01"
 [vars]
 LS_STORE_ID = ""
 LS_PRODUCT_ID = ""
+# Accounts. GOOGLE_CLIENT_ID comes from Google Cloud (it is public, not a secret).
+# ALLOWED_ORIGIN is the website address, e.g. https://maddoxdunlap1-glitch.github.io
+GOOGLE_CLIENT_ID = ""
+ALLOWED_ORIGIN = "https://maddoxdunlap1-glitch.github.io"
 
 # Private bucket holding pro-package.tar.gz and pro-update.json. Never make it public.
 [[r2_buckets]]
@@ -16,5 +20,10 @@ bucket_name = "launchos-pro-files"
 [[kv_namespaces]]
 binding = "REVOKED"
 id = "REPLACE_WITH_KV_ID"
+
+# Holds accounts (user:<email>) and who has Pro (pro:<email>).
+[[kv_namespaces]]
+binding = "ACCOUNTS"
+id = "REPLACE_WITH_ACCOUNTS_KV_ID"
 
 # Secrets are NOT set here. Run: wrangler secret put LS_WEBHOOK_SECRET / LINK_SECRET / ADMIN_TOKEN
