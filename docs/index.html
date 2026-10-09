@@ -66,12 +66,12 @@ code{background:var(--panel);border:1px solid var(--line);border-radius:5px;padd
 <div class="wrap">
 <div class="hero">
   <h1>Your PC, like a console.</h1>
-  <p class="lead">LaunchOS boots to a spinning ferris wheel, then a Home screen built for a controller. Steam, Windows programs, Files, a Store and a Terminal. Run it from a USB stick, in VirtualBox, or install it.</p>
+  <p class="lead">LaunchOS starts with a rocket lift-off, then a Home screen built for a controller. Steam, Windows programs, real apps like Discord and Spotify, Files, a Store and a Terminal. Run it from a USB stick, in VirtualBox, or install it.</p>
   <div class="btns">
     <a class="btn primary" href="#get" data-link="download">Download free</a>
     <a class="btn" href="#pro">See LaunchOS Pro</a>
   </div>
-  <div class="shot"><img src="assets/boot-preview.gif" alt="The LaunchOS boot screen, a spinning ferris wheel"></div>
+  <div class="shot"><img src="assets/boot-preview.gif" alt="The LaunchOS start-up screen: a rocket climbing through the stars"></div>
 </div>
 </div>
 
@@ -86,6 +86,10 @@ code{background:var(--panel);border:1px solid var(--line);border-radius:5px;padd
     <div class="card"><h3>Updates</h3><p>Small updates for LaunchOS, your apps and the system, from Settings.</p></div>
     <div class="card"><h3>Saves your stuff</h3><p>Settings, sign-ins and games are kept on your USB stick or installed drive.</p></div>
     <div class="card"><h3>Built on Debian</h3><p>A stable base with security updates, for BIOS and UEFI PCs.</p></div>
+    <div class="card"><h3>Real apps in Setup</h3><p>Pick Discord, Spotify, FreeTube, Roblox, Minecraft, Heroic, OBS or VLC and they download as real apps.</p></div>
+    <div class="card"><h3>LaunchOS Flasher</h3><p>A small Windows program that puts the newest LaunchOS on a USB drive, and offers to update an old one.</p></div>
+    <div class="card"><h3>Wallpapers</h3><p>Painted space, aurora, dunes and synthwave wallpapers, plus a sign-in screen with your name and color.</p></div>
+    <div class="card"><h3>Made for controllers</h3><p>Everything works with a controller, including typing, with the on-screen keyboard.</p></div>
   </div>
 </div></section>
 
@@ -108,12 +112,11 @@ code{background:var(--panel);border:1px solid var(--line);border-radius:5px;padd
       <div class="price">$5 <small>one time</small></div>
       <ul>
         <li>Everything in free</li>
-        <li>Extra themes and animated Home backgrounds</li>
-        <li>Pro app pack: Heroic, Prism Launcher, Discord, OBS and Lutris</li>
-        <li>Game tweaks: performance mode and an FPS overlay switch</li>
+        <li>Live backgrounds that move, and five color themes</li>
+        <li>Gaming mode: full speed and top priority while a game runs</li>
+        <li>An FPS counter in games</li>
         <li>Early access to new versions</li>
-        <li>Priority help by email</li>
-        <li>Supporter badge in Settings</li>
+        <li>A supporter badge on Home and the sign-in screen</li>
       </ul>
       <a class="btn primary" href="#" data-link="buy" aria-disabled="true">Get Pro</a>
       <p style="color:var(--dim);font-size:.85rem;margin:10px 0 0" id="buy-note">Pro goes on sale soon.</p>
@@ -125,9 +128,8 @@ code{background:var(--panel);border:1px solid var(--line);border-radius:5px;padd
 <section id="get"><div class="wrap">
   <h2>Get it</h2>
   <ol class="steps">
-    <li>Download <strong>LaunchOS.zip</strong> and unzip it.</li>
-    <li><strong>VirtualBox:</strong> Machine &rarr; Add&hellip; and pick <code>LaunchOS.vbox</code>.</li>
-    <li><strong>USB stick (8 GB or more):</strong> write <code>LaunchOS.iso</code> with <a href="https://etcher.balena.io">balenaEtcher</a>, or <a href="https://rufus.ie">Rufus</a> in <strong>DD mode</strong>. This erases the stick. Turn off Secure Boot, then start the PC from the stick.</li>
+    <li><strong>USB stick (8 GB or more), on Windows:</strong> run <strong>LaunchOS Flasher</strong> (<code>LaunchOS-Flasher.exe</code>). It downloads the newest LaunchOS, checks it and writes it. The first time, Windows may say &ldquo;Windows protected your PC&rdquo;: choose <strong>More info</strong>, then <strong>Run anyway</strong>. (Or write <code>LaunchOS.iso</code> with <a href="https://etcher.balena.io">balenaEtcher</a>, or <a href="https://rufus.ie">Rufus</a> in <strong>DD mode</strong>.) Turn off Secure Boot, then start the PC from the stick.</li>
+    <li><strong>VirtualBox:</strong> download <strong>LaunchOS.zip</strong>, unzip it, then Machine &rarr; Add&hellip; and pick <code>LaunchOS.vbox</code>.</li>
     <li><strong>Install:</strong> from the USB stick, open Settings &rarr; Install LaunchOS and pick a drive (16 GB or more). This erases that drive.</li>
   </ol>
   <div class="btns" style="justify-content:flex-start;margin-top:16px"><a class="btn primary" href="#" data-link="download">Download LaunchOS (free)</a></div>
@@ -144,7 +146,7 @@ code{background:var(--panel);border:1px solid var(--line);border-radius:5px;padd
   <details><summary>Is the free edition complete?</summary><p>Yes. Pro only adds extras on top.</p></details>
   <details><summary>How many PCs can I use Pro on?</summary><p>One key works on up to 5 PCs. To free a slot from a PC you no longer use, email us.</p></details>
   <details><summary>Does Pro need internet?</summary><p>Only to unlock and to get Pro updates. Once unlocked, Pro stays unlocked offline. LaunchOS rechecks the key about once a month when online, and never locks anything because you are offline.</p></details>
-  <details><summary>What do you collect?</summary><p>Only the license key and a random PC id when you unlock. Never your name, email or hardware serial. Payments are handled by the store; LaunchOS never sees card details.</p></details>
+  <details><summary>What do you collect?</summary><p>Only the license key and a PC id when you unlock: a scrambled code made from the PC, so the same PC keeps its one slot. It can&rsquo;t be turned back into anything about your PC. Never your name, email or hardware serial. Payments are handled by the store; LaunchOS never sees card details.</p></details>
   <details><summary>What is your refund policy?</summary><p>All Pro sales are final. If something is wrong with your purchase, email us and we will sort it out. Your legal rights where you live are not affected.</p></details>
   <details><summary>Is it open source?</summary><p>LaunchOS is built from open-source parts (Linux, Debian, sway, GTK, Wine, Flatpak) and lists them under Settings &rarr; About &rarr; Open-source credits. Source code for the GPL parts is available on request and through Debian's source packages.</p></details>
 </div></section>

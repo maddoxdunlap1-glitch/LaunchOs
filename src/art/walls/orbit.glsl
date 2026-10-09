@@ -1,11 +1,11 @@
 // Orbit: dawn breaking over a planet's edge, seen from space.
 vec3 scene(vec2 fc) {
   vec2 p = (fc - .5 * R) / R.y;
-  vec2 c = vec2(-.35, -1.55);          // the planet's centre, far below the picture
+  vec2 c = vec2(-.32, -1.17);          // the planet's centre, below the picture (its edge high up, above Home's tiles)
   float rad = 1.42;
   float d = length(p - c);
   vec2 n2 = (p - c) / d;
-  vec2 sunDir = normalize(vec2(.62, .78));
+  vec2 sunDir = normalize(vec2(.5, .87));
   vec2 sunAt = c + sunDir * rad;       // where the sun peeks over the edge
   vec3 col = vec3(.004, .008, .02);
   col += stars(p, 32., .87, 11.) + stars(p, 75., .9, 12.) * .5 + stars(p, 160., .92, 13.) * .3;

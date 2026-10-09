@@ -2,43 +2,45 @@
 
 This folder is LaunchOS's source. Since v0.9 LaunchOS is built on Debian 13; v0.8 and earlier were Ubuntu-based (their scripts are kept in `build/ubuntu-era/`).
 
-## Building (Debian 13)
+## Building
 
-1. **Base system** (`build/debian/base.sh`, `packages.txt`): Debian plus every package and Flathub's catalog. Built by the *Build Debian base* GitHub Action whenever those files change, and published as the prerelease `build-debian-base` (`base.squashfs.part*`; join the parts with `cat`).
-2. **Image**: `sudo build/debian/make-image.sh base.squashfs WORKDIR 0.9 [fast]` adds `ui/`, `rootfs/` and the boot theme, and makes `WORKDIR/LaunchOS.iso` (hybrid: disc and USB, BIOS and UEFI).
-3. **VirtualBox files**: `sudo build/debian/make-vbox.sh OUTDIR` (the machine, an empty save disk labelled `persistence`, a spare drive).
-4. **Update package**: `build/debian/make-update.sh 0.9 dist/update` (`FULL=1` when older versions can't update to it).
-5. **Release**: zip the ISO and VirtualBox files, split into 90 MB `dist/LaunchOS.zip.part*`, write `dist/PARTS`, `dist/SHA256`, `dist/VERSION`, `dist/NOTES.md`, and push; the *Publish LaunchOS release* Action does the rest.
+Everything is built on GitHub Actions (this repo's `.github/workflows/`):
 
-The *Smoke test* Action installs apps from Flathub through `launchos-store` on the base system (this workspace can't reach Flathub).
+1. **Base system** (*Build Debian base*, `build/debian/base.sh` and `packages.txt`): Debian plus every package and Flathub's catalog. Runs whenever those files change and publishes the prerelease `build-debian-base` (`base.squashfs.part*`; join the parts with `cat`).
+2. **LaunchOS** (*Build LaunchOS*, run by hand): `build/debian/make-image.sh` adds `ui/`, `rootfs/` and the boot theme to the base and makes `LaunchOS.iso` (hybrid: disc and USB, BIOS and UEFI). Then `tests/ci_boot.py` starts it in QEMU with KVM four ways (BIOS and UEFI, disc and USB stick at 40 MB/s, the USB stick twice so saving is set up and then used), checks it reaches the sign-in screen without errors and times it.
+   - *test*: publishes the ISO and the start-up report as the `build-test` prerelease.
+   - *release*: also builds the flasher (*Flasher* workflow), the VirtualBox files (`build/debian/make-vbox.sh`) and the update package (`build/debian/make-update.sh`), and publishes the release `v` + `dist/VERSION` with `dist/NOTES.md` as its notes. Only the newest release is kept.
+3. **LaunchOS Flasher** (*Flasher*, on every change in `flasher/`): builds `LaunchOS-Flasher.exe` on Windows, runs its checks, writes a test image to a virtual disk and compares every byte. Publishes the `build-flasher` prerelease.
+4. **Pro files** (*Pro files*, run by hand): the files the LaunchOS Pro server hands out, signed with the Pro signing key (`pro-server/SETUP.md`).
+
+To build by hand on Debian/Ubuntu: `sudo build/debian/make-image.sh base.squashfs WORKDIR VERSION [fast]`.
+
+Release settings in `dist/`: `VERSION`, `NOTES.md`, `MIN_VERSION` (the oldest LaunchOS that can update to this one through Settings > Updates; older ones are told to download it fresh), optional `FULL` (1: no one can update to it), `APT` (Debian packages an update needs) and `UPDATE_NOTE`.
 
 ## Folders
 
 | Folder | What it is |
 | --- | --- |
-| `ui/` | The launcher: `launch.py` (GTK4 + WebKitGTK 6.0), the pages (`index.html` Home, `files.html`, `store.html`, `setup.html`, `monitor.html`, `view.html`, `start.html`), `los.js` / `los.css`, `fsops.py` (copy/move jobs). Installed to `/opt/launcher`, owned by root. |
-| `rootfs/` | Files copied on top of the system image (`cp -a rootfs/. <image root>/`): systemd units, udev rule, tmpfiles, sway config, update config, and the root scripts in `/usr/local/sbin`. |
-| `boot-theme/` | The ferris-wheel Plymouth boot theme (`/usr/share/plymouth/themes/launchos`) and the script that drew its images. |
+| `ui/` | The launcher: `launch.py` (GTK4 + WebKitGTK 6.0), the pages (`index.html` Home, `login.html` sign-in, `setup.html`, `files.html`, `store.html`, `monitor.html`, `view.html`, `start.html`), `los.js` / `los.css` (shared: the call bridge with browser mocks, looks, wallpapers, the on-screen keyboard), `fsops.py` (copy/move jobs), `walls/` (wallpapers), `icons/`, `img/`. Installed to `/opt/launcher`, owned by root. |
+| `rootfs/` | Files put on top of the system image, owned by root: systemd units, udev rule, tmpfiles, sysctl, plymouth settings, sway config, update and Pro settings, and the root scripts in `/usr/local/sbin`. |
+| `boot-theme/` | The rocket Plymouth boot theme (`/usr/share/plymouth/themes/launchos`). |
+| `art/` | Where the art comes from: `make-art.py` (rocket, boot frames, icon), `walls/*.glsl` (the wallpapers, drawn on the GPU; `walls/export.py` saves them to `ui/walls/`), `preview.py` (the README's boot preview). |
+| `pro/` | LaunchOS Pro extras (the live backgrounds), packed by `pro-server/make-pro-files.py`. |
 | `build/debian/` | The Debian 13 build (see above). |
-| `build/ubuntu-era/` | The scripts that built v0.1–v0.8 on Ubuntu 24.04, in the order they were made. **Their paths point to an old temporary folder (`O=` / `W=` / `R=` at the top) and must be changed before use.** Also the image's package list (`packages-manual.txt`), foreign architectures (i386), masked units, GRUB menu, casper settings and initramfs modules. |
-| `tests/` | Playwright page tests (`pt16.js`, `pt17.js`, `monkey.js` random input), QEMU helpers (`vm6.sh` starts a VM; `push.py`, `sh.py`, `qmp.py`, `serlog.py` drive it over the serial console), stress scripts. |
+| `build/ubuntu-era/` | The scripts that built v0.1–v0.8 on Ubuntu 24.04 (history only). |
+| `tests/` | `ci_boot.py` (start-up tests), `every_button.js` (presses every button on every page with the mocks, mouse and keyboard; about an hour), `mock_pro_server.py`, older page tests (`pt16.js`, `pt17.js`, `monkey.js`) and QEMU helpers. |
+| `../flasher/` | LaunchOS Flasher for Windows (C#, .NET Framework 4.8). |
+| `../pro-server/` | The LaunchOS Pro server (a Cloudflare Worker) and its setup. |
 
 ## How it runs
 
-- **Boot:** GRUB → kernel + initrd → casper live system (Ubuntu) with `persistent`: a partition labelled `casper-rw` or `writable` keeps changes. Plymouth shows the ferris wheel. The user is `player` (uid 1000), hostname `launchos`.
-- **Session:** `launcher.service` runs `/usr/local/bin/launchos-session` as `player` on tty1 (no display manager, no getty on tty1). It picks hardware or software drawing, then starts sway with `/etc/launchos/sway.conf`, which runs `launchos-inner` (PipeWire, WirePlumber, then `python3 /opt/launcher/launch.py`). Seat access is through `seatd`.
-- **Pages talk to Python** through `call(action, arg)` in `los.js`, handled in `launch.py`.
-- **Root actions** (power, Wi-Fi, time zone, drives, format, install, Store, updates, admin password): the launcher writes a small JSON file into `/run/launchos/requests/` (owned by player). `launchos-helper.path` (DirectoryNotEmpty) starts `launchos-helper.service`, which runs `/usr/local/sbin/launchos-helper` as root. It accepts only a fixed list of actions and validates every value; long jobs run through `systemd-run` and write progress to `/run/launchos-status/<job>.json` (root-owned), which the launcher polls.
-- **Drives:** USB drives mount under `/media/player` (root-owned 755) through the udev rule and `launchos-drives`. Drive jobs share the lock `/run/launchos-status/.drives.lock`. `/usr/local/lib/launchos/disks.py` is shared code: which disk LaunchOS runs from and saves to, what's in use.
-- **Store:** Flathub (system install). The catalog is read from `/var/lib/flatpak/appstream/flathub/x86_64/active/appstream.xml.gz` and its icons. `launchos-store` runs flatpak on a pseudo-terminal to read progress.
-- **Updates:** `launchos-update` reads `/etc/launchos/update.conf` (`url=` the GitHub `releases/latest/download/` folder), downloads `launchos-update.json`, then the version-specific `launchos-update.tar.gz`, checks SHA-256 and only writes under allowed paths (`/opt/launcher`, `/usr/local`, `/etc/launchos`, a few units). Needs saving on. `launchos-reconcile.service` fixes a save area that holds an older LaunchOS than the image. `build/ubuntu-era/make-update.sh` builds the package. **The repo is private, so these downloads only work once releases are publicly reachable.**
-- **Admin password:** none by default; root is locked. Setting one in Settings goes through `launchos-admin`, which needs a physical key press for the first set and writes `/etc/sudoers.d/launchos-player` and `/etc/launchos/admin-set`.
-- **Version:** `/etc/launchos-release` (`VERSION=`, `BUILD_DATE=`), shown in Settings → About.
-
-## What changed from Ubuntu (done in v0.9)
-
-- **casper** (live boot, persistence, `username=`/`hostname=` boot options, `/etc/casper.conf`) → Debian's **live-boot** / **live-config** (`boot=live`, `persistence` with a `persistence.conf`, `live-config.username=player`). `launchos-usb-saving`, `launchos-install`, `launchos-reconcile` and `disks.py` look for casper's partition labels and paths (`casper-rw`, `writable`, `/cdrom/casper`); search for `casper` across `rootfs/` and `ui/`.
-- **Image layout:** `/casper/vmlinuz`, `/casper/initrd`, `/casper/filesystem.squashfs` → `/live/...`. The hybrid ISO (BIOS + UEFI, works from USB written with Etcher or Rufus DD mode) is built with xorriso in `build/ubuntu-era/build6.sh`; `live-build` can produce the same.
-- **Packages:** `packages-manual.txt` lists Ubuntu names. Most are the same on Debian. Differences to check: `steam-installer` (Debian `contrib`/`non-free`), `linux-firmware` → `firmware-linux` / `firmware-misc-nonfree` / `firmware-amd-graphics` / `firmware-iwlwifi` etc. (`non-free-firmware`), `intel-microcode` / `amd64-microcode` (`non-free-firmware`), `gir1.2-vte-3.91` and `gir1.2-webkit-6.0` (Debian 13 has both), `casper` (drop). i386 must be enabled for Steam and Wine.
-- **Updates button "Install Ubuntu's security fixes"** (`launchos-update system`, text in `index.html`) → Debian security updates.
-- **Branding:** remove "Ubuntu" from pages, README, GRUB text and the VirtualBox "Ubuntu (64-bit)" type note (Debian (64-bit) instead).
+- **Boot:** GRUB (no menu) → kernel + a slim start-up image (no AMD/NVIDIA/network drivers: they load from the system a moment later) → Debian live-boot with `persistence`. GRUB and the start-up image only accept the disc or stick of their own build (`/.disk/live-uuid-*`). A partition labelled `persistence` keeps changes: the VirtualBox save disk, or the free space of the USB stick, which `initramfs-tools/scripts/live-premount/launchos-saving` turns into a save area on the first start. Plymouth shows the rocket. The user is `player` (uid 1000), hostname `launchos`; each PC makes its own machine id on its first start.
+- **Session:** `launcher.service` runs `/usr/local/bin/launchos-session` as `player` on tty1 (no display manager, no getty on tty1). It picks hardware or software drawing, then starts sway with `/etc/launchos/sway.conf`, which runs `launchos-inner` (PipeWire, WirePlumber, then `python3 /opt/launcher/launch.py`). Seat access is through `seatd`. It starts at the sign-in page, `login.html`.
+- **Pages talk to Python** through `call(action, arg)` in `los.js`, handled in `launch.py` (slow calls in threads). Opened in a normal browser, the pages use mocks instead, which is how the page tests run.
+- **Root actions** (power, Wi-Fi, time zone, drives, format, install, Store, updates, password, Pro, gaming mode): the launcher writes a small JSON file into `/run/launchos/requests/` (owned by player). `launchos-helper.path` starts `launchos-helper`, which runs as root, accepts only a fixed list of actions and validates every value; long jobs run through `systemd-run` and write progress to `/run/launchos-status/<job>.json` (root-owned), which the launcher polls.
+- **Drives:** USB drives mount under `/media/player` (root-owned 755) through the udev rule and `launchos-drives`. `/usr/local/lib/launchos/disks.py` is shared code: which disk LaunchOS runs from and saves to, what's in use.
+- **Store:** Flathub (system install). `launchos-store` runs flatpak on a pseudo-terminal to read progress.
+- **Updates:** `launchos-update` reads `/etc/launchos/update.conf` (`url=` the GitHub `releases/latest/download/` folder), downloads `launchos-update-v1.json`, then the version's `launchos-update.tar.gz`, checks SHA-256 and only writes LaunchOS's own files. Needs saving on. `launchos-reconcile` makes sure a save area never hides a newer LaunchOS image. **While the repo is private, these downloads only work once releases are publicly reachable.**
+- **LaunchOS Pro:** `launchos-pro` activates a key with the Pro server (`url=` in `/etc/launchos/pro.conf`), downloads the Pro extras to `/opt/launchos-pro` (only if signed with the key in `signing_key=`, see `lib/launchos/signed.py`) and re-checks the key monthly (never turning Pro off for being offline). With Pro, `launchos-game` (gaming mode) runs while a game is open, and early-access updates come from the Pro server.
+- **Password:** none by default; root is locked. Setting one goes through `launchos-admin`, which needs a physical key press the first time.
+- **Version:** `/etc/launchos-release` (`VERSION=`, `BUILD_DATE=`, `EARLY=` for early-access builds), shown in Settings → About.

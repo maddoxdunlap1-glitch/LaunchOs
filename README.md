@@ -1,8 +1,8 @@
 # LaunchOS
 
-![LaunchOS boot screen](assets/boot-preview.gif)
+![LaunchOS start-up: a rocket climbing through the stars](assets/boot-preview.gif)
 
-A console-style Linux system, based on Debian, with a controller-friendly Home screen. It boots to a spinning ferris wheel, then Home. Run it in VirtualBox, from a USB stick, or install it on a PC.
+A console-style Linux system, based on Debian, with a controller-friendly Home screen. It starts with a rocket lift-off, then the sign-in screen and Home. Run it in VirtualBox, from a USB stick, or install it on a PC. In our start-up tests it reaches the sign-in screen in 10 to 20 seconds.
 
 **What's in it**
 
@@ -19,15 +19,18 @@ A console-style Linux system, based on Debian, with a controller-friendly Home s
 - **Setup**: your name and color, time zone, network, sound, screen size, controller test, look, and your apps.
 - **Side menu** (`M`, Super, or the controller's Menu or Home button): running apps, Discord, devices, notifications, and Settings (screen size, sound, network, Wi-Fi, time zone, apps on Home, password, saving, install, updates, power).
 - **Apps keep running** when you go Home. **Ctrl+click** (or right-click) an app for Resume, Restart, End task and Move.
+- **Wallpapers**: painted Liftoff, Nebula, Aurora, Orbit, Dunes, Waves and Grid wallpapers, the classic contour lines, or plain (Setup → Look).
+- **On-screen keyboard**: every text box (passwords, Wi-Fi, search, file names) can be typed with a controller.
+- **LaunchOS Flasher** for Windows: puts the newest LaunchOS on a USB drive, and offers to update a drive that has an older one.
 
 ## Download
 
-Get **LaunchOS.zip** from the [latest release](../../releases/latest). It contains:
+From the [latest release](../../releases/latest):
 
+- `LaunchOS-Flasher.exe`: the easiest way onto a USB stick, on Windows (see below).
 - `LaunchOS.iso`: the system. Boots as a disc or a USB stick, on BIOS and UEFI.
-- `LaunchOS.vbox`: a ready-made VirtualBox machine
-- `LaunchOS-data.vdi`: its save disk (starts empty and grows as you use it)
-- `LaunchOS-storage.vdi`: a spare empty drive to try Files on (format it in Files first)
+- `LaunchOS.zip`: for VirtualBox. It contains `LaunchOS.iso`, `LaunchOS.vbox` (a ready-made machine), `LaunchOS-data.vdi` (its save disk, which starts empty and grows as you use it) and `LaunchOS-storage.vdi` (a spare empty drive to try Files on).
+- `SHA256SUMS.txt`: checksums of the ISO and the zip.
 
 Check which version you're running in **Settings → About LaunchOS**.
 
@@ -43,9 +46,13 @@ Making your own VM instead? Set **Type: Linux, Version: Debian (64-bit)** and at
 
 ## Run it from a USB stick
 
-1. Write `LaunchOS.iso` to a USB stick (8 GB or more) with [balenaEtcher](https://etcher.balena.io), or with [Rufus](https://rufus.ie) in **DD mode**. This erases the stick.
-2. Turn off **Secure Boot** in your PC's BIOS/UEFI settings.
-3. Start the PC from the USB stick (usually F8, F12 or Esc at power-on opens the boot menu).
+1. On Windows, run **LaunchOS-Flasher.exe**. It isn't signed, so the first time Windows may say "Windows protected your PC": choose **More info**, then **Run anyway**. It asks for administrator rights (writing a whole drive needs them).
+2. Pick **Download the newest LaunchOS** (or a `LaunchOS.iso` you have), pick your USB stick (8 GB or more), and choose **Write LaunchOS**. This erases the stick. The flasher only lists USB drives and memory cards, checks the download and reads everything back after writing.
+   (Not on Windows? Write `LaunchOS.iso` with [balenaEtcher](https://etcher.balena.io), or [Rufus](https://rufus.ie) in **DD mode**.)
+3. Turn off **Secure Boot** in your PC's BIOS/UEFI settings.
+4. Start the PC from the USB stick (usually F8, F12 or Esc at power-on opens the boot menu).
+
+To update a stick to a newer LaunchOS, plug it in with the flasher open: it offers to update it. (That erases the saves on it.)
 
 The first time it starts, LaunchOS uses the free space on the stick for saving, so your settings, sign-ins and games are kept.
 
@@ -73,15 +80,22 @@ Lock, sign out, shut down or restart from **Side menu → Settings → Power**.
 ## Notes
 
 - Only one game or app (Steam, Discord, Roblox, a Windows program…) runs at a time, like on a console. The Browser and Terminal can run alongside.
-- Wi-Fi passwords are typed with a keyboard for now.
-- Password: set one in **Settings → Password** (the first time, it asks you to press Enter or A to confirm). It's asked for at the sign-in screen (you can turn that off) and for `sudo` in the Terminal. There's no default root password. Type it with a keyboard for now.
+- Password: set one in **Settings → Password** (the first time, it asks you to press Enter or A to confirm). It's asked for at the sign-in screen (you can turn that off) and for `sudo` in the Terminal. There's no default root password.
 - Text console: press Ctrl+Alt+F2 and log in as `player` with your password.
-- Coming from LaunchOS 0.8 (based on Ubuntu)? 0.9 is a fresh start on Debian: download the new LaunchOS.zip and write it to your USB stick again, or add the new LaunchOS.vbox. Saves from 0.8 aren't used.
+- Coming from LaunchOS 0.9 or older? 1.0 is a fresh download: write it to your USB stick with LaunchOS Flasher, or add the new LaunchOS.vbox. (Settings → Updates on 0.9 says so too.) From 1.0 on, most updates come through Settings → Updates.
 - Updates and Store apps are kept only when saving is on (or LaunchOS is installed).
 
 ## LaunchOS Pro
 
-*Coming soon.* LaunchOS is free, and everything above stays free. **LaunchOS Pro** will be an optional $5 one-time unlock that adds extra themes and animated Home backgrounds, game tweaks (performance mode, FPS overlay switch), early access to new versions and a supporter badge. One key will work on up to 5 PCs and cover every future version. It isn't on sale yet; see the [LaunchOS site](docs/index.html) for news.
+*Coming soon.* LaunchOS is free, and everything above stays free. **LaunchOS Pro** will be an optional $5 one-time unlock that adds:
+
+- **Live backgrounds** that move (Warp, Drift, Sky, Launch) and five **color themes** (Carbon, Deep sea, Royal, Ember, Pure black)
+- **Gaming mode**: while a game runs, the processor runs at full speed and the game gets priority over everything else
+- An **FPS counter** in games (just the FPS, or detailed)
+- **Early access** to new versions
+- A **supporter badge** on Home and the sign-in screen
+
+One key will work on up to 5 PCs and cover every future version. It's built into LaunchOS (Settings → LaunchOS Pro) but isn't on sale yet; see the [LaunchOS site](docs/index.html) for news.
 
 ## Credits and trademarks
 

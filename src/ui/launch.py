@@ -935,6 +935,32 @@ class ExtApp:
         GLib.timeout_add(5000, kill)
 
 
+def sway_windows():
+    """Every window sway has: (con id, app id or X11 class, focused, in the scratchpad), or None if
+    sway can't be asked."""
+    try:
+        tree = json.loads(subprocess.run(['swaymsg', '-t', 'get_tree', '-r'], capture_output=True, text=True,
+                                         timeout=2).stdout or 'null')
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    out, todo = [], [(tree, False)] if isinstance(tree, dict) else []
+    while todo:
+        n, hidden = todo.pop()
+        hidden = hidden or (n.get('type') == 'workspace' and n.get('name') in ('__i3_scratch', 'parked'))
+        if n.get('type') in ('con', 'floating_con') and n.get('pid'):
+            out.append((n.get('id'), n.get('app_id') or (n.get('window_properties') or {}).get('class') or '',
+                        bool(n.get('focused')), hidden))
+        todo.extend((c, hidden) for c in (n.get('nodes') or []) + (n.get('floating_nodes') or []))
+    return out
+
+
+def sway_cmd(cmd):
+    try:
+        subprocess.run(['swaymsg', cmd], capture_output=True, timeout=3)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
 class SwayWatcher(threading.Thread):
     """Tells the launcher when a window that isn't ours appears (sway's window events)."""
 
@@ -2057,6 +2083,7 @@ class Launcher(Gtk.Application):
         self.panel = None   # Discord side panel
         self.quiet_super = 0.0
         self.signed_in = False
+        self.parked = set()   # (signed out: other apps' windows put out of sight, see guard_check)
         self.fails, self.wait_until = 0, 0.0   # wrong passwords in a row, and when the next try is allowed
         self.signin_lock = threading.Lock()
         self.connect('activate', self.on_activate)
@@ -2093,6 +2120,8 @@ class Launcher(Gtk.Application):
         WebKit.NetworkSession.get_default().connect('download-started', self.on_download)
         InputWatcher(self.on_global_home).start()
         SwayWatcher(self.on_new_window).start()
+        sway_cmd('focus_on_window_activation urgent')
+        self.start_guard()   # (it starts signed out)
         GLib.timeout_add(1500, self.check_ext)
         # Super (Windows) key on Home works like the Xbox button: the page opens or closes the side menu.
         keys = Gtk.EventControllerKey()
@@ -2257,7 +2286,59 @@ class Launcher(Gtk.Application):
                         else 'That password isn’t right. Wait a moment before trying again.'}
         self.fails, self.wait_until = 0, 0.0
         self.signed_in = True
+        GLib.idle_add(lambda: (sway_cmd('focus_on_window_activation focus'), False)[1])
         return {'ok': True}
+
+    # ---------- signed out: the sign-in screen stays in front ----------
+
+    def guard_soon(self):
+        """Checks what's in front a moment after a window event (apps often do several things in a
+        row: open, go full screen, ask for focus), and brings the sign-in screen back if needed."""
+        if getattr(self, 'guard_timer', 0):
+            return
+        self.guard_timer = GLib.timeout_add(250, self.guard_check)
+
+    def guard_check(self):
+        """Signed out: other apps' windows go to a workspace that's never shown (out of sight, and
+        they can't be reached), and the sign-in screen is the one in front. They come back when you
+        sign in and go back to the app. (Not sway's scratchpad: sway 1.10 can still draw a window
+        that was just put there.)"""
+        self.guard_timer = 0
+        if self.signed_in:
+            return False
+        wins = sway_windows()
+        if wins is None:
+            return False
+        moved = False
+        for cid, app, focused, hidden in wins:
+            if app != 'os.launch.home' and not hidden and isinstance(cid, int):
+                sway_cmd(f'[con_id={cid}] move container to workspace parked')
+                self.parked.add(cid)
+                moved = True
+        if moved or not any(app == 'os.launch.home' and focused for _, app, focused, _ in wins):
+            if self.win.get_visible():   # Home is there: sway puts it back in front (no remapping)
+                sway_cmd('[app_id="^os\\.launch\\.home$" title="^LaunchOS$"] fullscreen enable, focus')
+            else:
+                self.bring_home()
+        return False
+
+    def unpark(self):
+        """The apps put out of sight while signed out come back (when you go back to the app)."""
+        for cid in list(self.parked):
+            sway_cmd(f'[con_id={cid}] move container to workspace 1, fullscreen enable')
+        self.parked.clear()
+
+    def guard_tick(self):
+        """While signed out, every 2 seconds too (in case a window event was missed)."""
+        if self.signed_in:
+            self.guard_ticker = 0
+            return False
+        self.guard_check()
+        return True
+
+    def start_guard(self):
+        if not getattr(self, 'guard_ticker', 0):
+            self.guard_ticker = GLib.timeout_add(2000, self.guard_tick)
 
     def sign_out(self, end_apps):
         """Lock (apps keep running) or sign out (apps are closed), then show the sign-in screen."""
@@ -2275,7 +2356,11 @@ class Launcher(Gtk.Application):
             self.panel.set_visible(False)
         self.signed_in = False
         self.ext_waiting = 0
+        # (an app asking to be shown only gets marked, never focused, until you sign in again)
+        sway_cmd('focus_on_window_activation urgent')
         self.bring_home()
+        self.start_guard()
+        self.guard_soon()
         GLib.idle_add(lambda: (self.view.load_uri(UI + 'login.html'), False)[1])
         return {'ok': True}
 
@@ -2410,10 +2495,7 @@ class Launcher(Gtk.Application):
         the app just started, Home steps aside so it (and any dialog it shows) is in front.
         Signed out, the sign-in screen always stays in front, whatever an app still running does."""
         if not self.signed_in:
-            now = time.monotonic()
-            if now - getattr(self, 'last_guard', 0) > 0.3:
-                self.last_guard = now
-                self.bring_home()
+            self.guard_soon()
             return False
         if change != 'new':
             return False
@@ -2430,6 +2512,7 @@ class Launcher(Gtk.Application):
             if w.get_visible():
                 w.set_visible(False)
         self.ext.last_used = time.monotonic()
+        self.unpark()   # (its windows were put out of sight while signed out)
         self.win.set_visible(False)   # the app's own window is the one left on screen
         GLib.idle_add(self.push_tasks)
 
@@ -2469,6 +2552,7 @@ class Launcher(Gtk.Application):
         if self.ext is not None and not self.ext.alive():
             name, quick = self.ext.name, time.monotonic() - self.ext.started < 30
             self.ext = None
+            self.parked.clear()
             self.game_mode_off()
             self.bring_home()
             msg = (f'{name} closed right away. The first time, it needs an internet connection.' if quick and name in ('Steam', 'Roblox', 'FreeTube')

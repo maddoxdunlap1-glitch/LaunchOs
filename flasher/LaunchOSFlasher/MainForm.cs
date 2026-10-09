@@ -157,7 +157,7 @@ namespace LaunchOSFlasher
             }
             else
             {
-                status.Text = latestError + " You can still use a LaunchOS file you downloaded.";
+                status.Text = latestError;   // (the choice below still works: a LaunchOS file on this PC)
                 useNewest.Enabled = false;
                 useFile.Checked = true;
             }
