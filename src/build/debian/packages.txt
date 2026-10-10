@@ -39,6 +39,8 @@ python3-gi
 gir1.2-gtk-4.0
 gir1.2-webkit-6.0
 gir1.2-vte-3.91
+# the web browser
+firefox-esr
 gstreamer1.0-plugins-base
 gstreamer1.0-plugins-good
 gstreamer1.0-libav
