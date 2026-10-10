@@ -347,15 +347,11 @@ async function openEntry(k) {
   if (e.kind === 'archive') { toast('LaunchOS can’t open ' + e.name.split('.').pop().toUpperCase() + ' files yet. You can still copy or move it.', 4200); return; }
   toast('LaunchOS can’t open this kind of file. You can still copy or move it.', 4000);
 }
-async function runProgram(name, path, again) {
+async function runProgram(name, path) {
   const nice = name.replace(/\.(exe|msi)$/i, '');
   toast('Opening ' + nice + '… The first Windows program takes a minute', 4000);
   const r = await call('open_ext', { id: 'winprog', path });
-  if (r && r.busy && !again) {
-    panel('Close ' + r.busy + '?', 'One game or app like this runs at a time, like on a console.', [
-      row('Close ' + r.busy + ' and open ' + nice, 'Unsaved progress in ' + r.busy + ' may be lost', 'close', async () => { closePanel(); await call('end_app', r.busy_id); setTimeout(() => runProgram(name, path, true), 800); }),
-      row('Cancel', '', 'check', () => closePanel())]);
-  } else if (r && r.error) toast(nice + ' couldn’t start' + (r.error === 'not_installed' ? ': Wine isn’t available' : ''), 4000);
+  if (r && r.error) toast(nice + ' couldn’t start' + (r.error === 'not_installed' ? ': Wine isn’t available' : ''), 4000);
 }
 
 /* ---------- pop-ups ---------- */

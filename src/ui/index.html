@@ -123,10 +123,13 @@ async function openApp(id, name, url) {
   if (r && r.ended) noteOnReturn = 'Ended ' + r.ended + ' to free up memory';
   refreshTasks();
 }
-const monitor = () => { location.href = 'monitor.html'; };
-const files = () => { location.href = 'files.html'; };
-const settings = () => { location.href = 'settings.html'; };
-const store = hash => () => { location.href = 'store.html' + (hash ? '#' + encodeURIComponent(hash) : ''); };
+/* LaunchOS's own apps open in windows of their own and stay open in the background: Home is
+   never reloaded, so going back and forth is instant. */
+const openPage = (page, hash) => { if (mode !== 'home') closeAll(); LOS.open(page, hash); };
+const monitor = () => openPage('monitor');
+const files = () => openPage('files');
+const settings = () => openPage('settings');
+const store = hash => () => openPage('store', hash ? encodeURIComponent(hash) : '');
 async function terminal() {
   toast((running.terminal ? 'Back to ' : 'Opening ') + 'Terminal');
   const r = await call('open_terminal');
@@ -163,7 +166,7 @@ function shownApps() {
   return appsList.filter(a => picked.includes(a.key) || (a.flatpak && a.installed && !hidden.includes(a.key)));
 }
 const appArt = a => a.key === 'winprog' ? 'wine' : a.key === 'steam' ? 'steam' : '';
-const goSetup = hash => () => { location.href = 'setup.html' + (hash ? '#' + hash : ''); };
+const goSetup = hash => () => openPage('setup', hash || '');
 function tiles() {
   const W = (id, name, url, extra) => Object.assign({ id, name, url, act: web(id, name, url) }, extra);
   const all = [
@@ -228,7 +231,8 @@ function paintMe() {
   $('#av').style.background = LOS.prefs.avatar;
   $('#av').classList.toggle('pro', LOS.pro);
 }
-document.addEventListener('los:pro', () => paintMe());   // (Pro was turned on or off: the badge follows)
+document.addEventListener('los:pro', () => paintMe());
+document.addEventListener('los:back', () => paintMe());   // (back from another window: the name or picture may have changed)   // (Pro was turned on or off: the badge follows)
 const NAMES = () => [TB.map(t => t[1]), T1.map(t => t.name), T2.map(t => t.name)];
 function foc() {
   R.flat().forEach(e => e.classList.remove('f'));
@@ -279,11 +283,7 @@ async function openExt(id, name, path, checked) {
   }
   toast((running[id] ? 'Back to ' : 'Opening ') + name);
   const r = await call('open_ext', { id, path });
-  if (r && r.busy) {
-    panel('Close ' + r.busy + '?', 'One game or app like this runs at a time, like on a console.', [
-      row('Close ' + r.busy + ' and open ' + name, 'Unsaved progress in ' + r.busy + ' may be lost', 'close', async () => { closePanel(); await call('end_app', r.busy_id); setTimeout(() => openExt(id, name, path, true), 800); }),
-      row('Cancel', '', 'check', () => closePanel())]);
-  } else if (r && r.error) {
+  if (r && r.error) {
     toast(name + ' couldn’t start', 3200);
   }
   refreshTasks();
@@ -404,7 +404,7 @@ function items() {
   switch (g.t) {
     case 0: return [
       ...Object.values(running).map(t => { const tile = T1.find(x => x.id === t.id) || {};
-        return row(t.outside ? t.title || t.name : t.name, 'Running · ' + dur(t.running_s), 'play', () => { closeAll(); t.outside ? openExt(t.id, t.name) : openApp(t.id, t.name, ''); }, { img: tile.img, pic: tile.pic }); }),
+        return row(t.outside ? t.title || t.name : t.name, 'Running · ' + dur(t.running_s), 'play', () => { closeAll(); t.page ? LOS.open(t.page) : t.outside ? openExt(t.id, t.name) : openApp(t.id, t.name, ''); }, { img: tile.img, pic: tile.pic || t.page }); }),
       row('Browser', 'Browse the web', 'globe', web('browser', 'Browser', ''), { pic: 'browser' }),
       row('Setup', LOS.prefs.setupDone ? 'Go through setup again' : 'Not finished yet', 'wand', goSetup(), { pic: 'setup' }),
       row('Customize your Home', 'Colors and background', 'palette', goSetup('look'), { pic: 'look' }),

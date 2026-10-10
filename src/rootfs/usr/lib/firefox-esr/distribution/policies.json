@@ -1,0 +1,25 @@
+{
+  "policies": {
+    "Homepage": { "URL": "file:///opt/launcher/start.html", "StartPage": "homepage", "Locked": false },
+    "OverrideFirstRunPage": "",
+    "OverridePostUpdatePage": "",
+    "DontCheckDefaultBrowser": true,
+    "DisableTelemetry": true,
+    "DisableProfileImport": true,
+    "DisableSetDesktopBackground": true,
+    "NoDefaultBookmarks": true,
+    "SearchEngines": { "Default": "DuckDuckGo" },
+    "UserMessaging": {
+      "WhatsNew": false, "ExtensionRecommendations": false, "FeatureRecommendations": false,
+      "UrlbarInterventions": false, "SkipOnboarding": true, "MoreFromMozilla": false, "Locked": false
+    },
+    "Preferences": {
+      "browser.tabs.inTitlebar": { "Value": 0, "Status": "default" },
+      "browser.aboutwelcome.enabled": { "Value": false, "Status": "default" },
+      "browser.startup.homepage_override.mstone": { "Value": "ignore", "Status": "default" },
+      "browser.newtabpage.activity-stream.showSponsored": { "Value": false, "Status": "default" },
+      "browser.newtabpage.activity-stream.showSponsoredTopSites": { "Value": false, "Status": "default" },
+      "browser.fullscreen.autohide": { "Value": false, "Status": "default" }
+    }
+  }
+}

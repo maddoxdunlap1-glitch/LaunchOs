@@ -28,6 +28,7 @@ input { font: inherit; }
 
 #wrap { position: absolute; left: 50%; top: 50%; width: 1280px; height: 720px; transform-origin: 50% 50%; transform: translate(-50%, -50%) scale(var(--fit, 1)); }
 /* the background picture is there from the very first frame (look.js); #wall draws the same over it */
+img, a { -webkit-user-drag: none; }
 #stage { position: absolute; inset: 0; background: var(--wallshade, none), var(--wallimg, none) center / cover no-repeat, var(--bg); overflow: hidden; user-select: none; }
 /* until the page is ready (los.js), only the background shows: never a half-drawn screen */
 body:not(.losready) #stage > :not(#wall) { visibility: hidden !important; }

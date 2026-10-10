@@ -353,11 +353,11 @@ function collect() { F = [...document.querySelectorAll('#content [data-f], #nav 
 function paint() { F.forEach((e, k) => e.classList.toggle('f', k === fi)); const e = F[fi]; if (!e) return; if (e.tagName === 'INPUT') e.focus(); else if (document.activeElement && document.activeElement.tagName === 'INPUT') document.activeElement.blur(); e.scrollIntoView && e.scrollIntoView({ block: 'nearest' }); }
 function focusAt(key) { collect(); const k = F.findIndex(e => e.dataset.z === key || e.dataset.k === key); if (k >= 0) { fi = k; paint(); } }
 function next() { if (only >= 0) return finish(); if (cur < STEPS.length - 1) show(cur + 1); }
-function finish(early, forward) { const s = STEPS[cur]; if (s.leave) s.leave(!!forward); if (only < 0 && !early) LOS.save({ setupDone: true }); LOS.backTo(); }
+function finish(early, forward) { const s = STEPS[cur]; if (s.leave) s.leave(!!forward); if (only < 0 && !early) LOS.save({ setupDone: true }); LOS.backTo(true); }
 function navAct(k) {
   if (k === 'next') next();
   else if (k === 'back') { if (cur > 0) show(cur - 1); }
-  else if (k === 'skip') location.href = 'index.html';
+  else if (k === 'skip') LOS.backTo(true);
   else if (k === 'finish' || k === 'done') finish(false, true);
 }
 function activate() {
@@ -376,7 +376,7 @@ LOS.onNav((a, ev) => {
   if (a === 'ok') { activate(); return true; }
   if (a === 'back') {
     if (e && e.tagName === 'INPUT' && ev && ev.key === 'Backspace') return false;
-    if (only >= 0) finish(); else if (cur > 0) show(cur - 1); else location.href = 'index.html';
+    if (only >= 0) finish(); else if (cur > 0) show(cur - 1); else LOS.backTo(true);
     return true;
   }
   if (e && e.dataset.slider != null && (a === 'left' || a === 'right')) { adjust(a === 'left' ? -1 : 1); return true; }
@@ -425,7 +425,7 @@ document.addEventListener('click', e => { const t = e.target.closest('[data-f]')
 document.addEventListener('mousemove', e => { const t = e.target.closest('[data-f]'); if (!t || !LOS.mouseRecent()) return; const k = F.indexOf(t); if (k >= 0 && k !== fi) { fi = k; paint(); } });
 $('#ha').onclick = () => activate();
 $('#hm').onclick = () => finish(true);
-$('#hb').onclick = () => { if (only >= 0) finish(); else if (cur > 0) show(cur - 1); else location.href = 'index.html'; };
+$('#hb').onclick = () => { if (only >= 0) finish(); else if (cur > 0) show(cur - 1); else LOS.backTo(true); };
 LOS.holdReady();   // (shown once the first step is drawn)
 show(cur);
 </script>

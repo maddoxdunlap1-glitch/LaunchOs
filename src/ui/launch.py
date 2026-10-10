@@ -469,7 +469,7 @@ PAD_EXIT_JS = """
 
 
 SUPER_KEYS = (Gdk.KEY_Super_L, Gdk.KEY_Super_R, Gdk.KEY_Meta_L, Gdk.KEY_Meta_R)
-MAX_APPS = 3   # web apps kept running in the background; the least recently used one is ended past this
+MAX_APPS = 6   # web apps kept running in the background; the least recently used one is ended past this
 
 
 class Browser(Gtk.ApplicationWindow):
@@ -526,6 +526,8 @@ class Browser(Gtk.ApplicationWindow):
         self.view.connect('load-changed', self.on_load)
         self.view.connect('notify::uri', lambda *_: self.sync())
         self.view.connect('create', self.on_create)
+        # no right-click menu on LaunchOS's own pages (websites keep theirs)
+        self.view.connect('context-menu', lambda v, *a: (v.get_uri() or '').startswith(UI))
         self.view.connect('decide-policy', self.on_policy)
         self.view.connect('permission-request', lambda v, req: (req.deny(), True)[1])
         self.view.connect('load-failed', self.on_failed)
@@ -782,6 +784,94 @@ class TermWin(Gtk.ApplicationWindow):
         self.destroy()
 
 
+# ---------- LaunchOS's own screens ----------
+
+def ui_view(launcher, win_id):
+    """A web view for LaunchOS's own pages: the bridge to the system (window.LOS), no right-click
+    menu (no Copy, Reload or Inspect on buttons and tiles), drawn on the same navy as the pages."""
+    ucm = WebKit.UserContentManager()
+    holder = {}
+    ucm.connect('script-message-received::launchos', lambda m, v: launcher.on_message(m, v, holder.get('view')))
+    ucm.register_script_message_handler('launchos', None)
+    ucm.add_script(WebKit.UserScript.new(f'window.__losHW = {"true" if HW else "false"}; window.__losWin = {json.dumps(win_id)};',
+                                         WebKit.UserContentInjectedFrames.TOP_FRAME,
+                                         WebKit.UserScriptInjectionTime.START, None, None))
+    view = WebKit.WebView(user_content_manager=ucm, vexpand=True, hexpand=True)
+    holder['view'] = view
+    view.set_size_request(200, 200)   # (see Browser: never laid out at zero height)
+    view.set_background_color(NAVY)
+    s = view.get_settings()
+    s.set_hardware_acceleration_policy(ACCEL)
+    s.set_enable_developer_extras(False)
+    s.set_allow_file_access_from_file_urls(True)
+    s.set_media_playback_requires_user_gesture(False)   # the viewer starts a video or song you picked in Files
+    view.connect('context-menu', lambda *a: True)
+    return view
+
+
+# LaunchOS's own apps, each a page in a window of its own
+PAGES = {'files': 'Files', 'settings': 'Settings', 'store': 'Store', 'monitor': 'System monitor', 'setup': 'Setup'}
+
+
+class PageWin(Gtk.ApplicationWindow):
+    """Files, Settings, the Store, the system monitor or Setup: a LaunchOS page in a window of its
+    own, on a screen of its own. It opens out of sight (sway.conf puts a window with this title on
+    its screen) and comes to the front once its page is drawn, so opening never shows a half-drawn
+    or blank screen; going Home keeps it as it was, so coming back is instant too. Home itself is
+    never reloaded."""
+
+    def __init__(self, app, page, url):
+        super().__init__(application=app, title='LaunchOS ' + PAGES[page])
+        self.launcher, self.page = app, page
+        self.app_id, self.name = 'page:' + page, PAGES[page]
+        self.started = self.last_used = time.monotonic()
+        self.back = 'home'
+        self.pending = 0
+        self.view = ui_view(app, page)
+        self.set_child(self.view)
+        keys = Gtk.EventControllerKey()
+        keys.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        keys.connect('key-pressed', self.on_key)
+        self.add_controller(keys)
+        self.view.load_uri(url)
+        self.fullscreen()
+        self.present()
+
+    def js(self, code):
+        if self.view is not None:
+            self.view.evaluate_javascript(code, -1, None, None, None, None, None)
+
+    def on_key(self, ctl, keyval, code, state):
+        if keyval in SUPER_KEYS and time.monotonic() < self.launcher.quiet_super:
+            return True
+        if keyval == Gdk.KEY_Menu or (keyval == Gdk.KEY_F10 and state & Gdk.ModifierType.SHIFT_MASK):
+            self.js('window.__losOpts && window.__losOpts();')
+            return True
+        if keyval in SUPER_KEYS:
+            self.js('window.__losGuide && window.__losGuide();')   # (the page goes Home)
+            return True
+        return False
+
+    def page_title(self):
+        return ''
+
+    def page_uri(self):
+        return ''
+
+    def shutdown(self):
+        if self.view is None:
+            return
+        if self.pending:
+            GLib.source_remove(self.pending)
+            self.pending = 0
+        try:
+            self.view.terminate_web_process()
+        except Exception:
+            pass
+        self.view = None
+        self.destroy()
+
+
 # ---------- outside apps ----------
 
 # Apps LaunchOS offers in Setup and shows on Home. Apps with a Flathub id install from Flathub
@@ -891,8 +981,17 @@ def flatpak_argv(app):
     return ['flatpak', 'run', app]
 
 
+FIREFOX = '/usr/bin/firefox-esr'
+
+
+def firefox_ok():
+    return os.path.exists(FIREFOX)
+
+
 def ext_command(app_id, path=None):
     """(name, argv, working folder, title) for an outside app, or None if it can't start."""
+    if app_id == 'browser' and firefox_ok():
+        return 'Firefox', [FIREFOX], HOME, 'Firefox'
     if app_id == 'steam' and os.path.exists('/usr/games/steam'):
         return 'Steam', ['env', 'PATH=/usr/local/lib/launchos/steam-shim:' + os.environ.get('PATH', '/usr/bin:/bin'),
                          '/usr/games/steam', '-gamepadui'], HOME, 'Steam'
@@ -912,32 +1011,79 @@ def ext_command(app_id, path=None):
     return None
 
 
-class ExtApp:
-    """An outside app in its own process group, so End task stops all of it."""
+def ext_key(app_id, path=None):
+    """The running app's id: the app's own id, or for Windows programs one per program (any number
+    of them can run, each with its own screen)."""
+    if app_id == 'winprog' and path:
+        stem = re.sub(r'[^a-z0-9]+', '-', os.path.splitext(os.path.basename(str(path)))[0].lower()).strip('-')
+        return 'winprog:' + (stem[:24] or 'program')
+    return app_id
 
-    def __init__(self, app_id, name, argv, cwd, title, env=None):
-        self.app_id, self.name, self.title = app_id, name, title
+
+def proc_stat(pid):
+    """(parent pid, session id) of a process, or None if it's gone."""
+    s = read(f'/proc/{pid}/stat')
+    try:
+        f = s[s.rindex(')') + 2:].split()
+        return int(f[1]), int(f[3])
+    except (ValueError, IndexError):
+        return None
+
+
+def flatpak_of(pid):
+    """The Flathub app a process belongs to ('' if none): sandboxed apps see /.flatpak-info."""
+    try:
+        with open(f'/proc/{int(pid)}/root/.flatpak-info') as f:
+            for line in f:
+                if line.startswith('name='):
+                    return line[5:].strip()
+    except (OSError, ValueError, TypeError):
+        pass
+    return ''
+
+
+class ExtApp:
+    """An outside app in its own process group, so End task stops all of it. Its windows are on
+    a screen of its own ("x-<its id>"), so any number of them can run side by side: Discord
+    while you play, Steam and a Windows program, Firefox and the Terminal."""
+
+    def __init__(self, key, kind, name, argv, cwd, title, env=None, extra=None):
+        self.key, self.kind, self.name, self.title = key, kind, name, title
+        self.app_id = key
         self.argv, self.cwd, self.env = argv, cwd, env
         self.started = self.last_used = time.monotonic()
+        self.waiting = self.started   # its first window brings it to the front (if you're still on Home)
+        self.opened_from = 'home'
+        flat = FLATPAKS.get(kind, (kind[4:] if kind.startswith('app:') else '',))[0]
+        self.flatpak = flat
+        # names its windows may have (Wayland app id or X11 class)
+        self.names = {n.lower() for n in (flat.split('.')[-1] if flat else '', name, kind, 'firefox' if kind == 'browser' else '') if n}
         logdir = os.path.join(HOME, '.cache', 'launchos')
         os.makedirs(logdir, exist_ok=True)
-        log = open(os.path.join(logdir, app_id + '.log'), 'ab')
-        self.proc = subprocess.Popen(argv, cwd=cwd, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
-                                     start_new_session=True, env=env)
+        log = open(os.path.join(logdir, re.sub(r'[^\w.-]+', '_', key) + '.log'), 'ab')
+        self.proc = subprocess.Popen(argv + list(extra or []), cwd=cwd, stdin=subprocess.DEVNULL, stdout=log,
+                                     stderr=subprocess.STDOUT, start_new_session=True, env=env)
         log.close()
         self.pgid = self.proc.pid
 
-    def reopen(self):
+    def reopen(self, extra=None):
         """It's running but has no window (closed to the tray, like Discord or Steam): starting it
-        again makes the running copy show its window. Not for Windows programs (that would start a
-        second copy)."""
-        if self.app_id == 'winprog':
+        again makes the running copy show its window (Firefox opens the page in a new tab). Not
+        for Windows programs (that would start a second copy)."""
+        if self.kind == 'winprog':
             return
         try:
-            subprocess.Popen(self.argv, cwd=self.cwd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL, start_new_session=True, env=self.env)
+            subprocess.Popen(self.argv + list(extra or []), cwd=self.cwd, stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True, env=self.env)
         except OSError:
             pass
+
+    def matches(self, app):
+        """Whether a window's app id or X11 class looks like this app's."""
+        a = (app or '').lower()
+        if not a:
+            return False
+        return any(n == a or (len(n) >= 4 and n in a) or (len(a) >= 4 and a in n) for n in self.names)
 
     def alive(self):
         if self.proc.poll() is None:
@@ -991,15 +1137,29 @@ def sway_cmd(cmd):
 
 
 # Every app has a screen of its own (a sway workspace) and stays full screen on it: Home on "1"
-# (where sway puts the first window of what its config started), the outside app (a game, Steam,
-# Discord…) on "app" (sway.conf sends every window that isn't ours there), and each of our own apps
-# (Browser, Terminal, web apps) on "w-<its id>". Switching apps is switching screens: nothing is
-# hidden, shown again or resized, so nothing flickers or redraws.
+# (where sway puts the first window of what its config started), each outside app (a game, Steam,
+# Discord, Firefox…) on "x-<its id>", each of our web apps and the Terminal on "w-<its id>", and
+# Files, Settings, the Store, the system monitor and Setup on "p-<page>". Windows that aren't ours
+# first land on "app" (sway.conf sends them there, out of sight) and the launcher moves each to its
+# app's screen. Switching apps is switching screens: nothing is hidden, shown again, reloaded or
+# resized, so nothing flickers or redraws.
 WS_HOME, WS_APP = '1', 'app'
 
 
+def _slug(s):
+    return re.sub(r'[^a-z0-9]+', '-', str(s).lower()).strip('-')[:30] or 'app'
+
+
 def ws_for(app_id):
-    return 'w-' + (re.sub(r'[^a-z0-9]+', '-', str(app_id).lower()).strip('-')[:30] or 'app')
+    return 'w-' + _slug(app_id)
+
+
+def ws_ext(key):
+    return 'x-' + _slug(key)
+
+
+def ws_page(page):
+    return 'p-' + page
 
 
 def sway_ws(name):
@@ -1007,7 +1167,7 @@ def sway_ws(name):
 
 
 def sway_ws_windows():
-    """{workspace name: [(con id, app id or X11 class, focused)]} and the name of the screen shown."""
+    """{workspace name: [(con id, app id or X11 class, focused, pid)]} and the name of the screen shown."""
     try:
         tree = json.loads(subprocess.run(['swaymsg', '-t', 'get_tree', '-r'], capture_output=True, text=True,
                                          timeout=2).stdout or 'null')
@@ -1023,7 +1183,7 @@ def sway_ws_windows():
                 shown = ws
         if n.get('type') in ('con', 'floating_con') and n.get('pid') and ws:
             out[ws].append((n.get('id'), n.get('app_id') or (n.get('window_properties') or {}).get('class') or '',
-                            bool(n.get('focused'))))
+                            bool(n.get('focused')), n.get('pid') or 0))
         todo.extend((c, ws) for c in (n.get('nodes') or []) + (n.get('floating_nodes') or []))
     return out, shown
 
@@ -2145,12 +2305,15 @@ SIGNED_OUT_OK = {'session_state', 'sign_in', 'power', 'info', 'network', 'log_er
 class Launcher(Gtk.Application):
     def __init__(self):
         super().__init__(application_id='os.launch.home')
-        self.apps = {}   # app id -> Browser window, running (shown or in the background)
-        self.ext = None   # the one outside app (game, Steam, FreeTube…) that may run, like a console
+        self.apps = {}   # app id -> Browser or Terminal window, running (shown or in the background)
+        self.exts = {}   # app id -> ExtApp: outside apps (games, Steam, Discord, Firefox…), as many as you like
+        self.pages = {}   # page -> PageWin: Files, Settings, the Store, the system monitor, Setup
+        self.game_keys = set()   # outside apps running with gaming mode (Pro)
+        self.opening_page = None   # a page window being drawn out of sight, shown when it's ready
         self.panel = None   # Discord side panel
         self.quiet_super = 0.0
         self.signed_in = False
-        self.front = 'home'   # what's on screen: 'home', 'ext' (the outside app) or one of our apps' ids
+        self.front = 'home'   # what's on screen: 'home', an outside app's id, one of our apps' ids, or 'page:<page>'
         self.fails, self.wait_until = 0, 0.0   # wrong passwords in a row, and when the next try is allowed
         self.signin_lock = threading.Lock()
         self.connect('activate', self.on_activate)
@@ -2165,20 +2328,7 @@ class Launcher(Gtk.Application):
                                                   Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         sway_ws(WS_HOME)   # (Home's window opens on its own screen)
         self.win = Gtk.ApplicationWindow(application=app, title='LaunchOS')
-        ucm = WebKit.UserContentManager()
-        ucm.connect('script-message-received::launchos', self.on_message)
-        ucm.register_script_message_handler('launchos', None)
-        ucm.add_script(WebKit.UserScript.new('window.__losHW = ' + ('true' if HW else 'false') + ';',
-                                             WebKit.UserContentInjectedFrames.TOP_FRAME,
-                                             WebKit.UserScriptInjectionTime.START, None, None))
-        self.view = WebKit.WebView(user_content_manager=ucm)
-        self.view.set_background_color(NAVY)
-        s = self.view.get_settings()
-        s.set_hardware_acceleration_policy(ACCEL)
-        s.set_enable_developer_extras(False)
-        s.set_allow_file_access_from_file_urls(True)
-        s.set_media_playback_requires_user_gesture(False)   # the viewer starts a video or song you picked in Files
-        self.view.connect('context-menu', lambda *a: True)
+        self.view = ui_view(self, 'home')
         self.view.connect('load-changed', self.on_first_load)
         self.view.load_uri(UI + 'login.html')
         self.overlay = Gtk.Overlay()
@@ -2233,12 +2383,22 @@ class Launcher(Gtk.Application):
             return True
         return False
 
-    def reply(self, rid, data):
+    def live_view(self, view):
+        return view is self.view or any(w.view is view for w in self.pages.values())
+
+    def reply(self, rid, data, view=None):
+        view = view or self.view
+        if not self.live_view(view):
+            return False   # its window was closed meanwhile
         js = f'window.__losReply && window.__losReply({json.dumps(rid)}, {json.dumps(data)});'
-        self.view.evaluate_javascript(js, -1, None, None, None, None, None)
+        view.evaluate_javascript(js, -1, None, None, None, None, None)
         return False
 
-    def on_message(self, ucm, value):
+    def page_of(self, view):
+        return next((w for w in self.pages.values() if w.view is view and view is not None), None)
+
+    def on_message(self, ucm, value, view=None):
+        view = view or self.view
         try:
             msg = json.loads(value.to_string())
         except Exception:
@@ -2249,7 +2409,7 @@ class Launcher(Gtk.Application):
             return
         rid, action, arg = msg.get('id', 0), msg.get('action'), msg.get('arg')
         if not self.signed_in and action not in SIGNED_OUT_OK:
-            self.reply(rid, {'error': 'signed_out'})
+            self.reply(rid, {'error': 'signed_out'}, view)
             return
 
         slow = {'internet_test': internet_test, 'wifi_connect': lambda: wifi_connect(arg),
@@ -2269,7 +2429,7 @@ class Launcher(Gtk.Application):
                     result = slow[action]()
                 except Exception as e:   # never let one bad request take the launcher down
                     result = {'error': str(e)}
-                GLib.idle_add(self.reply, rid, result)
+                GLib.idle_add(self.reply, rid, result, view)
             threading.Thread(target=work, daemon=True).start()
             return
 
@@ -2284,7 +2444,7 @@ class Launcher(Gtk.Application):
             'timezone_get': lambda: {'zone': timezone_get()},
             'timezone_set': lambda: helper_request({'action': 'timezone', 'value': str(arg)}),
             'power': lambda: helper_request({'action': 'poweroff' if arg == 'poweroff' else 'reboot'}),
-            'open_browser': lambda: self.open_app({'id': 'browser', 'name': 'Browser', 'url': arg}),
+            'open_browser': lambda: self.open_app({'id': 'browser', 'name': 'Browser', 'url': arg, 'navigate': True}),
             'open_app': lambda: self.open_app(arg),
             'end_app': lambda: self.end_app(arg),
             'tasks': self.tasks,
@@ -2302,6 +2462,11 @@ class Launcher(Gtk.Application):
                                                       'confirm': str((arg or {}).get('confirm', ''))}),
             'discord_panel': lambda: self.discord_panel(arg),
             'open_terminal': self.open_terminal,
+            # LaunchOS's own apps (Files, Settings, Store, System monitor, Setup)
+            'open_page': lambda: self.open_page(arg),
+            'page_ready': lambda: self.page_ready(self.page_of(view)),
+            'page_back': lambda: self.page_back(self.page_of(view), arg),
+            'go_home': lambda: (self.bring_home(), {'ok': True})[1],
 
             'store_job': lambda: job_status('store'),
             'update_info': update_info,
@@ -2326,7 +2491,7 @@ class Launcher(Gtk.Application):
             result = fn() if fn else {'error': 'unknown action'}
         except Exception as e:  # never let one bad request take the launcher down
             result = {'error': str(e)}
-        self.reply(rid, result)
+        self.reply(rid, result, view)
 
     # ---------- sign-in ----------
 
@@ -2354,7 +2519,12 @@ class Launcher(Gtk.Application):
                         else 'That password isn’t right. Wait a moment before trying again.'}
         self.fails, self.wait_until = 0, 0.0
         self.signed_in = True
-        GLib.idle_add(lambda: (sway_cmd('focus_on_window_activation smart'), False)[1])
+
+        def after():
+            sway_cmd('focus_on_window_activation smart')
+            self.sort_strays()   # windows that opened while signed out go to their apps' screens
+            return False
+        GLib.idle_add(after)
         return {'ok': True}
 
     # ---------- signed out: the sign-in screen stays in front ----------
@@ -2369,17 +2539,15 @@ class Launcher(Gtk.Application):
     def guard_check(self):
         """Signed out: the sign-in screen is the one shown. Other apps' windows are on their own
         screens, out of sight (and can't be reached); one that turned up on Home's screen is sent to
-        the app screen. They're all there again when you sign in and go back to the app."""
+        its app's screen. They're all there again when you sign in and go back to the app."""
         self.guard_timer = 0
         if self.signed_in:
             return False
+        self.sort_strays()
         wins, shown = sway_ws_windows()
         if wins is None:
             return False
-        for cid, app, focused in wins.get(WS_HOME, []):
-            if app != 'os.launch.home' and isinstance(cid, int):
-                sway_cmd(f'[con_id={cid}] move container to workspace {WS_APP}')
-        if shown != WS_HOME or not any(app == 'os.launch.home' and f for _, app, f in wins.get(WS_HOME, [])):
+        if shown != WS_HOME or not any(app == 'os.launch.home' and f for _, app, f, _p in wins.get(WS_HOME, [])):
             self.front = 'home'
             sway_ws(WS_HOME)
             sway_cmd('[app_id="^os\\.launch\\.home$" title="^LaunchOS$"] fullscreen enable, focus')
@@ -2398,50 +2566,68 @@ class Launcher(Gtk.Application):
             self.guard_ticker = GLib.timeout_add(2000, self.guard_tick)
 
     def sign_out(self, end_apps):
-        """Lock (apps keep running) or sign out (apps are closed), then show the sign-in screen."""
+        """Lock (apps keep running) or sign out (apps are closed), then show the sign-in screen.
+        LaunchOS's own app windows (Files, Settings…) close either way."""
         if end_apps:
             for app_id in list(self.apps):
                 self.end_app(app_id)
-            if self.ext is not None:
-                self.ext.end()
-                self.ext = None
-                self.game_mode_off()
+            for key in list(self.exts):
+                self.drop_ext(key, end=True)
         if self.panel is not None:
             self.panel.set_visible(False)
         self.signed_in = False
-        self.ext_waiting = 0
+        for e in self.exts.values():
+            e.waiting = 0
         # (an app asking to be shown only gets marked, never focused, until you sign in again)
         sway_cmd('focus_on_window_activation urgent')
         self.bring_home()
         self.start_guard()
         self.guard_soon()
-        GLib.idle_add(lambda: (self.view.load_uri(UI + 'login.html'), False)[1])
+
+        def after():
+            for page in list(self.pages):   # (after this reply has gone to the page that asked)
+                self.close_page(page)
+            self.view.load_uri(UI + 'login.html')
+            return False
+        GLib.idle_add(after)
         return {'ok': True}
 
     # ---------- running apps ----------
 
     def tasks(self):
         now = time.monotonic()
-        return [{'id': w.app_id, 'name': w.name, 'running_s': int(now - w.started),
-                 'title': w.page_title(), 'uri': w.page_uri(), 'shown': self.front == w.app_id}
-                for w in self.apps.values()] + ([{
-                    'id': self.ext.app_id, 'name': self.ext.name, 'running_s': int(now - self.ext.started),
-                    'title': self.ext.title, 'uri': '', 'shown': self.front == 'ext', 'outside': True}]
-                    if self.ext is not None else [])
+        return ([{'id': w.app_id, 'name': w.name, 'running_s': int(now - w.started),
+                  'title': w.page_title(), 'uri': w.page_uri(), 'shown': self.front == w.app_id}
+                 for w in self.apps.values()]
+                + [{'id': e.key, 'name': e.name, 'running_s': int(now - e.started), 'title': e.title, 'uri': '',
+                    'shown': self.front == e.key, 'outside': True}
+                   for e in sorted(self.exts.values(), key=lambda e: e.started)]
+                + [{'id': w.app_id, 'name': w.name, 'running_s': int(now - w.started), 'title': w.name, 'uri': '',
+                    'shown': self.front == w.app_id, 'page': w.page}
+                   for w in self.pages.values()])
 
     def push_tasks(self):
         self.js(f'window.__losTasks && window.__losTasks({json.dumps(self.tasks())});')
         return False
+
+    def stop_waiting(self):
+        """You went somewhere yourself: an app still starting doesn't jump in front when its window shows."""
+        self.opening_page = None
+        for e in self.exts.values():
+            e.waiting = 0
 
     def open_app(self, arg):
         arg = arg if isinstance(arg, dict) else {}
         app_id = str(arg.get('id') or 'browser')[:40]
         name = str(arg.get('name') or 'Browser')[:60]
         url = arg.get('url') or ''
+        if app_id == 'browser' and firefox_ok():   # the web browser is Firefox
+            return self.open_ext({'id': 'browser', 'url': url})
         win = self.apps.get(app_id)
         if win is not None:
             if arg.get('navigate') and url:
                 win.go(url)
+            self.stop_waiting()
             win.resume()
             return {'ok': True, 'resumed': True}
         ended = None
@@ -2450,6 +2636,7 @@ class Launcher(Gtk.Application):
             oldest = min(others, key=lambda w: w.last_used)
             ended = oldest.name
             self.end_app(oldest.app_id)
+        self.stop_waiting()
         self.front = app_id
         sway_ws(ws_for(app_id))   # (its window opens on its own screen)
         win = Browser(self, url, app_id, name)
@@ -2462,42 +2649,33 @@ class Launcher(Gtk.Application):
             return {'ok': False, 'error': 'The terminal isn’t available on this system.'}
         win = self.apps.get('terminal')
         if win is not None:
+            self.stop_waiting()
             win.resume()
             return {'ok': True, 'resumed': True}
-        ended = None
-        if len(self.apps) >= MAX_APPS:
-            oldest = min(self.apps.values(), key=lambda w: w.last_used)
-            ended = oldest.name
-            self.end_app(oldest.app_id)
+        self.stop_waiting()
         self.front = 'terminal'
         sway_ws(ws_for('terminal'))
         win = TermWin(self)
         win.connect('close-request', self.on_app_closed)
         self.apps['terminal'] = win
         GLib.idle_add(self.push_tasks)
-        return {'ok': True, 'resumed': False, 'ended': ended}
-
-    def game_mode_off(self):
-        if getattr(self, 'game_mode', False):
-            self.game_mode = False
-            helper_request({'action': 'game', 'op': 'off'})
+        return {'ok': True, 'resumed': False}
 
     def end_app(self, app_id):
-        if self.ext is not None and self.ext.app_id == str(app_id):
-            self.ext.end()
-            self.ext = None
-            self.game_mode_off()
-            self.bring_home()
+        app_id = str(app_id)
+        if app_id in self.exts:
+            self.drop_ext(app_id, end=True)
             return {'ok': True}
-        win = self.apps.pop(str(app_id), None)
+        if app_id.startswith('page:'):
+            return {'ok': self.close_page(app_id[5:])}
+        win = self.apps.pop(app_id, None)
         if win is None:
             return {'ok': False, 'error': 'not running'}
-        visible = self.front == win.app_id
+        if self.front == win.app_id:
+            self.bring_home()   # (Home first, then the window goes: no empty screen in between)
         win.shutdown()
         del win
         GLib.timeout_add(500, lambda: (gc.collect(), False)[1])
-        if visible:
-            self.show_home()
         GLib.idle_add(self.push_tasks)
         return {'ok': True}
 
@@ -2505,9 +2683,10 @@ class Launcher(Gtk.Application):
         # closed from inside the app (Ctrl+W): end it the same way as End task
         if self.apps.get(win.app_id) is win:
             del self.apps[win.app_id]
+        if self.front == win.app_id:
+            self.bring_home()
         win.shutdown()
         GLib.timeout_add(500, lambda: (gc.collect(), False)[1])
-        self.show_home()
         GLib.idle_add(self.push_tasks)
         return True   # handled: shutdown() already closed the window
 
@@ -2518,61 +2697,225 @@ class Launcher(Gtk.Application):
     def show_home(self):
         GLib.idle_add(self.bring_home)
 
-    # ---------- outside apps: Steam, games, FreeTube, Windows programs ----------
-    # Only one runs at a time, like a console. It draws its own window on top of Home.
-    # Going Home re-shows the Home window on top; resuming hides Home so the app is
-    # in front again. Super or the Xbox button comes back Home from inside the app.
+    # ---------- LaunchOS's own apps: Files, Settings, the Store, the system monitor, Setup ----------
 
-    def open_ext(self, arg):
+    def open_page(self, arg):
         arg = arg if isinstance(arg, dict) else {}
-        app_id = str(arg.get('id', ''))
-        if self.ext is not None and self.ext.alive():
-            if self.ext.app_id == app_id and not arg.get('path'):
-                self.resume_ext()
-                return {'ok': True, 'resumed': True}
-            return {'ok': False, 'busy': self.ext.name, 'busy_id': self.ext.app_id}
-        cmd = ext_command(app_id, arg.get('path'))
-        if not cmd:
-            return {'ok': False, 'error': 'not_installed'}
-        name, argv, cwd, title = cmd
-        argv, env = game_env(app_id, argv)
-        try:
-            self.ext = ExtApp(app_id, name, argv, cwd, title, env)
-        except OSError as e:
-            return {'ok': False, 'error': str(e)}
-        if env is not None and gaming_get()['perf']:   # Pro: gaming mode while it runs
-            helper_request({'action': 'game', 'op': 'on', 'pid': self.ext.proc.pid})
-            self.game_mode = True
-        self.ext_waiting = time.monotonic()   # Home steps aside when the app's first window shows
+        page = str(arg.get('page', ''))
+        if page not in PAGES:
+            return {'ok': False, 'error': 'unknown page'}
+        hash_ = str(arg.get('hash') or '')[:300]
+        url = UI + page + '.html' + ('#' + hash_ if hash_ else '')
+        back = str(arg.get('back') or 'home')
+        w = self.pages.get(page)
+        self.stop_waiting()
+        # (Setup opened for one step, or for all of them, starts over; the others carry on where they were)
+        if w is not None and (w.view.get_uri() == url or (not hash_ and page != 'setup')):
+            w.back = back if back in PAGES and back != page else 'home'
+            self.show_page(w)
+            return {'ok': True, 'resumed': True}
+        if w is None:
+            w = PageWin(self, page, url)   # (drawn out of sight; page_ready brings it in front)
+            w.connect('close-request', self.on_page_closed)
+            self.pages[page] = w
+        else:
+            w.view.load_uri(url)   # (asked for a particular place in it: e.g. one app in the Store)
+        w.back = back if back in PAGES and back != page else 'home'
+        self.opening_page = page
+        if w.pending:
+            GLib.source_remove(w.pending)
+        w.pending = GLib.timeout_add(1500, lambda: (self.page_ready(w, late=True), False)[1])   # (never longer than that)
         GLib.idle_add(self.push_tasks)
         return {'ok': True, 'resumed': False}
 
+    def page_ready(self, w, late=False):
+        """The page in a page window has drawn itself: bring it in front, if it's still wanted there."""
+        if w is None:
+            return {'ok': False}
+        if w.pending and not late:
+            GLib.source_remove(w.pending)
+        w.pending = 0
+        if self.opening_page == w.page and self.pages.get(w.page) is w and self.signed_in:
+            self.show_page(w)
+        return {'ok': True}
+
+    def show_page(self, w):
+        self.opening_page = None
+        w.last_used = time.monotonic()
+        self.front = w.app_id
+        sway_ws(ws_page(w.page))
+        w.present()
+        if w.view is not None:
+            w.view.grab_focus()
+        w.js('window.__losBack && window.__losBack();')   # (it picks up what changed elsewhere, like the colors)
+        GLib.idle_add(self.push_tasks)
+
+    def page_back(self, w, arg):
+        """A page is done: back to where it was opened from (Home, or Settings). Setup closes when
+        it's finished; the others stay open in the background."""
+        if w is None:
+            self.bring_home()
+            return {'ok': True}
+        target = self.pages.get(w.back)
+        if target is not None:
+            self.show_page(target)
+        else:
+            self.bring_home()
+        if isinstance(arg, dict) and arg.get('close'):
+            GLib.idle_add(lambda: (self.close_page(w.page), False)[1])
+        return {'ok': True}
+
+    def close_page(self, page):
+        w = self.pages.pop(page, None)
+        if w is None:
+            return False
+        if self.opening_page == page:
+            self.opening_page = None
+        if self.front == w.app_id:
+            self.bring_home()
+        w.shutdown()
+        GLib.timeout_add(500, lambda: (gc.collect(), False)[1])
+        GLib.idle_add(self.push_tasks)
+        return True
+
+    def on_page_closed(self, w):
+        if self.pages.get(w.page) is w:
+            self.close_page(w.page)
+        else:
+            w.shutdown()
+        return True
+
+    # ---------- outside apps: Steam, games, Discord, Firefox, Flathub apps, Windows programs ----------
+    # Any number run at once, each on its own screen. Super or the Xbox button comes back Home from
+    # inside one; Home lists them all and switches to any of them instantly.
+
+    def open_ext(self, arg):
+        arg = arg if isinstance(arg, dict) else {}
+        kind = str(arg.get('id', ''))
+        path = arg.get('path')
+        url = str(arg.get('url') or '')
+        key = ext_key(kind, path)
+        e = self.exts.get(key)
+        if e is not None and e.alive():
+            if url:
+                e.reopen([url])   # (Firefox: opens it in a new tab)
+            self.resume_ext(key, quiet=bool(url))
+            return {'ok': True, 'resumed': True}
+        if e is not None:
+            self.drop_ext(key)
+        cmd = ext_command(kind, path)
+        if not cmd:
+            return {'ok': False, 'error': 'not_installed'}
+        name, argv, cwd, title = cmd
+        argv, env = game_env(kind, argv)
+        if kind == 'browser':
+            env = dict(env or os.environ, MOZ_ENABLE_WAYLAND='1')
+        try:
+            e = ExtApp(key, kind, name, argv, cwd, title, env, [url] if url else None)
+        except OSError as err:
+            return {'ok': False, 'error': str(err)}
+        self.stop_waiting()
+        # its first window brings it in front, if you're still where you opened it from (Home, Files, the Store)
+        e.waiting, e.opened_from = time.monotonic(), self.front
+        self.exts[key] = e
+        if is_game(kind) and env is not None and gaming_get()['perf']:   # Pro: gaming mode while games run
+            helper_request({'action': 'game', 'op': 'on', 'pid': e.proc.pid})
+            self.game_keys.add(key)
+        GLib.idle_add(self.push_tasks)
+        return {'ok': True, 'resumed': False}
+
+    def drop_ext(self, key, end=False):
+        """An outside app ended (or End task): forget it; gaming mode ends with the last game."""
+        e = self.exts.pop(key, None)
+        if e is None:
+            return
+        if end:
+            e.end()
+        was_game = key in self.game_keys
+        self.game_keys.discard(key)
+        if was_game and not self.game_keys:
+            helper_request({'action': 'game', 'op': 'off'})
+        if self.front == key:
+            self.bring_home()
+        GLib.idle_add(self.push_tasks)
+
+    def owner_of(self, pid, app):
+        """Which running outside app a window belongs to: the process that made it was started by
+        that app (or is in its sandbox); else by its name; else the app being opened, or the one
+        on screen (a file chooser an app opened, for example)."""
+        if not self.exts:
+            return None
+        by_pid = {e.proc.pid: k for k, e in self.exts.items()}
+        by_sid = {e.pgid: k for k, e in self.exts.items()}
+        p, hops = pid, 0
+        while isinstance(p, int) and p > 1 and hops < 64:
+            if p in by_pid:
+                return by_pid[p]
+            st = proc_stat(p)
+            if not st:
+                break
+            if st[1] in by_sid:
+                return by_sid[st[1]]
+            p, hops = st[0], hops + 1
+        fp = flatpak_of(pid) if pid else ''
+        if fp:
+            for k, e in self.exts.items():
+                if e.flatpak == fp:
+                    return k
+        for k, e in self.exts.items():
+            if e.matches(app):
+                return k
+        now = time.monotonic()
+        starting = [e for e in self.exts.values() if e.waiting and now - e.waiting < 600]
+        if starting:
+            return max(starting, key=lambda e: e.waiting).key
+        if self.front in self.exts:
+            return self.front
+        return max(self.exts.values(), key=lambda e: e.last_used).key
+
+    def sort_strays(self):
+        """Windows that aren't ours land on "app" (sway.conf), out of sight: each goes to its app's
+        screen. Returns the apps that got a window."""
+        self.sort_timer = 0
+        wins, shown = sway_ws_windows()
+        got = set()
+        for ws in (WS_APP, WS_HOME):
+            for cid, app, focused, pid in (wins or {}).get(ws, []):
+                if app == 'os.launch.home' or not isinstance(cid, int):
+                    continue
+                key = self.owner_of(pid, app)
+                if key is None:
+                    if ws == WS_HOME:   # (never on Home's screen)
+                        sway_cmd(f'[con_id={cid}] move container to workspace {WS_APP}')
+                    continue
+                sway_cmd(f'[con_id={cid}] move container to workspace {ws_ext(key)}')
+                got.add(key)
+        return got
+
     def on_new_window(self, change='new'):
-        """A window that isn't ours appeared (sway.conf puts it on the app screen), or any window
-        closed. The first window of the app just started brings the app screen to the front. When
-        the screen in front loses its last window (the app closed it, or went to the tray), Home
-        comes back right away. Signed out, the sign-in screen always stays in front."""
+        """A window that isn't ours appeared, or any window closed. A new window goes to its app's
+        screen; the first window of an app you just opened brings it in front. When the screen in
+        front loses its last window (the app closed it, or went to the tray), Home comes back right
+        away. Signed out, the sign-in screen always stays in front."""
         if change == 'close':
             GLib.timeout_add(30, self.after_close)
             return False
         if not self.signed_in:
             self.guard_soon()
             return False
-        if change != 'new':
+        if change != 'new' or getattr(self, 'sort_timer', 0):
             return False
-        GLib.timeout_add(60, self.sweep_home)
-        waiting = getattr(self, 'ext_waiting', 0)
-        if self.ext is not None and waiting and time.monotonic() - waiting < 600 and self.front == 'home':
-            self.ext_waiting = 0
-            self.resume_ext()
+        self.sort_timer = GLib.timeout_add(60, self.sort_and_show)
         return False
 
-    def sweep_home(self):
-        """A window that isn't ours on Home's screen (one sway.conf didn't recognize) goes to the app screen."""
-        wins, shown = sway_ws_windows()
-        for cid, app, focused in (wins or {}).get(WS_HOME, []):
-            if app != 'os.launch.home' and isinstance(cid, int):
-                sway_cmd(f'[con_id={cid}] move container to workspace {WS_APP}')
+    def sort_and_show(self):
+        got = self.sort_strays()
+        now = time.monotonic()
+        for key in got:
+            e = self.exts.get(key)
+            if e is not None and e.waiting and now - e.waiting < 600 and self.front in ('home', e.opened_from):
+                self.resume_ext(key)
+                break
         return False
 
     def after_close(self):
@@ -2583,25 +2926,29 @@ class Launcher(Gtk.Application):
             self.bring_home()   # the app on screen closed its last window
         return False
 
-    def resume_ext(self):
-        if not self.signed_in or self.ext is None:
+    def resume_ext(self, key, quiet=False):
+        e = self.exts.get(key)
+        if not self.signed_in or e is None:
             return
-        self.ext.last_used = time.monotonic()
+        e.last_used = time.monotonic()
+        self.sort_strays()
         wins, shown = sway_ws_windows()
-        if wins is not None and not wins.get(WS_APP):
+        if wins is not None and not wins.get(ws_ext(key)):
             # no window (yet): it's still starting, or it went to the tray. Home stays until one shows.
-            if time.monotonic() - self.ext.started > 20:
-                self.ext.reopen()   # (starting it again makes the running copy show its window)
-            self.ext_waiting = time.monotonic()
-            self.js(f'window.LOS && LOS.toast({json.dumps("Opening " + self.ext.name + "…")}, 3000);')
+            if time.monotonic() - e.started > 20 and not quiet:
+                e.reopen()   # (starting it again makes the running copy show its window)
+            self.stop_waiting()
+            e.waiting, e.opened_from = time.monotonic(), self.front
+            self.js(f'window.LOS && LOS.toast({json.dumps("Opening " + e.name + "…")}, 3000);')
             return
-        self.front = 'ext'
-        sway_ws(WS_APP)
+        self.stop_waiting()
+        self.front = key
+        sway_ws(ws_ext(key))
         GLib.idle_add(self.push_tasks)
 
     def bring_home(self):
         self.quiet_super = time.monotonic() + 0.8
-        self.ext_waiting = 0   # the player came back on purpose: don't jump to the app again
+        self.stop_waiting()   # you came back on purpose: an app still starting doesn't jump in front
         self.front = 'home'
         sway_ws(WS_HOME)
         if not self.win.get_visible():
@@ -2609,8 +2956,13 @@ class Launcher(Gtk.Application):
             self.win.fullscreen()
         self.win.present()
         self.view.grab_focus()
+        self.js('window.__losBack && window.__losBack();')   # (it picks up what changed in Settings or Setup)
         GLib.idle_add(self.push_tasks)
         return False
+
+    def ours_active(self):
+        return (self.win.is_active() or any(w.is_active() for w in self.apps.values())
+                or any(w.is_active() for w in self.pages.values()))
 
     def on_global_home(self):
         """Super key or Xbox button, seen on the raw input devices. Only acts when an
@@ -2620,19 +2972,19 @@ class Launcher(Gtk.Application):
                 self.quiet_super = time.monotonic() + 0.8
                 w.go_home()
                 return False
-        if self.front != 'ext' and self.ext is None:
+        if self.front not in self.exts and not self.exts:
             return False
-        if self.win.is_active() or any(w.is_active() for w in self.apps.values()):
+        if self.ours_active():
             return False   # (our own windows handle the key themselves)
         self.bring_home()
         return False
 
     def check_ext(self):
-        if self.ext is not None and not self.ext.alive():
-            name, quick = self.ext.name, time.monotonic() - self.ext.started < 30
-            self.ext = None
-            self.game_mode_off()
-            self.bring_home()
+        for key, e in list(self.exts.items()):
+            if e.alive():
+                continue
+            name, quick = e.name, time.monotonic() - e.started < 30
+            self.drop_ext(key)
             msg = (f'{name} closed right away. The first time, it needs an internet connection.' if quick and name in ('Steam', 'Roblox', 'FreeTube')
                    else f'{name} closed')
             self.js(f'window.LOS && LOS.toast({json.dumps(msg)}, 4500);')

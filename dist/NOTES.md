@@ -1,17 +1,19 @@
-LaunchOS 1.0.1: **no more flicker**, a **Settings app**, and apps that **can't freeze** when minimized.
+LaunchOS 1.1: **many apps at once**, **Files and Settings as real apps**, **Firefox**, and a **flicker fix**.
 
-**Smooth switching**
-- Every app now has a screen of its own. Going Home, coming back to an app, and opening or closing one is an instant switch: nothing blanks, redraws or flickers any more.
-- Moving between Home, Files, the Store, Setup and Settings no longer shows a half-drawn screen: the background stays put and the new page appears once it's ready.
-- When an app closes (or closes to the tray, like Discord), Home comes back right away instead of leaving an empty screen. Opening it again brings its window back.
-- Apps in the background can't jump in front of what you're doing.
+**Run as many apps as you like**
+- The one-app-at-a-time limit is gone. Run Discord while you play, Steam and Firefox side by side, the Terminal next to all of it.
+- Every app keeps a screen of its own. Press Super (or the Xbox button) to go Home; Home and the side menu list everything that's running, and picking one switches to it instantly.
+- Gaming mode (Pro) stays on while any game runs and ends with the last one.
 
-**Settings app**
-- The Settings tile now opens a full-screen Settings app: every setting on the left, the one you open on the right. B goes back, and B again goes Home. Setup, Files and the system monitor opened from Settings come back to it.
-- The side menu still has quick settings, plus "All settings".
+**Files, Settings, Store, System monitor and Setup are real apps now**
+- Each opens in a window of its own and stays open when you go Home, right where you left it, so coming back is instant. They show up in the side menu while they're open, and End task closes them.
+- Home itself is never reloaded any more, and an app only comes in front once it's fully drawn.
+
+**Firefox is the browser**
+- The Browser tile, the start page and links from Settings open Firefox, full screen, with tabs and the address bar. Super goes back Home and keeps it running.
 
 **Fixes**
-- Discord, Spotify and other apps from Flathub could freeze when their own minimize button was pressed. They now run in a mode where minimize can't freeze them. If anything ever looks stuck, the Windows key (or the controller's Xbox button) always takes you Home.
-- Pressing A on Home before its tiles were filled in did nothing useful.
+- Screen flicker when opening or closing apps on some laptops (Intel graphics especially): LaunchOS now always draws the screen itself instead of switching the display between modes.
+- Right-clicking or dragging a button or tile on LaunchOS's screens no longer offers to copy it.
 
-**Updating:** from LaunchOS 1.0, use Settings → Updates (needs saving on), or write LaunchOS 1.0.1 to your USB stick with LaunchOS Flasher.
+**Updating:** from LaunchOS 1.0 or 1.0.1, use Settings → Updates (needs saving on; it downloads Firefox too), or write LaunchOS 1.1 to your USB stick with LaunchOS Flasher.

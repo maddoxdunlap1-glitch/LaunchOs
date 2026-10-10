@@ -61,7 +61,7 @@ label.pw button { padding: 0 14px; border-radius: 10px; background: var(--chip);
    Right) opens one on the right, B goes back to the list, and B again goes Home. The settings
    themselves are in settings.js, shared with Home's side menu. */
 const { $, call, toast, icon, pic, appPic, esc } = LOS;
-call('session_state').then(s => { if (s && s.signed_in === false) location.href = 'login.html'; });
+call('session_state').then(s => { if (s && s.signed_in === false && !LOS.inApp) location.href = 'login.html'; });
 
 let mode = 'cats';   // cats: the list on the left has the focus; panel: the open setting does
 let ci = 0, open = -1, running = {};
@@ -69,7 +69,7 @@ let P = null;        // the open setting: { rows, i, ... } (see settings.js)
 const goSetup = hash => () => LOS.openFrom('setup.html' + (hash ? '#' + hash : ''));
 const files = () => LOS.openFrom('files.html');
 const monitor = () => LOS.openFrom('monitor.html');
-const home = () => { location.href = 'index.html'; };
+const home = () => LOS.home();   // (Settings stays open in the background)
 
 /* the settings, with what they're set to now */
 function cats() {

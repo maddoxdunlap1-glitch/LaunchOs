@@ -5,6 +5,10 @@
 
   /* ---------- bridge to the system (launch.py) ---------- */
   const native = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.launchos);
+  // Which LaunchOS window this page is in: Home ('home'), or one of LaunchOS's own apps (Files,
+  // Settings, the Store, the system monitor, Setup), each a window of its own that stays open.
+  const WIN = native ? window.__losWin || '' : '';
+  const inApp = !!WIN && WIN !== 'home';
   let seq = 0;
   const PAGE = Math.random().toString(36).slice(2, 10);
   const pending = {};
@@ -183,7 +187,8 @@
   };
 
   /* Signed out (locked) while on a page other than the sign-in screen: go there. */
-  const guard = r => { if (r && r.error === 'signed_out' && !/login\.html$/.test(location.pathname)) location.href = 'login.html'; return r; };
+  // (an app window just closes: the system shows the sign-in screen on Home)
+  const guard = r => { if (r && r.error === 'signed_out' && !inApp && !/login\.html$/.test(location.pathname)) location.href = 'login.html'; return r; };
   function call(action, arg) {
     if (!native) {
       const fn = MOCK[action];
@@ -456,7 +461,7 @@
     // A on a controller on a selected text box: type with the on-screen keyboard
     const ae = document.activeElement;
     if (a === 'ok' && e === null && textBox(ae) && ae.classList.contains('f')) { osk.show(ae); return true; }
-    if (a === 'guide' && !guideHere) { location.href = 'index.html'; return true; }
+    if (a === 'guide' && !guideHere) { home(); return true; }
     return handler(a, e);
   }
   window.__losGuide = () => dispatch('guide', { key: 'Super' });   // the system sends the Super key here
@@ -562,26 +567,53 @@
   /* A page's content shows once it's ready (los.css hides it until then, over the background
      picture): moving between pages never shows a half-drawn screen. Pages that fill themselves in
      from the system (Home's apps) call holdReady() first and ready() once drawn. */
-  let holding = false;
-  function ready() { if (document.body) document.body.classList.add('losready'); }
+  let holding = false, readySent = false;
+  function ready() {
+    if (document.body) document.body.classList.add('losready');
+    // an app window opens out of sight and comes in front once its page is drawn
+    if (inApp && !readySent) { readySent = true; setTimeout(() => raw('page_ready'), 40); }   // (a timer, not a frame: out of sight, frames may not tick)
+  }
   function holdReady() { holding = true; setTimeout(ready, 900); }   // (never longer than that)
   document.addEventListener('DOMContentLoaded', () => { if (!holding) setTimeout(ready, 0); });
 
-  /* Pages opened from another page that should come back to it (Setup, Files and the system
-     monitor opened from Settings): openFrom() remembers where to come back to, backTo() goes there
-     (Home if nothing was remembered). Home forgets it. */
-  function openFrom(url) {
-    try { sessionStorage.setItem('launchos.return', location.pathname.split('/').pop()); } catch (e) { /* no storage: back goes Home */ }
-    location.href = url;
+  /* LaunchOS's own apps. In LaunchOS each is a window of its own that stays open in the
+     background (the system switches to it, nothing reloads); in a preview they're pages.
+     open('files') opens one from Home; openFrom() opens one that should come back to this one
+     when it's done (Setup, Files and the system monitor opened from Settings); backTo() goes
+     back there (Home if nothing was remembered); home() goes Home and keeps the app open. */
+  function open(page, hash, back) {
+    if (native) return call('open_page', { page, hash: hash || '', back: back || 'home' });
+    if (back) { try { sessionStorage.setItem('launchos.return', location.pathname.split('/').pop()); } catch (e) { /* no storage: back goes Home */ } }
+    location.href = page + '.html' + (hash ? '#' + hash : '');
+    return Promise.resolve({ ok: true });
   }
-  function backTo() {
+  function openFrom(url) {
+    const m = /^([a-z]+)\.html(?:#(.*))?$/.exec(url) || [];
+    return open(m[1] || 'index', m[2] || '', WIN || 'home');
+  }
+  function backTo(close) {
+    if (inApp) return call('page_back', { close: !!close });   // (Setup closes once it's finished)
     let u = '';
     try { u = sessionStorage.getItem('launchos.return') || ''; sessionStorage.removeItem('launchos.return'); } catch (e) { /* no storage */ }
     location.href = /^[a-z]+\.html$/.test(u) ? u : 'index.html';
   }
+  function home() {
+    if (inApp) return call('go_home');
+    location.href = 'index.html';
+  }
+  /* The system calls this when a window comes back in front: pick up what changed meanwhile in
+     another window (colors, background, name, apps). */
+  window.__losBack = () => { prefs = load(); applyLook(); document.dispatchEvent(new CustomEvent('los:back')); };
+
+  /* LaunchOS's screens are buttons and tiles, not documents: nothing on them can be dragged out
+     (copied as a link or picture), selected or right-click copied. Text boxes work as usual. */
+  const editable = el => !!(el && el.closest && el.closest('input, textarea, pre, [contenteditable], .selectable'));
+  addEventListener('dragstart', e => { if (!editable(e.target)) e.preventDefault(); }, true);
+  addEventListener('selectstart', e => { if (!editable(e.target)) e.preventDefault(); }, true);
+  addEventListener('contextmenu', e => { if (!editable(e.target)) e.preventDefault(); });
 
   window.LOS = {
-    ready, holdReady, openFrom, backTo,
+    ready, holdReady, open, openFrom, backTo, home, inApp, win: WIN,
     $, call, native, toast, icon, pic, appPic, fileUrl, esc, fit, clockText, mouseRecent,
     get prefs() { return prefs; }, save, ACCENTS, SIZE_NAMES, WALLS, LIVE, THEMES, get pro() { return proOK(); }, checkPro,
     osk: { show: (el, o) => osk.show(el, o), hide: () => osk.hide(), get open() { return osk.open; } },

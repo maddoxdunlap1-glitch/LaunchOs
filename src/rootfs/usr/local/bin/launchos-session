@@ -34,6 +34,12 @@ export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 WLR_NO_HARDWARE_CURSORS=1
 if [ "$gpu" = software ]; then
   export WLR_RENDERER=pixman WLR_RENDERER_ALLOW_SOFTWARE=1 WLR_DRM_NO_MODIFIERS=1
   export LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 GSK_RENDERER=cairo
+else
+  # Real graphics: every screen is drawn by sway itself. (By default a full-screen window is put on
+  # the display directly, and switching between that and sway drawing it makes some laptop screens,
+  # Intel ones especially, flicker each time an app opens or closes.) WebKit hands its pages to the
+  # window in a way every driver shows the same (its newer way blinks on some Intel graphics).
+  export WLR_SCENE_DISABLE_DIRECT_SCANOUT=1 WEBKIT_DISABLE_DMABUF_RENDERER=1
 fi
 echo "LaunchOS session: graphics=$gpu"
 # sway: handles X11 apps (Steam, Wine, most games) reliably

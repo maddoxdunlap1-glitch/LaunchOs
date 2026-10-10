@@ -252,12 +252,10 @@ async function remove(a) {
   job = { step: 'Removing', percent: 10, app: a.id, done: false };
   drawDetail(); watchJob();
 }
-async function openApp(a, again) {
+async function openApp(a) {
   toast('Opening ' + a.name);
   const r = await call('open_ext', { id: 'app:' + a.id });
-  if (r && r.busy && !again) {
-    toast('Close ' + r.busy + ' first (Ctrl+click its tile on Home, then End task)', 4500);
-  } else if (r && r.error) toast(a.name + ' couldn’t start', 3600);
+  if (r && r.error) toast(a.name + ' couldn’t start', 3600);
 }
 
 /* ---------- a download or removal in progress ---------- */
@@ -322,7 +320,7 @@ function nav(a, e) {
   }
   return true;
 }
-const home = () => { location.href = 'index.html'; };
+const home = () => LOS.home();   // (the Store stays open in the background)
 let qTimer = null;
 function setQuery(v) { query = v.trim(); if (query && tab !== 0) { /* search covers every shelf */ } pos = 0; render(); }
 $('#q').addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(() => setQuery($('#q').value), 200); });
