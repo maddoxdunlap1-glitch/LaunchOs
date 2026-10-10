@@ -12,7 +12,7 @@ A console-style Linux system, based on Debian, with a controller-friendly Home s
 - **Steam** with Proton for Windows games. Steam downloads itself from Valve the first time you open it.
 - **Windows programs**: run .exe and .msi files with Wine, from your Downloads or a USB drive.
 - **Real apps, picked in Setup**: Discord, Spotify, FreeTube (YouTube without ads), Roblox (through Sober), Minecraft (through Prism Launcher), Heroic (Epic Games and GOG), OBS Studio and VLC. The ones you pick download from Flathub and show up on Home with their own icons.
-- **Browser**: a lightweight web browser with a start page, shortcuts and downloads. `Ctrl+L` address bar, `Alt+Left` back, `F5` reload, `Ctrl+W` close.
+- **Browser**: Firefox, built in, full screen, with LaunchOS's start page. `Ctrl+L` address bar, `Ctrl+T` new tab, `Ctrl+W` close tab, Super back to Home (it keeps running).
 - **Files**: your Downloads, Documents, Pictures, Videos and Music, plus USB drives and disks. Copy, move, rename and delete, with progress you can stop. Look at pictures, play videos and music, read text files, and run Windows programs straight from a folder. Open drives inside the PC, eject USB drives safely, and format a drive as exFAT, FAT32, NTFS or ext4.
 - **Store**: thousands of free apps and games from Flathub (Discord, Spotify, VLC, OBS, Heroic, Prism Launcher for Minecraft, emulators and more). Installed apps show up on Home.
 - **Terminal**: a full Linux terminal. Set a **password** in Settings to use `sudo`.
@@ -82,7 +82,7 @@ Lock, sign out, shut down or restart from **Side menu → Settings → Power**.
 
 ## Notes
 
-- Only one game or app (Steam, Discord, Roblox, a Windows program…) runs at a time, like on a console. The Browser and Terminal can run alongside.
+- Run as many apps as you like at once: Discord while you play, Steam and Firefox, the Terminal next to all of it. Each keeps its own screen; Home (or the side menu) lists everything running and switches instantly. Files, Settings and the Store stay open in the background too.
 - Password: set one in **Settings → Password** (the first time, it asks you to press Enter or A to confirm). It's asked for at the sign-in screen (you can turn that off) and for `sudo` in the Terminal. There's no default root password.
 - Text console: press Ctrl+Alt+F2 and log in as `player` with your password.
 - Coming from LaunchOS 0.9 or older? 1.0 is a fresh download: write it to your USB stick with LaunchOS Flasher, or add the new LaunchOS.vbox. (Settings → Updates on 0.9 says so too.) From 1.0 on, most updates come through Settings → Updates.
