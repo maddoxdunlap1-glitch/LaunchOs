@@ -112,7 +112,7 @@ const PAGES = [
       groups: [{ sel: '#content [data-f]', kb: 'nav', name: 'choice', max: 30 }, { sel: '#nav [data-f]', kb: 'nav', name: 'step button' }, hints] }] },
   { file: 'settings.html', depth: 5, cap: 700, variants: [{ q: '' }, { q: '?onsale' }, { q: '?pro' }],
     layers: [osk, bye,
-      { name: 'settings', when: 'true', head: '#ph', box: '#stage', navOrder: 'cols', typingLeave: 'Escape',
+      { name: 'settings', when: 'true', head: '#ph', box: '#stage', navOrder: 'cols', typingLeave: 'Escape', typingStay: '#panel',
         groups: [{ sel: '#cats > .it', kb: 'nav', name: 'setting' }, { sel: '#pl > [data-k]', kb: 'nav', name: 'row', padKeys: TYPE_ROWS },
           { sel: '#pbody input', kb: 'input', name: 'text box' }, { sel: '#pbody button, #panel label.pw button', kb: 'none', name: 'panel button' }, hints] }] },
   { file: 'files.html', depth: 6, cap: 900, variants: [{ q: '' }],
@@ -362,7 +362,7 @@ function INPAGE() {
     const at = cur ? pair(cur.el, it.el) : { t: pos(it.el) };
     return { found: true, where, reached, tgt: at.t, cur: cur ? Object.assign({ key: cur.key }, at.c) : null, axis: g.kb === 'tab' ? 'x' : '', cols: L.navOrder === 'cols',
       slider: it.el.classList.contains('slider'), active: desc(ae), typing: !!ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA'),
-      leave: L.typingLeave || '', tgtTyping: g.kb === 'input' };
+      leave: L.typingLeave || '', tgtTyping: g.kb === 'input' || !!(L.typingStay && it.el.closest(L.typingStay)) };
   };
 }
 const INPAGE_SRC = '(' + INPAGE.toString() + ')();';
